@@ -18,7 +18,8 @@ export interface Issue {
   description: string
   type: IssueType
   status: IssueStatus
-  screenshotId: string | null
+  screenshotId: string | null // Legacy single ID for backwards compatibility
+  screenshotIds?: string[] // Multiple screenshots support
   createdAt: string // ISO timestamp
   updatedAt: string // ISO timestamp
 }
@@ -33,6 +34,7 @@ export interface Screenshot {
 
 export interface ApplicationSettings {
   schemaVersion: number
+  theme?: 'light' | 'dark' | 'system'
   onboardingCompleted: boolean
   lastBackupExportAt: string | null
   backupReminderDismissedAt: string | null

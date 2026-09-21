@@ -433,4 +433,59 @@ describe('Bugstow Local-First Application Test Suite', () => {
     const reloaded = await settingsRepo.get()
     expect(reloaded.backupReminderDismissedAt).toBe(now)
   })
+
+  // ── Test 18: Multi-Screenshot Creation, Updates, and Deletion ───────────
+  it('Test 18: Supports multiple screenshots per issue and updates/deletes cleanly', async () => {
+    const blob1 = new Blob(['shot1'], { type: 'image/png' })
+    const blob2 = new Blob(['shot2'], { type: 'image/png' })
+    const blob3 = new Blob(['shot3'], { type: 'image/jpeg' })
+
+    // Create issue with primary blob and additionalBlobs
+    const created = await issueRepo.create(
+      {
+        title: 'Multi-image bug',
+        description: 'Several screens attached',
+        projectId: null,
+        type: 'bug',
+      },
+      blob1,
+      'shot1.png',
+      [{ blob: blob2, filename: 'shot2.png' }, { blob: blob3, filename: 'shot3.jpg' }]
+    )
+
+    expect(created.screenshotIds).toBeDefined()
+    expect(created.screenshotIds).toHaveLength(3)
+    const [id1, id2, id3] = created.screenshotIds!
+
+    // Verify all 3 screenshots exist in database
+    expect(await screenshotRepo.getById(id1)).toBeDefined()
+    expect(await screenshotRepo.getById(id2)).toBeDefined()
+    expect(await screenshotRepo.getById(id3)).toBeDefined()
+
+    // Update with screenshots: keep id1 and id3, remove id2, add id4
+    const blob4 = new Blob(['shot4'], { type: 'image/png' })
+    const updated = await issueRepo.updateWithScreenshots(
+      created.id,
+      { title: 'Updated Multi-image bug' },
+      {
+        keepScreenshotIds: [id1, id3],
+        newScreenshots: [{ blob: blob4, filename: 'shot4.png' }]
+      }
+    )
+
+    expect(updated.title).toBe('Updated Multi-image bug')
+    expect(updated.screenshotIds).toHaveLength(3)
+    expect(updated.screenshotIds).toContain(id1)
+    expect(updated.screenshotIds).toContain(id3)
+    expect(updated.screenshotIds).not.toContain(id2)
+
+    // Verify id2 was removed from screenshot repository
+    expect(await screenshotRepo.getById(id2)).toBeUndefined()
+
+    // Delete issue: verify ALL remaining screenshots are cleaned up
+    await issueRepo.delete(created.id)
+    for (const sid of updated.screenshotIds!) {
+      expect(await screenshotRepo.getById(sid)).toBeUndefined()
+    }
+  })
 })

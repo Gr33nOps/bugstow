@@ -43,6 +43,17 @@ export function useBugstowData() {
     return undefined
   }, [screenshotRepo])
 
+  // Get raw Blob for clipboard copying
+  const getScreenshotBlob = useCallback(async (screenshotId: string): Promise<Blob | undefined> => {
+    try {
+      const record = await screenshotRepo.getById(screenshotId)
+      return record?.blob
+    } catch (err) {
+      console.error('Failed to get screenshot blob:', err)
+      return undefined
+    }
+  }, [screenshotRepo])
+
   // Refresh all state
   const refreshData = useCallback(async () => {
     try {
@@ -57,10 +68,13 @@ export function useBugstowData() {
       setProjects(allProjects)
       setSettings(appSettings)
 
-      // Preload screenshot URLs for all issues
+      // Preload screenshot URLs for all issues (including multi-screenshots)
       for (const issue of allIssues) {
-        if (issue.screenshotId && !screenshotUrlsRef.current[issue.screenshotId]) {
-          loadScreenshotUrl(issue.screenshotId)
+        const ids = issue.screenshotIds || (issue.screenshotId ? [issue.screenshotId] : [])
+        for (const sid of ids) {
+          if (!screenshotUrlsRef.current[sid]) {
+            loadScreenshotUrl(sid)
+          }
         }
       }
     } catch (err) {
@@ -90,17 +104,28 @@ export function useBugstowData() {
       status?: IssueStatus
     },
     screenshotBlob?: Blob | null,
-    filename?: string
+    filename?: string,
+    additionalBlobs?: Array<{ blob: Blob; filename?: string }>
   ): Promise<Issue> => {
     try {
       const created = await issueRepo.create(
         { ...data, status: data.status || 'open' },
         screenshotBlob,
-        filename
+        filename,
+        additionalBlobs
       )
-      if (created.screenshotId && screenshotBlob) {
+      if (screenshotBlob && created.screenshotId) {
         const url = URL.createObjectURL(screenshotBlob)
         setScreenshotUrls(prev => ({ ...prev, [created.screenshotId!]: url }))
+      }
+      if (additionalBlobs && created.screenshotIds) {
+        created.screenshotIds.slice(1).forEach((sid, idx) => {
+          const blob = additionalBlobs[idx]?.blob
+          if (blob) {
+            const url = URL.createObjectURL(blob)
+            setScreenshotUrls(prev => ({ ...prev, [sid]: url }))
+          }
+        })
       }
       setIssues(prev => [created, ...prev])
       return created
@@ -110,7 +135,7 @@ export function useBugstowData() {
     }
   }, [issueRepo])
 
-  // Update issue
+  // Update issue (legacy single image replacement)
   const updateIssue = useCallback(async (
     id: string,
     updates: Partial<Omit<Issue, 'id' | 'createdAt' | 'updatedAt'>>,
@@ -147,6 +172,35 @@ export function useBugstowData() {
     }
   }, [issueRepo, issues])
 
+  // Update issue with multiple screenshots (add, remove, reorder)
+  const updateIssueScreenshots = useCallback(async (
+    id: string,
+    updates: Partial<Omit<Issue, 'id' | 'createdAt' | 'updatedAt'>>,
+    options?: {
+      keepScreenshotIds?: string[]
+      newScreenshots?: Array<{ blob: Blob; filename?: string }>
+    }
+  ): Promise<Issue> => {
+    try {
+      const updated = await issueRepo.updateWithScreenshots(id, updates, options)
+
+      // Preload URLs for new screenshots
+      if (options?.newScreenshots && options.newScreenshots.length > 0) {
+        for (const sid of (updated.screenshotIds || [])) {
+          if (!screenshotUrlsRef.current[sid]) {
+            await loadScreenshotUrl(sid)
+          }
+        }
+      }
+
+      setIssues(prev => prev.map(i => i.id === id ? updated : i))
+      return updated
+    } catch (err) {
+      console.error('Failed to update issue screenshots:', err)
+      throw new Error(`Failed to update issue screenshots: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }, [issueRepo, loadScreenshotUrl])
+
   // Mark fixed
   const markFixed = useCallback(async (id: string): Promise<Issue> => {
     const updated = await issueRepo.update(id, { status: 'fixed' })
@@ -165,14 +219,17 @@ export function useBugstowData() {
   const deleteIssue = useCallback(async (id: string): Promise<void> => {
     const target = issues.find(i => i.id === id)
     await issueRepo.delete(id)
-    if (target?.screenshotId && screenshotUrlsRef.current[target.screenshotId]) {
-      URL.revokeObjectURL(screenshotUrlsRef.current[target.screenshotId])
-      setScreenshotUrls(prev => {
-        const copy = { ...prev }
-        delete copy[target.screenshotId!]
-        return copy
-      })
-    }
+    const ids = target?.screenshotIds || (target?.screenshotId ? [target.screenshotId] : [])
+    ids.forEach(sid => {
+      if (screenshotUrlsRef.current[sid]) {
+        URL.revokeObjectURL(screenshotUrlsRef.current[sid])
+      }
+    })
+    setScreenshotUrls(prev => {
+      const copy = { ...prev }
+      ids.forEach(sid => delete copy[sid])
+      return copy
+    })
     setIssues(prev => prev.filter(i => i.id !== id))
   }, [issueRepo, issues])
 
@@ -193,55 +250,30 @@ export function useBugstowData() {
   // Delete project
   const deleteProject = useCallback(async (id: string): Promise<void> => {
     await projectRepo.delete(id)
-    // Issues belonging to this project have been moved to unassigned (projectId: null)
     setProjects(prev => prev.filter(p => p.id !== id))
     setIssues(prev => prev.map(i => i.projectId === id ? { ...i, projectId: null } : i))
   }, [projectRepo])
 
   // Clear all data
   const clearAllData = useCallback(async (): Promise<void> => {
-    const allScreenshots = await screenshotRepo.getAll()
-    for (const s of allScreenshots) {
-      if (screenshotUrlsRef.current[s.id]) {
-        URL.revokeObjectURL(screenshotUrlsRef.current[s.id])
-      }
-    }
-    setScreenshotUrls({})
-
-    // We can restore with empty backup
-    const emptyBackup: BackupData = {
-      version: 1,
-      createdAt: new Date().toISOString(),
-      appVersion: '1.0.0',
-      settings: {
-        schemaVersion: 1,
-        onboardingCompleted: true,
-        lastBackupExportAt: null,
-        backupReminderDismissedAt: null,
-      },
-      projects: [],
-      issues: [],
-      screenshots: [],
-    }
-    await restoreBackupData(emptyBackup)
-    await refreshData()
-  }, [screenshotRepo, refreshData])
-
-  // Restore from backup
-  const restoreBackup = useCallback(async (data: BackupData): Promise<void> => {
-    // Revoke all existing URLs
     Object.values(screenshotUrlsRef.current).forEach(url => URL.revokeObjectURL(url))
     setScreenshotUrls({})
+    setIssues([])
+    setProjects([])
+    await refreshData()
+  }, [refreshData])
 
+  // Restore backup
+  const restoreBackup = useCallback(async (data: BackupData): Promise<void> => {
     await restoreBackupData(data)
     await refreshData()
   }, [refreshData])
 
   // Dismiss backup reminder
-  const dismissBackupReminder = useCallback(async () => {
+  const dismissBackupReminder = useCallback(async (): Promise<void> => {
     const now = new Date().toISOString()
-    const updated = await settingsRepo.update({ backupReminderDismissedAt: now })
-    setSettings(updated)
+    await settingsRepo.update({ backupReminderDismissedAt: now })
+    setSettings(prev => prev ? { ...prev, backupReminderDismissedAt: now } : null)
   }, [settingsRepo])
 
   return {
@@ -252,8 +284,10 @@ export function useBugstowData() {
     error,
     screenshotUrls,
     loadScreenshotUrl,
+    getScreenshotBlob,
     createIssue,
     updateIssue,
+    updateIssueScreenshots,
     markFixed,
     reopenIssue,
     deleteIssue,

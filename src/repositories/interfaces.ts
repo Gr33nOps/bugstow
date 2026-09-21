@@ -6,9 +6,10 @@ export interface IIssueRepository {
   getByProject(projectId: string | null): Promise<Issue[]>
   getByStatus(status: IssueStatus): Promise<Issue[]>
   create(
-    issue: Omit<Issue, 'id' | 'createdAt' | 'updatedAt' | 'screenshotId'>,
+    issue: Omit<Issue, 'id' | 'createdAt' | 'updatedAt' | 'screenshotId' | 'screenshotIds'>,
     screenshotBlob?: Blob | null,
-    filename?: string
+    filename?: string,
+    additionalBlobs?: Array<{ blob: Blob; filename?: string }>
   ): Promise<Issue>
   update(
     id: string,
@@ -17,8 +18,16 @@ export interface IIssueRepository {
   updateWithScreenshot(
     id: string,
     updates: Partial<Omit<Issue, 'id' | 'createdAt' | 'updatedAt'>>,
-    newScreenshotBlob?: Blob | null, // null means delete screenshot, Blob means replace, undefined means keep as is
+    newScreenshotBlob?: Blob | null,
     filename?: string
+  ): Promise<Issue>
+  updateWithScreenshots(
+    id: string,
+    updates: Partial<Omit<Issue, 'id' | 'createdAt' | 'updatedAt'>>,
+    options?: {
+      keepScreenshotIds?: string[]
+      newScreenshots?: Array<{ blob: Blob; filename?: string }>
+    }
   ): Promise<Issue>
   delete(id: string): Promise<void>
 }

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import type { Tab, Issue, Project, IssueType } from './types'
 import { useBugstowData } from './hooks/useBugstowData'
 import { useStorageEstimate } from './hooks/useStorageEstimate'
+import { useTheme } from './hooks/useTheme'
 import { formatBytes } from './services/storageService'
 import { copyPromptToClipboard } from './services/promptService'
 
@@ -18,7 +19,6 @@ import {
   type ToastMessage,
   type ConfirmDialogProps,
 } from './components/common/Modals'
-import { BRAND_PRIMARY } from './components/common/Icon'
 
 // Feature Components
 import { ListView } from './components/features/inbox/ListView'
@@ -36,8 +36,10 @@ export default function App() {
     loading,
     error,
     screenshotUrls,
+    getScreenshotBlob,
     createIssue,
     updateIssue,
+    updateIssueScreenshots,
     markFixed,
     reopenIssue,
     deleteIssue,
@@ -50,6 +52,7 @@ export default function App() {
   } = useBugstowData()
 
   const { estimate } = useStorageEstimate()
+  const { theme, setTheme, toggleTheme } = useTheme()
 
   // Navigation & View States
   const [currentTab, setCurrentTab] = useState<Tab>('inbox')
@@ -81,7 +84,7 @@ export default function App() {
     setToasts(prev => [...prev, { id, text, type }])
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id))
-    }, 3200)
+    }, 3500)
   }, [])
 
   const handleToggleSidebar = () => {
@@ -220,24 +223,28 @@ export default function App() {
 
   // Handle Save New Issue
   const handleSaveNewIssue = async (
-    title: string,
-    description: string,
-    projectId: string | null,
-    type: IssueType,
+    data: {
+      title: string
+      description: string
+      projectId: string | null
+      type: IssueType
+    },
     screenshotBlob?: Blob | null,
-    filename?: string
+    filename?: string,
+    additionalBlobs?: Array<{ blob: Blob; filename?: string }>
   ) => {
     try {
       const newIssue = await createIssue(
         {
-          title,
-          description,
-          projectId,
-          type,
+          title: data.title,
+          description: data.description,
+          projectId: data.projectId,
+          type: data.type,
           status: 'open',
         },
         screenshotBlob || undefined,
-        filename
+        filename,
+        additionalBlobs
       )
       showToast('Issue captured')
       setShowNewIssueModal(false)
@@ -392,7 +399,7 @@ export default function App() {
               setCurrentTab('inbox')
             }}
             onCreateProject={async (name, color) => {
-              await createProject({ name, color })
+              await createProject(name, color)
               showToast('Project created')
             }}
             onUpdateProject={async (id, updates) => {
@@ -407,6 +414,8 @@ export default function App() {
       case 'settings':
         return (
           <SettingsView
+            theme={theme}
+            onSetTheme={setTheme}
             onClearAllData={async () => {
               await clearAllData()
               setSelectedIssueId(null)
@@ -438,6 +447,8 @@ export default function App() {
       screenshotUrl={
         selectedIssue.screenshotId ? screenshotUrls[selectedIssue.screenshotId] : undefined
       }
+      screenshotUrls={screenshotUrls}
+      getScreenshotBlob={getScreenshotBlob}
       onBack={() => setSelectedIssueId(null)}
       onToggleFixed={() => handleToggleFixed(selectedIssue)}
       onCopyPrompt={() => handleCopyPrompt(selectedIssue)}
@@ -446,12 +457,17 @@ export default function App() {
         await updateIssue(selectedIssue.id, updates, newScreenshotBlob, filename)
         showToast('Issue updated')
       }}
+      onUpdateScreenshots={async (updates, options) => {
+        await updateIssueScreenshots(selectedIssue.id, updates, options)
+        showToast('Issue updated')
+      }}
       onZoomScreenshot={url => setZoomImageUrl(url)}
+      onToast={showToast}
     />
   ) : null
 
   return (
-    <div className="flex h-screen w-screen bg-[#F9FAFB] overflow-hidden text-slate-900 antialiased selection:bg-[#EEF0FF] selection:text-[#5B50F6]">
+    <div className="flex h-screen w-screen bg-slate-50 dark:bg-slate-950 overflow-hidden text-slate-900 dark:text-slate-100 antialiased selection:bg-[#EEF0FF] dark:selection:bg-indigo-950 selection:text-[#5B50F6] dark:selection:text-indigo-300 transition-colors">
       {/* Desktop Responsive Sidebar */}
       <div className="hidden md:flex h-full">
         <Sidebar
@@ -477,7 +493,7 @@ export default function App() {
       </div>
 
       {/* Main Web Application Canvas */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-white relative min-w-0">
+      <div className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-slate-900 relative min-w-0 transition-colors">
         {/* Global Desktop Top Bar */}
         <AppHeader
           currentTab={currentTab}
@@ -493,6 +509,8 @@ export default function App() {
           onToggleSidebar={handleToggleSidebar}
           issueCount={currentTab === 'inbox' ? openIssues.length : currentTab === 'fixed' ? fixedIssues.length : undefined}
           storageUsedFormatted={storageUsedFormatted}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
 
         {/* Mobile Header */}
@@ -506,9 +524,9 @@ export default function App() {
 
         {/* Subtle Backup Reminder Banner */}
         {shouldShowBackupReminder && currentTab === 'inbox' && !selectedIssue && (
-          <div className="bg-[#EEF0FF] border-b border-[#D8DDFF] px-5 py-2 flex items-center justify-between text-[12px] text-[#4338CA] shrink-0">
+          <div className="bg-[#EEF0FF] dark:bg-indigo-950/40 border-b border-[#D8DDFF] dark:border-indigo-900/60 px-5 py-2.5 flex items-center justify-between text-xs text-[#4338CA] dark:text-indigo-300 shrink-0">
             <div className="flex items-center gap-2">
-              <Shield size={14} className="text-[#5B50F6] shrink-0" />
+              <Shield size={15} className="text-[#5B50F6] shrink-0" />
               <span>
                 <strong>Backup reminder:</strong> Your data is stored locally in this browser. Keep an encrypted backup.
               </span>
@@ -517,34 +535,34 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setCurrentTab('settings')}
-                className="font-semibold underline hover:text-[#251D98] flex items-center gap-1"
+                className="font-semibold underline hover:text-[#251D98] dark:hover:text-white flex items-center gap-1"
               >
-                <Download size={12} />
+                <Download size={13} />
                 Export
               </button>
               <button
                 type="button"
                 aria-label="Dismiss reminder"
                 onClick={dismissBackupReminder}
-                className="text-[#5B50F6] hover:text-[#251D98]"
+                className="text-[#5B50F6] dark:text-indigo-400 hover:text-[#251D98] dark:hover:text-white"
               >
-                <X size={14} />
+                <X size={15} />
               </button>
             </div>
           </div>
         )}
 
         {/* Center Workspace (Split view or full content) */}
-        <div className="flex-1 flex overflow-hidden min-h-0">
+        <div className="flex-1 flex overflow-hidden min-h-0 bg-slate-50/50 dark:bg-slate-950">
           {selectedIssue ? (
             <>
               {/* Left pane: list on desktop (hidden on mobile when issue is open) */}
-              <div className="hidden md:flex flex-1 overflow-hidden border-r border-slate-200/80 min-w-0">
+              <div className="hidden md:flex flex-1 overflow-hidden border-r border-slate-200 dark:border-slate-800 min-w-0 bg-white dark:bg-slate-900">
                 {renderTabContent()}
               </div>
 
               {/* Right pane: issue detail panel on desktop, full screen on mobile */}
-              <div className="flex-1 md:flex-initial md:w-[480px] lg:w-[520px] xl:w-[560px] flex flex-col overflow-hidden bg-white shrink-0">
+              <div className="flex-1 md:flex-initial md:w-[480px] lg:w-[540px] xl:w-[600px] flex flex-col overflow-hidden bg-white dark:bg-slate-900 shrink-0 border-l border-slate-200/80 dark:border-slate-800">
                 {issueDetailComponent}
               </div>
             </>
@@ -570,12 +588,12 @@ export default function App() {
 
       {/* Mobile Drawer Overlay */}
       {mobileDrawerOpen && (
-        <div className="fixed inset-0 z-50 md:hidden flex">
+        <div className="fixed inset-0 z-50 md:hidden flex select-none">
           <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-xs"
+            className="absolute inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-xs"
             onClick={() => setMobileDrawerOpen(false)}
           />
-          <div className="relative w-64 bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-left duration-200">
+          <div className="relative w-68 bg-white dark:bg-slate-900 h-full shadow-2xl flex flex-col animate-in slide-in-from-left duration-200 border-r border-slate-200 dark:border-slate-800">
             <Sidebar
               currentTab={currentTab}
               onSelectTab={tab => {
@@ -610,7 +628,7 @@ export default function App() {
       {showQuickProjectModal && (
         <ProjectModal
           onSave={async (name, color) => {
-            await createProject({ name, color })
+            await createProject(name, color)
             showToast('Project created')
             setShowQuickProjectModal(false)
           }}
@@ -623,6 +641,7 @@ export default function App() {
         <NewIssueModal
           projects={projects}
           defaultProjectId={projectFilterId}
+          initialFile={initialPastedFile}
           onSave={handleSaveNewIssue}
           onClose={() => {
             setShowNewIssueModal(false)

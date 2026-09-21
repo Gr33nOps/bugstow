@@ -19,14 +19,14 @@ export function MobileHeader({
   onToggleMenu,
 }: MobileHeaderProps) {
   return (
-    <header className="flex md:hidden items-center justify-between px-4 py-3.5 border-b border-gray-100 bg-white sticky top-0 z-30">
+    <header className="flex md:hidden items-center justify-between px-4 py-3 border-b border-slate-200/80 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md sticky top-0 z-30 transition-colors">
       {/* Left button */}
       {hasBack && onBack ? (
         <button
           type="button"
           onClick={onBack}
           aria-label="Back"
-          className="w-10 h-10 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-700 active:bg-gray-100 transition-colors"
+          className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 active:bg-slate-200 transition-colors"
         >
           <ArrowLeft size={18} />
         </button>
@@ -35,15 +35,16 @@ export function MobileHeader({
           type="button"
           onClick={onToggleMenu}
           aria-label="Menu"
-          className="w-10 h-10 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-700 active:bg-gray-100 transition-colors"
+          className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 active:bg-slate-200 transition-colors"
         >
           <Menu size={18} />
         </button>
       )}
 
       {/* Center logo */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <BugstowLogoIcon size={24} color={BRAND_PRIMARY} />
+        <span className="font-bold text-base text-slate-900 dark:text-white tracking-tight">bugstow.</span>
       </div>
 
       {/* Right + Capture button */}
@@ -79,7 +80,7 @@ export function MobileBottomNav({ currentTab, onSelectTab, inboxCount, fixedCoun
   ]
 
   return (
-    <nav className="flex md:hidden border-t border-gray-100 bg-white sticky bottom-0 z-30 pb-safe">
+    <nav className="flex md:hidden border-t border-slate-200/80 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md sticky bottom-0 z-30 pb-safe transition-colors">
       {tabs.map(tab => {
         const isActive = currentTab === tab.id
         const IconComponent = tab.icon
@@ -88,18 +89,21 @@ export function MobileBottomNav({ currentTab, onSelectTab, inboxCount, fixedCoun
             key={tab.id}
             type="button"
             onClick={() => onSelectTab(tab.id)}
-            className="flex-1 flex flex-col items-center justify-center gap-1 py-2.5 relative transition-colors"
-            style={{ color: isActive ? BRAND_PRIMARY : '#9CA3AF' }}
+            className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 relative transition-colors ${
+              isActive
+                ? 'text-[#5B50F6] dark:text-indigo-400 font-semibold'
+                : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+            }`}
           >
             <div className="relative">
               <IconComponent size={20} strokeWidth={isActive ? 2.3 : 1.8} />
               {tab.count !== undefined && tab.count > 0 && (
-                <span className="absolute -top-1 -right-2 w-4 h-4 rounded-full bg-[#5B50F6] text-white text-[9px] font-bold flex items-center justify-center">
+                <span className="absolute -top-1 -right-2 w-4 h-4 rounded-full bg-[#5B50F6] text-white text-[10px] font-bold flex items-center justify-center">
                   {tab.count > 99 ? '99+' : tab.count}
                 </span>
               )}
             </div>
-            <span className="text-[11px] font-medium tracking-tight">{tab.label}</span>
+            <span className="text-xs tracking-tight">{tab.label}</span>
           </button>
         )
       })}

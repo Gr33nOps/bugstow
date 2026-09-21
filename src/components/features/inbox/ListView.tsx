@@ -105,7 +105,7 @@ export function ListView({
 
   if (issues.length === 0) {
     return (
-      <div className="flex-1 flex flex-col bg-white overflow-hidden">
+      <div className="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
         <EmptyState
           heading={emptyHeading}
           subheading={emptySub}
@@ -117,28 +117,28 @@ export function ListView({
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-white">
+    <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-slate-900 transition-colors">
       {/* Sticky Sub-Header & Controls Bar */}
-      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-5 py-3 flex flex-wrap items-center justify-between gap-3">
-        {/* Left: Mobile search & project selector */}
-        <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
-          {/* Mobile Search input (on desktop it's in AppHeader) */}
-          <div className="relative md:hidden flex-1 min-w-[160px]">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+      <div className="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800 px-6 py-3.5 flex flex-wrap items-center justify-between gap-3">
+        {/* Left: Project selector & mobile controls */}
+        <div className="flex items-center gap-3 flex-wrap flex-1 min-w-0">
+          {/* Mobile Search input */}
+          <div className="relative md:hidden flex-1 min-w-[180px]">
+            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
               type="text"
               placeholder="Search..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full pl-8 pr-7 py-1.5 text-[12px] bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-[#5B50F6] text-slate-800"
+              className="w-full pl-9 pr-8 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-[#5B50F6] text-slate-900 dark:text-slate-100"
             />
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
               >
-                <X size={12} />
+                <X size={14} />
               </button>
             )}
           </div>
@@ -153,7 +153,7 @@ export function ListView({
                   onClearProjectFilter()
                 }
               }}
-              className="appearance-none pl-3 pr-7 py-1 text-[12px] font-medium bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-lg text-slate-700 focus:outline-none focus:border-[#5B50F6] transition-colors cursor-pointer"
+              className="appearance-none pl-3.5 pr-8 py-1.5 text-sm font-medium bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#5B50F6] transition-colors cursor-pointer"
             >
               <option value="all">All Projects</option>
               <option value="unassigned">Unassigned</option>
@@ -164,16 +164,16 @@ export function ListView({
               ))}
             </select>
             <ChevronDown
-              size={12}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+              size={14}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
             />
           </div>
 
           {/* Active project tag if filtered */}
           {activeProjectObj && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-[#EEF0FF] text-[#5B50F6]">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-[#EEF0FF] dark:bg-[#5B50F6]/20 text-[#5B50F6] dark:text-[#7C74FF]">
               <span
-                className="w-1.5 h-1.5 rounded-full"
+                className="w-2 h-2 rounded-full"
                 style={{ backgroundColor: activeProjectObj.color }}
               />
               <span>{activeProjectObj.name}</span>
@@ -181,16 +181,16 @@ export function ListView({
                 <button
                   type="button"
                   onClick={onClearProjectFilter}
-                  className="hover:text-[#251D98] text-[#5B50F6] ml-0.5"
+                  className="hover:text-[#251D98] text-[#5B50F6] ml-1"
                 >
-                  <X size={11} />
+                  <X size={12} />
                 </button>
               )}
             </span>
           )}
 
           {/* Type pills on mobile */}
-          <div className="flex lg:hidden items-center gap-1 bg-slate-100/80 p-0.5 rounded-lg">
+          <div className="flex lg:hidden items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
             {typePills.map(pill => {
               const active = typeFilter === pill.value
               return (
@@ -198,10 +198,10 @@ export function ListView({
                   key={pill.value}
                   type="button"
                   onClick={() => setTypeFilter(pill.value)}
-                  className={`px-2 py-0.5 text-[11px] font-medium rounded transition-all ${
+                  className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-all ${
                     active
-                      ? 'bg-white text-slate-900 shadow-2xs font-semibold'
-                      : 'text-slate-500 hover:text-slate-900'
+                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-semibold'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   {pill.label}
@@ -211,16 +211,16 @@ export function ListView({
           </div>
         </div>
 
-        {/* Right: Count and status */}
-        <div className="text-[12px] text-slate-400 whitespace-nowrap">
-          Showing <span className="font-semibold text-slate-700">{filteredIssues.length}</span> of {issues.length}
+        {/* Right: Count indicator */}
+        <div className="text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap">
+          Showing <span className="font-semibold text-slate-700 dark:text-slate-300">{filteredIssues.length}</span> of {issues.length}
         </div>
       </div>
 
       {/* Issues list scroll area */}
       <div className="flex-1 overflow-y-auto">
         {filteredIssues.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 text-[13px]">
+          <div className="p-16 text-center text-slate-400 dark:text-slate-500 text-sm">
             No issues match your current filters.{' '}
             <button
               type="button"
@@ -230,7 +230,7 @@ export function ListView({
                 setProjectFilter('all')
                 if (onClearProjectFilter) onClearProjectFilter()
               }}
-              className="text-[#5B50F6] font-semibold hover:underline"
+              className="text-[#5B50F6] dark:text-[#7C74FF] font-semibold hover:underline ml-1"
             >
               Reset filters
             </button>

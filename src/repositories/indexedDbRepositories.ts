@@ -49,20 +49,21 @@ export class IndexedDbIssueRepository implements IIssueRepository {
   }
 
   async create(
-    issueData: Omit<Issue, 'id' | 'createdAt' | 'updatedAt' | 'screenshotId'>,
+    issueData: Omit<Issue, 'id' | 'createdAt' | 'updatedAt' | 'screenshotId' | 'screenshotIds'>,
     screenshotBlob?: Blob | null,
-    filename?: string
+    filename?: string,
+    additionalBlobs?: Array<{ blob: Blob; filename?: string }>
   ): Promise<Issue> {
     const db = await getDB()
     const issueId = generateUUID()
     const now = new Date().toISOString()
-    let screenshotId: string | null = null
+    const screenshotIds: string[] = []
 
     // Run in atomic transaction
     const tx = db.transaction(['issues', 'screenshots'], 'readwrite')
     try {
       if (screenshotBlob) {
-        screenshotId = generateUUID()
+        const screenshotId = generateUUID()
         const screenshotRecord: Screenshot = {
           id: screenshotId,
           blob: screenshotBlob,
@@ -71,6 +72,22 @@ export class IndexedDbIssueRepository implements IIssueRepository {
           createdAt: now
         }
         await tx.objectStore('screenshots').put(screenshotRecord)
+        screenshotIds.push(screenshotId)
+      }
+
+      if (additionalBlobs && additionalBlobs.length > 0) {
+        for (const item of additionalBlobs) {
+          const sid = generateUUID()
+          const sRecord: Screenshot = {
+            id: sid,
+            blob: item.blob,
+            mimeType: item.blob.type || 'image/png',
+            filename: item.filename || `screenshot-${Date.now()}.${item.blob.type?.split('/')[1] || 'png'}`,
+            createdAt: now
+          }
+          await tx.objectStore('screenshots').put(sRecord)
+          screenshotIds.push(sid)
+        }
       }
 
       const newIssue: Issue = {
@@ -80,7 +97,8 @@ export class IndexedDbIssueRepository implements IIssueRepository {
         description: issueData.description || '',
         type: issueData.type,
         status: issueData.status || 'open',
-        screenshotId,
+        screenshotId: screenshotIds[0] || null,
+        screenshotIds,
         createdAt: now,
         updatedAt: now
       }
@@ -164,6 +182,69 @@ export class IndexedDbIssueRepository implements IIssueRepository {
       ...updates,
       title: updates.title !== undefined ? updates.title.trim() : existing.title,
       screenshotId,
+      screenshotIds: screenshotId ? [screenshotId] : [],
+      updatedAt: now
+    }
+
+    await issueStore.put(updated)
+    await tx.done
+    return updated
+  }
+
+  async updateWithScreenshots(
+    id: string,
+    updates: Partial<Omit<Issue, 'id' | 'createdAt' | 'updatedAt'>>,
+    options?: {
+      keepScreenshotIds?: string[]
+      newScreenshots?: Array<{ blob: Blob; filename?: string }>
+    }
+  ): Promise<Issue> {
+    const db = await getDB()
+    const tx = db.transaction(['issues', 'screenshots'], 'readwrite')
+    const issueStore = tx.objectStore('issues')
+    const screenshotStore = tx.objectStore('screenshots')
+
+    const existing = await issueStore.get(id)
+    if (!existing) {
+      tx.abort()
+      throw new Error(`Issue with id ${id} not found`)
+    }
+
+    const now = new Date().toISOString()
+    const currentIds = existing.screenshotIds || (existing.screenshotId ? [existing.screenshotId] : [])
+    const keepIds = options?.keepScreenshotIds || currentIds
+
+    // Delete any screenshot that is not kept
+    for (const sid of currentIds) {
+      if (!keepIds.includes(sid)) {
+        await screenshotStore.delete(sid)
+      }
+    }
+
+    // Add new screenshots
+    const addedIds: string[] = []
+    if (options?.newScreenshots && options.newScreenshots.length > 0) {
+      for (const item of options.newScreenshots) {
+        const sid = generateUUID()
+        const sRecord: Screenshot = {
+          id: sid,
+          blob: item.blob,
+          mimeType: item.blob.type || 'image/png',
+          filename: item.filename || `screenshot-${Date.now()}.${item.blob.type?.split('/')[1] || 'png'}`,
+          createdAt: now
+        }
+        await screenshotStore.put(sRecord)
+        addedIds.push(sid)
+      }
+    }
+
+    const finalScreenshotIds = [...keepIds, ...addedIds]
+    const updated: Issue = {
+      ...existing,
+      ...updates,
+      title: updates.title !== undefined ? updates.title.trim() : existing.title,
+      screenshotId: finalScreenshotIds[0] || null,
+      screenshotIds: finalScreenshotIds,
       updatedAt: now
     }
 
@@ -180,8 +261,13 @@ export class IndexedDbIssueRepository implements IIssueRepository {
 
     const existing = await issueStore.get(id)
     if (existing) {
-      if (existing.screenshotId) {
-        await screenshotStore.delete(existing.screenshotId)
+      const idsToDelete = new Set<string>()
+      if (existing.screenshotId) idsToDelete.add(existing.screenshotId)
+      if (existing.screenshotIds) {
+        existing.screenshotIds.forEach(sid => idsToDelete.add(sid))
+      }
+      for (const sid of idsToDelete) {
+        await screenshotStore.delete(sid)
       }
       await issueStore.delete(id)
     }

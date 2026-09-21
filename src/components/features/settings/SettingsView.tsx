@@ -12,12 +12,15 @@ import {
   AlertTriangle,
   X,
   Lock,
-  Unlock,
-  AlertCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  AlertCircle,
+  Sun,
+  Moon,
+  Monitor
 } from 'lucide-react'
 import type { BackupData, EncryptedBackupPayload } from '../../../types'
+import type { Theme } from '../../../hooks/useTheme'
 import {
   exportBackupFile,
   triggerDownload,
@@ -28,6 +31,8 @@ import { formatBytes } from '../../../services/storageService'
 import { useStorageEstimate } from '../../../hooks/useStorageEstimate'
 
 interface SettingsViewProps {
+  theme: Theme
+  onSetTheme: (theme: Theme) => void
   onClearAllData: () => Promise<void>
   onRestoreBackup: (data: BackupData) => Promise<void>
   onToast: (msg: string, type?: 'success' | 'error' | 'info') => void
@@ -36,13 +41,15 @@ interface SettingsViewProps {
 }
 
 export function SettingsView({
+  theme,
+  onSetTheme,
   onClearAllData,
   onRestoreBackup,
   onToast,
   onOpenKeyboardShortcuts,
   onOpenAbout,
 }: SettingsViewProps) {
-  const { estimate, requestPersistence, refreshEstimate } = useStorageEstimate()
+  const { estimate, requestPersistence } = useStorageEstimate()
 
   const [showExportModal, setShowExportModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
@@ -65,92 +72,148 @@ export function SettingsView({
     }
   }
 
+  const themeOptions: Array<{ value: Theme; label: string; icon: React.ElementType }> = [
+    { value: 'light', label: 'Light', icon: Sun },
+    { value: 'dark', label: 'Dark', icon: Moon },
+    { value: 'system', label: 'System', icon: Monitor },
+  ]
+
   return (
-    <div className="flex-1 overflow-y-auto bg-white select-none">
-      {/* Header matching bugstow_06_settings.png */}
-      <div className="px-6 pt-6 pb-5">
-        <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">Settings</h1>
+    <div className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950 select-none transition-colors">
+      {/* Header */}
+      <div className="px-8 pt-8 pb-6 border-b border-slate-200/60 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xs">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Settings</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          Manage local storage, theme preferences, and encrypted offline backups.
+        </p>
       </div>
 
-      <div className="px-6 pb-12 flex flex-col gap-8 max-w-xl">
-        {/* Data & Backup Section */}
+      <div className="px-8 py-8 flex flex-col gap-8 max-w-2xl">
+        {/* Appearance Section */}
         <div>
-          <h3 className="text-[13px] font-semibold text-gray-500 mb-1">Data & Backup</h3>
-          <p className="text-[13px] text-gray-400 mb-3.5">
-            Keep your data safe. Everything stays on your device.
+          <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+            Appearance
+          </h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-3.5">
+            Choose your preferred color mode.
           </p>
 
-          <div className="bg-white border border-gray-200/90 rounded-2xl overflow-hidden shadow-xs divide-y divide-gray-100">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300">
+                <Layout size={18} />
+              </div>
+              <div>
+                <span className="text-[15px] font-semibold text-slate-900 dark:text-white block">Theme Mode</span>
+                <span className="text-xs text-slate-400">Current: {theme.charAt(0).toUpperCase() + theme.slice(1)}</span>
+              </div>
+            </div>
+
+            {/* 3-way toggle button group */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+              {themeOptions.map(opt => {
+                const active = theme === opt.value
+                const IconComponent = opt.icon
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => onSetTheme(opt.value)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                      active
+                        ? 'bg-white dark:bg-slate-700 text-[#5B50F6] dark:text-indigo-300 shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <IconComponent size={14} />
+                    <span>{opt.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Data & Backup Section */}
+        <div>
+          <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+            Data & Backup
+          </h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-3.5">
+            Keep your data safe. Everything stays on your local device.
+          </p>
+
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs divide-y divide-slate-100 dark:divide-slate-800">
             {/* Export Backup button */}
             <button
               type="button"
               onClick={() => setShowExportModal(true)}
-              className="w-full flex items-center gap-3 px-5 py-4 text-[14px] text-gray-800 hover:bg-gray-50/80 active:bg-gray-100 transition-colors text-left"
+              className="w-full flex items-center gap-3.5 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
             >
-              <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600">
-                <Download size={16} />
+              <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300">
+                <Download size={18} />
               </div>
               <div className="flex-1">
-                <span className="font-semibold block">Export Backup</span>
-                <span className="text-[12px] text-gray-400">Save your projects, issues, and screenshots</span>
+                <span className="text-[15px] font-semibold text-slate-900 dark:text-white block">Export Backup</span>
+                <span className="text-xs text-slate-400">Save your projects, issues, and screenshots into JSON</span>
               </div>
-              <span className="text-gray-300 text-lg">&rsaquo;</span>
+              <span className="text-slate-400 text-lg font-bold">&rsaquo;</span>
             </button>
 
             {/* Import Backup button */}
             <button
               type="button"
               onClick={() => setShowImportModal(true)}
-              className="w-full flex items-center gap-3 px-5 py-4 text-[14px] text-gray-800 hover:bg-gray-50/80 active:bg-gray-100 transition-colors text-left"
+              className="w-full flex items-center gap-3.5 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
             >
-              <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600">
-                <Upload size={16} />
+              <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300">
+                <Upload size={18} />
               </div>
               <div className="flex-1">
-                <span className="font-semibold block">Import Backup</span>
-                <span className="text-[12px] text-gray-400">Restore from an exported JSON backup file</span>
+                <span className="text-[15px] font-semibold text-slate-900 dark:text-white block">Import Backup</span>
+                <span className="text-xs text-slate-400">Restore from an exported JSON or encrypted backup</span>
               </div>
-              <span className="text-gray-300 text-lg">&rsaquo;</span>
+              <span className="text-slate-400 text-lg font-bold">&rsaquo;</span>
             </button>
 
             {/* Storage explanation & persistence banner */}
-            <div className="p-4 bg-[#F4F6FF]/70 border-t border-[#E0E4FE]/60 flex flex-col gap-3">
+            <div className="p-5 bg-indigo-50/50 dark:bg-slate-850 border-t border-indigo-100/60 dark:border-slate-800 flex flex-col gap-3.5">
               <div className="flex items-start gap-3">
-                <Shield size={18} className="text-[#5B50F6] shrink-0 mt-0.5" />
-                <div className="flex-1 text-[12px]">
-                  <p className="font-semibold text-gray-900">Your data is stored locally</p>
-                  <p className="text-gray-500 mt-0.5 leading-relaxed">
-                    Nothing is sent to any server. You are in complete control of your data.
+                <Shield size={20} className="text-[#5B50F6] shrink-0 mt-0.5" />
+                <div className="flex-1 text-xs">
+                  <p className="font-bold text-slate-900 dark:text-white text-sm">Your data is stored 100% locally</p>
+                  <p className="text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+                    Zero telemetry. Zero external servers. You are in complete control of your issues and images.
                   </p>
                 </div>
               </div>
 
               {/* Approximate Storage usage info */}
-              <div className="bg-white/80 rounded-xl p-3 border border-gray-200/60 flex flex-col gap-2">
-                <div className="flex items-center justify-between text-[12px]">
-                  <span className="text-gray-500 flex items-center gap-1.5">
-                    <HardDrive size={13} className="text-gray-400" />
+              <div className="bg-white/90 dark:bg-slate-800 rounded-xl p-3.5 border border-slate-200/80 dark:border-slate-700 flex flex-col gap-2.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <HardDrive size={14} className="text-slate-400" />
                     Storage used:
                   </span>
-                  <span className="font-mono font-medium text-gray-800">
+                  <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
                     {formatBytes(estimate.usageBytes)}
                     {estimate.quotaBytes > 0 && ` (approx. ${formatBytes(estimate.quotaBytes)} available)`}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between text-[12px] pt-1 border-t border-gray-100">
-                  <span className="text-gray-500 flex items-center gap-1.5">
-                    <CheckCircle2 size={13} className={estimate.persisted ? 'text-emerald-500' : 'text-gray-400'} />
+                <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100 dark:border-slate-700">
+                  <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <CheckCircle2 size={14} className={estimate.persisted ? 'text-emerald-500' : 'text-slate-400'} />
                     Browser Persistence:
                   </span>
                   {estimate.persisted ? (
-                    <span className="text-emerald-600 font-medium">Enabled</span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Enabled</span>
                   ) : (
                     <button
                       type="button"
                       onClick={handleRequestPersistence}
                       disabled={isPersisting}
-                      className="text-[11px] font-semibold text-[#5B50F6] hover:underline disabled:opacity-50"
+                      className="text-xs font-semibold text-[#5B50F6] dark:text-indigo-400 hover:underline disabled:opacity-50"
                     >
                       {isPersisting ? 'Requesting...' : 'Request Persistence'}
                     </button>
@@ -158,61 +221,68 @@ export function SettingsView({
                 </div>
               </div>
 
-              <p className="text-[11px] text-gray-400 leading-snug">
-                Persistent storage reduces automatic eviction risk during low disk events, but cannot prevent manual browser resets.
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-snug">
+                Persistent storage reduces eviction risk during low disk events. Remember to export regular backups.
               </p>
             </div>
           </div>
         </div>
 
-        {/* App Section */}
+        {/* Application Information Section */}
         <div>
-          <h3 className="text-[13px] font-semibold text-gray-500 mb-3">App</h3>
-          <div className="bg-white border border-gray-200/90 rounded-2xl overflow-hidden shadow-xs divide-y divide-gray-100">
-            {/* Theme */}
-            <div className="flex items-center gap-3 px-5 py-4">
-              <Layout size={16} className="text-gray-400" />
-              <span className="flex-1 text-[14px] text-gray-700">Theme</span>
-              <span className="text-[13px] text-gray-400">Light</span>
-            </div>
-
+          <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+            Help & Info
+          </h3>
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs divide-y divide-slate-100 dark:divide-slate-800">
             {/* Keyboard Shortcuts */}
             <button
               type="button"
               onClick={onOpenKeyboardShortcuts}
-              className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center gap-3.5 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
             >
-              <Keyboard size={16} className="text-gray-400" />
-              <span className="flex-1 text-[14px] text-gray-700">Keyboard Shortcuts</span>
-              <span className="text-[13px] text-gray-400 font-mono">⌘ K &rsaquo;</span>
+              <Keyboard size={18} className="text-slate-400" />
+              <span className="flex-1 text-[15px] font-semibold text-slate-800 dark:text-slate-200">
+                Keyboard Shortcuts
+              </span>
+              <span className="text-xs text-slate-400 font-mono bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">⌘ K / Esc</span>
             </button>
 
             {/* About */}
             <button
               type="button"
               onClick={onOpenAbout}
-              className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center gap-3.5 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
             >
-              <Info size={16} className="text-gray-400" />
-              <span className="flex-1 text-[14px] text-gray-700">About Bugstow</span>
-              <span className="text-[13px] text-gray-400">&rsaquo;</span>
+              <Info size={18} className="text-slate-400" />
+              <span className="flex-1 text-[15px] font-semibold text-slate-800 dark:text-slate-200">
+                About Bugstow
+              </span>
+              <span className="text-slate-400 text-lg font-bold">&rsaquo;</span>
             </button>
           </div>
         </div>
 
         {/* Danger Zone */}
         <div>
-          <button
-            type="button"
-            onClick={() => setShowClearConfirm(true)}
-            className="flex items-center gap-2 px-5 py-3 text-[14px] font-semibold text-[#F04438] bg-[#FEECEB]/60 border border-[#FEECEB] hover:bg-[#FEECEB] active:bg-[#FEECEB]/80 rounded-2xl transition-all shadow-xs"
-          >
-            <Trash2 size={16} />
-            <span>Clear All Data</span>
-          </button>
-          <p className="text-[12px] text-gray-400 mt-2 pl-1">
-            This will permanently delete all your projects, issues and screenshots from local storage.
-          </p>
+          <h3 className="text-sm font-bold text-red-500 uppercase tracking-wider mb-2">
+            Danger Zone
+          </h3>
+          <div className="p-5 bg-red-50/50 dark:bg-red-950/20 border border-red-200/80 dark:border-red-900/60 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <p className="text-[15px] font-bold text-red-900 dark:text-red-200">Wipe Local Database</p>
+              <p className="text-xs text-red-600/80 dark:text-red-400/80 mt-0.5">
+                Permanently deletes all projects, issues, and screenshots stored in this browser.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowClearConfirm(true)}
+              className="shrink-0 flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 active:bg-red-800 rounded-xl transition-all shadow-xs"
+            >
+              <Trash2 size={16} />
+              <span>Clear All Data</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -303,52 +373,52 @@ function ExportBackupModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/35 backdrop-blur-xs" onClick={onClose} />
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
+      <div className="absolute inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-xs" onClick={onClose} />
       <form
         onSubmit={handleExport}
-        className="relative bg-white rounded-2xl shadow-2xl border border-gray-100 w-full max-w-md p-6 flex flex-col gap-4 animate-in zoom-in-95 duration-150"
+        className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200/80 dark:border-slate-800 w-full max-w-md p-6 sm:p-7 flex flex-col gap-4 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100"
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Download size={18} className="text-[#5B50F6]" />
-            <h3 className="text-[17px] font-bold text-gray-900">Export Backup</h3>
+          <div className="flex items-center gap-2.5">
+            <Download size={20} className="text-[#5B50F6]" />
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Export Backup</h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400"
+            className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
           >
-            <X size={15} />
+            <X size={16} />
           </button>
         </div>
 
-        <p className="text-[13px] text-gray-500 leading-relaxed">
-          Create a full, portable backup of all your projects, issues, and screenshots.
+        <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+          Create a full, portable backup of all your projects, issues, and screenshots into a single file.
         </p>
 
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-[12px] text-red-700 flex items-center gap-2">
-            <AlertCircle size={14} className="shrink-0 text-red-500" />
+          <div className="p-3.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
+            <AlertCircle size={15} className="shrink-0 text-red-500" />
             <span>{error}</span>
           </div>
         )}
 
         {/* Encrypt toggle */}
-        <label className="flex items-start gap-3 p-3 bg-gray-50 border border-gray-200 rounded-xl cursor-pointer">
+        <label className="flex items-start gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer">
           <input
             type="checkbox"
             checked={encrypt}
             onChange={e => setEncrypt(e.target.checked)}
             className="mt-0.5 rounded text-[#5B50F6] focus:ring-[#5B50F6]"
           />
-          <div className="text-[13px]">
-            <span className="font-semibold text-gray-800 flex items-center gap-1.5">
+          <div className="text-xs">
+            <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
               <Lock size={13} className="text-[#5B50F6]" />
               Encrypt backup with passphrase (recommended)
             </span>
-            <p className="text-[11px] text-gray-400 mt-0.5">
-              Uses AES-256-GCM. A lost passphrase cannot be recovered.
+            <p className="text-slate-400 dark:text-slate-500 mt-0.5">
+              Uses AES-256-GCM encryption. A lost passphrase cannot be recovered.
             </p>
           </div>
         </label>
@@ -356,57 +426,61 @@ function ExportBackupModal({
         {encrypt ? (
           <div className="flex flex-col gap-3">
             <div>
-              <label className="text-[12px] font-semibold text-gray-600 block mb-1">Passphrase</label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1 uppercase tracking-wider">
+                Passphrase
+              </label>
               <div className="relative">
                 <input
                   type={showPass ? 'text' : 'password'}
                   placeholder="Enter a secure passphrase"
                   value={passphrase}
                   onChange={e => setPassphrase(e.target.value)}
-                  className="w-full px-3.5 py-2 text-[13px] border border-gray-200 rounded-xl focus:outline-none focus:border-[#5B50F6] pr-9"
+                  className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-[#5B50F6] pr-10 text-slate-900 dark:text-white"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 >
-                  {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                  {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
               </div>
             </div>
 
             <div>
-              <label className="text-[12px] font-semibold text-gray-600 block mb-1">Confirm Passphrase</label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1 uppercase tracking-wider">
+                Confirm Passphrase
+              </label>
               <input
                 type={showPass ? 'text' : 'password'}
                 placeholder="Confirm your passphrase"
                 value={confirmPass}
                 onChange={e => setConfirmPass(e.target.value)}
-                className="w-full px-3.5 py-2 text-[13px] border border-gray-200 rounded-xl focus:outline-none focus:border-[#5B50F6]"
+                className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-[#5B50F6] text-slate-900 dark:text-white"
               />
             </div>
           </div>
         ) : (
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[12px] text-amber-800 flex items-start gap-2">
-            <AlertTriangle size={14} className="shrink-0 text-amber-600 mt-0.5" />
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-xl text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+            <AlertTriangle size={15} className="shrink-0 text-amber-600 mt-0.5" />
             <span>
-              Unencrypted export stores all issues and screenshots in plain text in the downloaded JSON file. Anyone with access to the file can view them.
+              Unencrypted export stores all issues and screenshots in plain text.
             </span>
           </div>
         )}
 
-        <div className="flex gap-2.5 pt-2">
+        <div className="flex gap-3 pt-2">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 py-2.5 text-[13px] font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50"
+            className="flex-1 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isExporting}
-            className="flex-1 py-2.5 text-[13px] font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] rounded-xl shadow-sm disabled:opacity-50"
+            className="flex-1 py-2.5 text-sm font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] rounded-xl shadow-sm disabled:opacity-50"
           >
             {isExporting ? 'Exporting...' : 'Export Backup'}
           </button>
@@ -494,7 +568,7 @@ function ImportBackupModal({
       setValidatedData(check.data)
       setValidationSummary(check.summary)
     } catch (err) {
-      setError('Incorrect passphrase or corrupted backup file. Your existing data remains safe.')
+      setError('Incorrect passphrase or corrupted backup file.')
     } finally {
       setIsProcessing(false)
     }
@@ -515,26 +589,26 @@ function ImportBackupModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/35 backdrop-blur-xs" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl border border-gray-100 w-full max-w-md p-6 flex flex-col gap-4 animate-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
+      <div className="absolute inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-xs" onClick={onClose} />
+      <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200/80 dark:border-slate-800 w-full max-w-md p-6 sm:p-7 flex flex-col gap-4 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Upload size={18} className="text-[#5B50F6]" />
-            <h3 className="text-[17px] font-bold text-gray-900">Import Backup</h3>
+          <div className="flex items-center gap-2.5">
+            <Upload size={20} className="text-[#5B50F6]" />
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Import Backup</h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400"
+            className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
           >
-            <X size={15} />
+            <X size={16} />
           </button>
         </div>
 
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-[12px] text-red-700 flex items-start gap-2">
-            <AlertCircle size={14} className="shrink-0 text-red-500 mt-0.5" />
+          <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
+            <AlertCircle size={15} className="shrink-0 text-red-500 mt-0.5" />
             <span>{error}</span>
           </div>
         )}
@@ -543,11 +617,11 @@ function ImportBackupModal({
         {!fileContent && (
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-gray-200 rounded-2xl p-8 flex flex-col items-center justify-center gap-2.5 cursor-pointer hover:border-[#5B50F6] transition-colors bg-gray-50/70"
+            className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl p-8 flex flex-col items-center justify-center gap-2.5 cursor-pointer hover:border-[#5B50F6] transition-colors bg-slate-50/70 dark:bg-slate-800/40"
           >
-            <Upload size={24} className="text-gray-400" />
-            <p className="text-[13px] font-semibold text-gray-700">Click to select backup file</p>
-            <p className="text-[11px] text-gray-400">Supported: .json or .enc.json</p>
+            <Upload size={26} className="text-[#5B50F6]" />
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Click to select backup file</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Supports .json or .enc.json backups</p>
             <input
               ref={fileInputRef}
               type="file"
@@ -563,28 +637,30 @@ function ImportBackupModal({
 
         {/* Step 2: Encrypted Passphrase Prompt */}
         {fileContent !== null && isEncrypted && !validatedData && (
-          <form onSubmit={handleDecrypt} className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl text-[12px] text-blue-800">
-              <Lock size={15} className="text-blue-600 shrink-0" />
+          <form onSubmit={handleDecrypt} className="flex flex-col gap-3.5">
+            <div className="flex items-center gap-2.5 p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-xl text-xs text-blue-800 dark:text-blue-300">
+              <Lock size={16} className="text-blue-600 shrink-0" />
               <span>This backup is encrypted. Enter its passphrase to decrypt.</span>
             </div>
 
             <div>
-              <label className="text-[12px] font-semibold text-gray-600 block mb-1">Passphrase</label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1 uppercase tracking-wider">
+                Passphrase
+              </label>
               <input
                 autoFocus
                 type="password"
                 placeholder="Enter passphrase"
                 value={passphrase}
                 onChange={e => setPassphrase(e.target.value)}
-                className="w-full px-3.5 py-2 text-[13px] border border-gray-200 rounded-xl focus:outline-none focus:border-[#5B50F6]"
+                className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-[#5B50F6] text-slate-900 dark:text-white"
               />
             </div>
 
             <button
               type="submit"
               disabled={isProcessing || !passphrase}
-              className="w-full py-2.5 text-[13px] font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] rounded-xl shadow-sm disabled:opacity-50"
+              className="w-full py-2.5 text-sm font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] rounded-xl shadow-sm disabled:opacity-50"
             >
               {isProcessing ? 'Decrypting...' : 'Decrypt & Verify'}
             </button>
@@ -594,34 +670,34 @@ function ImportBackupModal({
         {/* Step 3: Confirmation Summary */}
         {validatedData && validationSummary && (
           <div className="flex flex-col gap-3.5">
-            <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-[13px] text-emerald-900">
-              <p className="font-bold flex items-center gap-1.5 mb-1.5">
+            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs text-emerald-900 dark:text-emerald-200">
+              <p className="font-bold flex items-center gap-1.5 mb-2 text-sm text-emerald-800 dark:text-emerald-300">
                 <CheckCircle2 size={16} className="text-emerald-600" />
                 Valid Backup Detected
               </p>
-              <div className="text-[12px] text-emerald-800 space-y-0.5">
+              <div className="space-y-1 text-slate-700 dark:text-slate-300">
                 <p>• {validationSummary.projectsCount} Projects</p>
                 <p>• {validationSummary.issuesCount} Issues</p>
                 <p>• {validationSummary.screenshotsCount} Screenshots</p>
-                <p className="text-emerald-700/80 text-[11px] pt-1">
+                <p className="text-[11px] text-slate-400 pt-1">
                   Exported on: {new Date(validationSummary.createdAt).toLocaleString()}
                 </p>
               </div>
             </div>
 
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[12px] text-amber-900 flex items-start gap-2">
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-xl text-xs text-amber-900 dark:text-amber-300 flex items-start gap-2">
               <AlertTriangle size={15} className="shrink-0 text-amber-600 mt-0.5" />
               <span>
                 Restoring will replace all current issues and projects in this browser with the backup contents.
               </span>
             </div>
 
-            <div className="flex gap-2.5 pt-1">
+            <div className="flex gap-3 pt-1">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={isProcessing}
-                className="flex-1 py-2.5 text-[13px] font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50"
+                className="flex-1 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 Cancel
               </button>
@@ -629,7 +705,7 @@ function ImportBackupModal({
                 type="button"
                 onClick={handleConfirmRestore}
                 disabled={isProcessing}
-                className="flex-1 py-2.5 text-[13px] font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] rounded-xl shadow-sm disabled:opacity-50"
+                className="flex-1 py-2.5 text-sm font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] rounded-xl shadow-sm disabled:opacity-50"
               >
                 {isProcessing ? 'Restoring...' : 'Replace & Restore'}
               </button>
@@ -656,17 +732,17 @@ function ClearDataModal({
   const isMatch = typed.trim().toLowerCase() === 'delete'
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-sm p-6 animate-in zoom-in-95 duration-150">
-        <h3 className="text-[17px] font-bold text-gray-900 mb-2">Clear all local data?</h3>
-        <p className="text-[13px] text-gray-500 leading-relaxed mb-4">
-          This will permanently wipe all your projects, issues, and screenshots stored in this browser. Without an exported backup, this action is irreversible.
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
+      <div className="absolute inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-xs" onClick={onClose} />
+      <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200/80 dark:border-slate-800 w-full max-w-sm p-6 sm:p-7 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100">
+        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Clear all local data?</h3>
+        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">
+          This will permanently wipe all your projects, issues, and screenshots stored in this browser. This cannot be undone without a backup file.
         </p>
 
         <div className="mb-5">
-          <label className="text-[12px] font-semibold text-gray-600 block mb-1">
-            Type <span className="font-mono text-red-600">DELETE</span> to confirm:
+          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1 uppercase tracking-wider">
+            Type <span className="font-mono text-red-600 dark:text-red-400 font-bold">DELETE</span> to confirm:
           </label>
           <input
             autoFocus
@@ -674,7 +750,7 @@ function ClearDataModal({
             value={typed}
             onChange={e => setTyped(e.target.value)}
             placeholder="DELETE"
-            className="w-full px-3.5 py-2 text-[13px] border border-gray-200 rounded-xl focus:outline-none focus:border-red-500"
+            className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-red-500 text-slate-900 dark:text-white"
           />
         </div>
 
@@ -683,7 +759,7 @@ function ClearDataModal({
             type="button"
             onClick={onClose}
             disabled={isClearing}
-            className="px-4 py-2 text-[13px] font-medium text-gray-600 hover:bg-gray-100 rounded-xl"
+            className="px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
           >
             Cancel
           </button>
@@ -694,7 +770,7 @@ function ClearDataModal({
               setIsClearing(true)
               await onConfirm()
             }}
-            className="px-4 py-2 text-[13px] font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl disabled:opacity-40 transition-colors shadow-sm"
+            className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl disabled:opacity-40 transition-colors shadow-sm"
           >
             {isClearing ? 'Clearing...' : 'Clear All Data'}
           </button>

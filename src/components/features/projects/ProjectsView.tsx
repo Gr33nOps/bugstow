@@ -1,10 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Plus, MoreHorizontal, ArrowLeft, X, Edit2, Trash2, FolderPlus } from 'lucide-react'
+import { Plus, MoreHorizontal, ArrowLeft, X, Edit2, Trash2 } from 'lucide-react'
 import type { Project, Issue } from '../../../types'
 import { EmptyState } from '../inbox/EmptyState'
-import { BRAND_PRIMARY } from '../../common/Icon'
 
-export const PROJECT_COLORS = [
+const PROJECT_COLORS = [
   '#5B50F6', // Bugstow Blurple
   '#3B82F6', // Blue
   '#10B981', // Emerald
@@ -64,34 +63,39 @@ export function ProjectsView({
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-white select-none">
-      {/* Header bar matching bugstow_05_projects.png */}
-      <div className="flex items-center justify-between px-6 pt-6 pb-5">
-        <div className="flex items-center gap-3">
+    <div className="flex-1 flex flex-col overflow-hidden bg-slate-50/50 dark:bg-slate-950 select-none transition-colors">
+      {/* Header bar */}
+      <div className="flex items-center justify-between px-8 pt-8 pb-6 border-b border-slate-200/60 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xs">
+        <div className="flex items-center gap-3.5">
           {onBack && (
             <button
               type="button"
               onClick={onBack}
-              className="w-9 h-9 border border-gray-200 rounded-xl flex md:hidden items-center justify-center text-gray-600 hover:bg-gray-50 transition-colors"
+              className="w-10 h-10 border border-slate-200 dark:border-slate-700 rounded-xl flex md:hidden items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
-              <ArrowLeft size={16} />
+              <ArrowLeft size={18} />
             </button>
           )}
-          <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">Projects</h1>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Projects</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Organize issues, tasks, and notes by client or code repository.
+            </p>
+          </div>
         </div>
 
         <button
           type="button"
           onClick={handleOpenCreate}
-          className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] active:bg-[#4338CA] rounded-xl transition-all shadow-sm active:scale-98"
+          className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] active:bg-[#4338CA] rounded-xl transition-all shadow-xs active:scale-98"
         >
-          <Plus size={15} strokeWidth={2.5} />
+          <Plus size={16} strokeWidth={2.5} />
           <span>New Project</span>
         </button>
       </div>
 
       {/* Projects List Content */}
-      <div className="flex-1 overflow-y-auto px-6 pb-6">
+      <div className="flex-1 overflow-y-auto px-8 py-8 max-w-4xl">
         {projects.length === 0 ? (
           <EmptyState
             heading="No projects yet"
@@ -101,27 +105,29 @@ export function ProjectsView({
             showShortcutHint={false}
           />
         ) : (
-          <div className="bg-white border border-gray-200/90 rounded-2xl overflow-hidden shadow-xs">
-            {projects.map((p, idx) => {
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs divide-y divide-slate-100 dark:divide-slate-800">
+            {projects.map((p) => {
               const projectIssueCount = issues.filter(i => i.projectId === p.id).length
               return (
                 <div
                   key={p.id}
                   onClick={() => onSelectProject(p.id)}
-                  className={`flex items-center gap-4 px-5 py-4 hover:bg-gray-50 cursor-pointer transition-colors relative group ${
-                    idx < projects.length - 1 ? 'border-b border-gray-100' : ''
-                  }`}
+                  className="flex items-center gap-4.5 px-6 py-4.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer transition-colors relative group"
                 >
                   {/* Solid color circle */}
                   <div
-                    className="w-9 h-9 rounded-full shrink-0 shadow-xs flex items-center justify-center text-white"
+                    className="w-10 h-10 rounded-xl shrink-0 shadow-xs flex items-center justify-center text-white font-bold text-sm"
                     style={{ backgroundColor: p.color }}
-                  />
+                  >
+                    {p.name.charAt(0).toUpperCase()}
+                  </div>
 
                   {/* Name and count */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-semibold text-gray-900 truncate">{p.name}</p>
-                    <p className="text-[13px] text-gray-400 mt-0.5">
+                    <p className="text-base font-semibold text-slate-900 dark:text-white truncate group-hover:text-[#5B50F6] transition-colors">
+                      {p.name}
+                    </p>
+                    <p className="text-sm text-slate-400 dark:text-slate-500 mt-0.5">
                       {projectIssueCount} issue{projectIssueCount !== 1 ? 's' : ''}
                     </p>
                   </div>
@@ -135,22 +141,22 @@ export function ProjectsView({
                         e.stopPropagation()
                         setMenuOpenId(prev => (prev === p.id ? null : p.id))
                       }}
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                      className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                     >
-                      <MoreHorizontal size={16} />
+                      <MoreHorizontal size={18} />
                     </button>
 
                     {menuOpenId === p.id && (
                       <div
-                        className="absolute right-0 top-9 w-40 bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 z-20 animate-in fade-in zoom-in-95 duration-100"
+                        className="absolute right-0 top-11 w-44 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl py-1.5 z-20 animate-in fade-in zoom-in-95 duration-100"
                         onClick={e => e.stopPropagation()}
                       >
                         <button
                           type="button"
                           onClick={() => handleOpenEdit(p)}
-                          className="w-full text-left px-3.5 py-2 text-[13px] text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                          className="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2.5 font-medium"
                         >
-                          <Edit2 size={14} className="text-gray-400" />
+                          <Edit2 size={15} className="text-slate-400" />
                           <span>Edit Project</span>
                         </button>
                         <button
@@ -159,9 +165,9 @@ export function ProjectsView({
                             setMenuOpenId(null)
                             onRequestDeleteProject(p)
                           }}
-                          className="w-full text-left px-3.5 py-2 text-[13px] text-red-600 hover:bg-red-50 flex items-center gap-2"
+                          className="w-full text-left px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-2.5 font-medium"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={15} />
                           <span>Delete</span>
                         </button>
                       </div>
@@ -225,14 +231,14 @@ export function ProjectModal({ initial, onSave, onClose }: ProjectModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-none">
-      <div className="absolute inset-0 bg-black/35 backdrop-blur-xs" onClick={() => !isSaving && onClose()} />
+      <div className="absolute inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-xs" onClick={() => !isSaving && onClose()} />
 
       <form
         onSubmit={handleFormSubmit}
-        className="relative bg-white rounded-2xl shadow-2xl border border-gray-100 w-full max-w-sm p-6 flex flex-col gap-4 animate-in zoom-in-95 duration-150"
+        className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200/80 dark:border-slate-800 w-full max-w-md p-6 sm:p-7 flex flex-col gap-4.5 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100"
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-[17px] font-bold text-gray-900">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">
             {initial ? 'Edit Project' : 'New Project'}
           </h2>
           <button
@@ -240,36 +246,40 @@ export function ProjectModal({ initial, onSave, onClose }: ProjectModalProps) {
             aria-label="Close"
             onClick={onClose}
             disabled={isSaving}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400"
+            className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
           >
             <X size={16} />
           </button>
         </div>
 
         <div>
-          <label className="text-[12px] font-semibold text-gray-500 mb-1 block">Project Name</label>
+          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block uppercase tracking-wider">
+            Project Name
+          </label>
           <input
             autoFocus
             type="text"
-            placeholder="e.g. Website or Mobile App"
+            placeholder="e.g. Website Redesign or Mobile App"
             value={name}
             onChange={e => setName(e.target.value)}
-            className="w-full px-3.5 py-2.5 text-[14px] border border-gray-200 rounded-xl focus:outline-none focus:border-[#5B50F6] focus:ring-2 focus:ring-[#5B50F6]/15 transition-all"
+            className="w-full px-4 py-3 text-[15px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-[#5B50F6] focus:ring-2 focus:ring-[#5B50F6]/20 transition-all text-slate-900 dark:text-white"
           />
         </div>
 
         <div>
-          <label className="text-[12px] font-semibold text-gray-500 mb-2 block">Color</label>
-          <div className="flex gap-2.5 flex-wrap items-center">
+          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2 block uppercase tracking-wider">
+            Color Accent
+          </label>
+          <div className="flex gap-3 flex-wrap items-center">
             {PROJECT_COLORS.map(c => (
               <button
                 key={c}
                 type="button"
                 onClick={() => setColor(c)}
-                className="w-7 h-7 rounded-full transition-transform hover:scale-110 relative flex items-center justify-center"
+                className="w-8 h-8 rounded-full transition-transform hover:scale-110 relative flex items-center justify-center cursor-pointer shadow-xs"
                 style={{
                   backgroundColor: c,
-                  outline: color === c ? `2.5px solid ${c}` : 'none',
+                  outline: color === c ? `3px solid ${c}` : 'none',
                   outlineOffset: '2px',
                 }}
               />
@@ -277,19 +287,19 @@ export function ProjectModal({ initial, onSave, onClose }: ProjectModalProps) {
           </div>
         </div>
 
-        <div className="flex gap-2.5 pt-2">
+        <div className="flex gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
           <button
             type="button"
             onClick={onClose}
             disabled={isSaving}
-            className="flex-1 py-2.5 text-[13px] font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50"
+            className="flex-1 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={!name.trim() || isSaving}
-            className="flex-1 py-2.5 text-[13px] font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] rounded-xl disabled:opacity-40 transition-all shadow-sm"
+            className="flex-1 py-2.5 text-sm font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] rounded-xl disabled:opacity-40 transition-all shadow-sm"
           >
             {isSaving ? 'Saving...' : initial ? 'Save Changes' : 'Create Project'}
           </button>
