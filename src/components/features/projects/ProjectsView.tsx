@@ -193,13 +193,13 @@ export function ProjectsView({
   )
 }
 
-interface ProjectModalProps {
+export interface ProjectModalProps {
   initial?: Project | null
   onSave: (name: string, color: string) => Promise<void>
   onClose: () => void
 }
 
-function ProjectModal({ initial, onSave, onClose }: ProjectModalProps) {
+export function ProjectModal({ initial, onSave, onClose }: ProjectModalProps) {
   const [name, setName] = useState(initial?.name || '')
   const [color, setColor] = useState(initial?.color || PROJECT_COLORS[0])
   const [isSaving, setIsSaving] = useState(false)

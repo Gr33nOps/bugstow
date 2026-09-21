@@ -156,27 +156,55 @@ export function IssueDetail({
 
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden select-none">
-      {/* Header bar matching bugstow_04_issue_details.png */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Back to issues"
-          className="w-9 h-9 border border-gray-200 rounded-xl flex items-center justify-center text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors"
-        >
-          <ArrowLeft size={16} />
-        </button>
-
-        {/* More options ••• */}
-        <div className="relative" ref={menuRef}>
+      {/* Header bar */}
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 shrink-0">
+        <div className="flex items-center gap-2">
+          {/* Mobile Back button */}
           <button
             type="button"
-            aria-label="More options"
-            onClick={() => setMenuOpen(prev => !prev)}
-            className="w-9 h-9 border border-gray-200 rounded-xl flex items-center justify-center text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+            onClick={onBack}
+            aria-label="Back to issues"
+            className="w-8 h-8 border border-slate-200 rounded-lg flex md:hidden items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors"
           >
-            <MoreHorizontal size={16} />
+            <ArrowLeft size={15} />
           </button>
+
+          {/* Desktop Close panel button */}
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Close details"
+            className="hidden md:flex items-center gap-1.5 px-2 py-1 text-[12px] font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+            title="Close details (Esc)"
+          >
+            <X size={14} />
+            <span>Close</span>
+            <kbd className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1 py-0.2 rounded">Esc</kbd>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {!isEditing && (
+            <button
+              type="button"
+              onClick={handleStartEdit}
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200/80"
+            >
+              <Edit3 size={13} />
+              <span>Edit</span>
+            </button>
+          )}
+
+          {/* More options ••• */}
+          <div className="relative" ref={menuRef}>
+            <button
+              type="button"
+              aria-label="More options"
+              onClick={() => setMenuOpen(prev => !prev)}
+              className="w-8 h-8 border border-slate-200 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-50 active:bg-slate-100 transition-colors"
+            >
+              <MoreHorizontal size={15} />
+            </button>
 
           {menuOpen && (
             <div
@@ -204,6 +232,7 @@ export function IssueDetail({
               </button>
             </div>
           )}
+          </div>
         </div>
       </div>
 

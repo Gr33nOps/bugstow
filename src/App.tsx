@@ -1,19 +1,30 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import type { Tab, Issue, Project, IssueType } from './types'
 import { useBugstowData } from './hooks/useBugstowData'
+import { useStorageEstimate } from './hooks/useStorageEstimate'
+import { formatBytes } from './services/storageService'
 import { copyPromptToClipboard } from './services/promptService'
 
 // Layout & Common Components
 import { Sidebar } from './components/layout/Sidebar'
+import { AppHeader } from './components/layout/AppHeader'
 import { MobileHeader, MobileBottomNav } from './components/layout/MobileNav'
-import { ToastContainer, ConfirmModal, ImageFullModal, KeyboardShortcutsModal, AboutModal, type ToastMessage, type ConfirmDialogProps } from './components/common/Modals'
+import {
+  ToastContainer,
+  ConfirmModal,
+  ImageFullModal,
+  KeyboardShortcutsModal,
+  AboutModal,
+  type ToastMessage,
+  type ConfirmDialogProps,
+} from './components/common/Modals'
 import { BRAND_PRIMARY } from './components/common/Icon'
 
 // Feature Components
 import { ListView } from './components/features/inbox/ListView'
 import { NewIssueModal } from './components/features/capture/NewIssueModal'
 import { IssueDetail } from './components/features/issues/IssueDetail'
-import { ProjectsView } from './components/features/projects/ProjectsView'
+import { ProjectsView, ProjectModal } from './components/features/projects/ProjectsView'
 import { SettingsView } from './components/features/settings/SettingsView'
 import { Shield, X, Download } from 'lucide-react'
 
@@ -38,13 +49,23 @@ export default function App() {
     dismissBackupReminder,
   } = useBugstowData()
 
+  const { estimate } = useStorageEstimate()
+
   // Navigation & View States
   const [currentTab, setCurrentTab] = useState<Tab>('inbox')
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
   const [projectFilterId, setProjectFilterId] = useState<string | null>(null)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem('bugstow_sidebar_collapsed') === 'true'
+  })
+
+  // Global Search & Type Filters (shared across AppHeader & ListView)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState<IssueType | 'all'>('all')
 
   // Modals & Overlays
   const [showNewIssueModal, setShowNewIssueModal] = useState(false)
+  const [showQuickProjectModal, setShowQuickProjectModal] = useState(false)
   const [initialPastedFile, setInitialPastedFile] = useState<File | null>(null)
   const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null)
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogProps | null>(null)
@@ -63,23 +84,72 @@ export default function App() {
     }, 3200)
   }, [])
 
+  const handleToggleSidebar = () => {
+    setSidebarCollapsed(prev => {
+      const next = !prev
+      localStorage.setItem('bugstow_sidebar_collapsed', String(next))
+      return next
+    })
+  }
+
   // Currently selected issue object
   const selectedIssue = useMemo(() => {
     if (!selectedIssueId) return null
     return issues.find(i => i.id === selectedIssueId) || null
   }, [selectedIssueId, issues])
 
+  // Active project object
+  const activeProject = useMemo(() => {
+    if (!projectFilterId) return null
+    return projects.find(p => p.id === projectFilterId) || null
+  }, [projectFilterId, projects])
+
   // Counts
   const openIssues = useMemo(() => issues.filter(i => i.status === 'open'), [issues])
   const fixedIssues = useMemo(() => issues.filter(i => i.status === 'fixed'), [issues])
 
-  // Global Keyboard Shortcuts (⌘K / Ctrl+K and Esc)
+  const storageUsedFormatted = useMemo(() => {
+    if (!estimate || estimate.usage === undefined) return undefined
+    return formatBytes(estimate.usage)
+  }, [estimate])
+
+  // Global Keyboard Shortcuts (⌘K, ⌘B, /, Esc, ?)
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // ⌘K or Ctrl+K
+      const target = e.target as HTMLElement
+      const isInput =
+        target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+
+      // ⌘K or Ctrl+K: New Issue
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         setShowNewIssueModal(true)
+        return
+      }
+
+      // ⌘B or Ctrl+B: Toggle Sidebar
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault()
+        handleToggleSidebar()
+        return
+      }
+
+      // / : Focus global search if not already typing
+      if (e.key === '/' && !isInput) {
+        e.preventDefault()
+        const searchInput = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement
+        if (searchInput) {
+          searchInput.focus()
+          searchInput.select()
+        }
+        return
+      }
+
+      // ? : Show keyboard shortcuts if not typing
+      if (e.key === '?' && !isInput && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        setShowKeyboardShortcuts(prev => !prev)
+        return
       }
 
       // Escape key closes modals / selection
@@ -90,6 +160,10 @@ export default function App() {
         }
         if (showNewIssueModal) {
           setShowNewIssueModal(false)
+          return
+        }
+        if (showQuickProjectModal) {
+          setShowQuickProjectModal(false)
           return
         }
         if (showKeyboardShortcuts) {
@@ -113,12 +187,11 @@ export default function App() {
 
     window.addEventListener('keydown', handleGlobalKeyDown)
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [zoomImageUrl, showNewIssueModal, showKeyboardShortcuts, showAbout, confirmDialog, selectedIssueId])
+  }, [zoomImageUrl, showNewIssueModal, showQuickProjectModal, showKeyboardShortcuts, showAbout, confirmDialog, selectedIssueId])
 
   // Global clipboard paste listener (when modal is not already open)
   useEffect(() => {
     const handleGlobalPaste = (e: ClipboardEvent) => {
-      // Don't hijack if user is typing in an input or textarea
       const target = e.target as HTMLElement
       if (
         target &&
@@ -145,177 +218,215 @@ export default function App() {
     return () => window.removeEventListener('paste', handleGlobalPaste)
   }, [])
 
-  // Handlers for Issue Operations
+  // Handle Save New Issue
   const handleSaveNewIssue = async (
-    data: {
-      title: string
-      description: string
-      projectId: string | null
-      type: IssueType
-    },
+    title: string,
+    description: string,
+    projectId: string | null,
+    type: IssueType,
     screenshotBlob?: Blob | null,
     filename?: string
   ) => {
-    await createIssue(data, screenshotBlob, filename)
-    showToast('Issue captured')
-  }
-
-  const handleToggleFixed = async (issue: Issue) => {
     try {
-      if (issue.status === 'open') {
-        await markFixed(issue.id)
-        showToast('Marked as fixed')
-      } else {
-        await reopenIssue(issue.id)
-        showToast('Issue reopened')
-      }
+      const newIssue = await createIssue(
+        {
+          title,
+          description,
+          projectId,
+          type,
+          status: 'open',
+        },
+        screenshotBlob || undefined,
+        filename
+      )
+      showToast('Issue captured')
+      setShowNewIssueModal(false)
+      setInitialPastedFile(null)
+      setCurrentTab('inbox')
+      setSelectedIssueId(newIssue.id)
     } catch (err) {
-      showToast('Failed to update issue status', 'error')
+      console.error('Failed to create issue:', err)
+      showToast('Failed to save issue. Please retry.', 'error')
+      throw err
     }
   }
 
+  // Handle Copy Prompt
   const handleCopyPrompt = async (issue: Issue) => {
     const project = projects.find(p => p.id === issue.projectId)
     const success = await copyPromptToClipboard(issue, project)
     if (success) {
       showToast('Prompt copied to clipboard')
     } else {
-      showToast('Could not copy prompt', 'error')
+      showToast('Failed to copy prompt to clipboard', 'error')
     }
   }
 
+  // Handle Toggle Fixed / Reopen
+  const handleToggleFixed = async (issue: Issue) => {
+    if (issue.status === 'open') {
+      await markFixed(issue.id)
+      showToast('Marked as fixed')
+    } else {
+      await reopenIssue(issue.id)
+      showToast('Issue reopened')
+    }
+  }
+
+  // Handle Delete Request
   const handleDeleteIssueRequest = (issue: Issue) => {
     setConfirmDialog({
-      title: 'Delete this issue?',
-      description:
-        'This will permanently remove the issue and its attached screenshot. This action cannot be undone.',
-      confirmLabel: 'Delete Issue',
+      title: 'Delete Issue',
+      message: `Are you sure you want to delete "${issue.title}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
       isDestructive: true,
       onConfirm: async () => {
-        try {
-          await deleteIssue(issue.id)
-          if (selectedIssueId === issue.id) setSelectedIssueId(null)
-          setConfirmDialog(null)
-          showToast('Issue deleted')
-        } catch (err) {
-          showToast('Failed to delete issue', 'error')
+        await deleteIssue(issue.id)
+        if (selectedIssueId === issue.id) {
+          setSelectedIssueId(null)
         }
+        setConfirmDialog(null)
+        showToast('Issue deleted')
       },
       onCancel: () => setConfirmDialog(null),
     })
   }
 
-  // Handlers for Project Operations
+  // Handle Project Delete Request
   const handleDeleteProjectRequest = (project: Project) => {
+    const associatedCount = issues.filter(i => i.projectId === project.id).length
     setConfirmDialog({
-      title: `Delete "${project.name}"?`,
-      description:
-        'All issues in this project will be preserved and moved into Unassigned. They will not be deleted.',
+      title: 'Delete Project',
+      message: `Are you sure you want to delete "${project.name}"? ${
+        associatedCount > 0
+          ? `All ${associatedCount} issue${
+              associatedCount > 1 ? 's' : ''
+            } in this project will be preserved and moved to "Unassigned".`
+          : 'No issues are currently assigned to this project.'
+      }`,
       confirmLabel: 'Delete Project',
       isDestructive: true,
       onConfirm: async () => {
-        try {
-          await deleteProject(project.id)
-          if (projectFilterId === project.id) setProjectFilterId(null)
-          setConfirmDialog(null)
-          showToast(`Project "${project.name}" deleted. Issues moved to Unassigned.`)
-        } catch (err) {
-          showToast('Failed to delete project', 'error')
+        await deleteProject(project.id)
+        if (projectFilterId === project.id) {
+          setProjectFilterId(null)
         }
+        setConfirmDialog(null)
+        showToast('Project deleted. Associated issues were preserved.')
       },
       onCancel: () => setConfirmDialog(null),
     })
   }
 
-  // Backup reminder calculation
+  // Calculate if backup reminder is due
   const shouldShowBackupReminder = useMemo(() => {
-    if (!settings) return false
-    if (issues.length < 3) return false
-
-    // Check if dismissed recently (within 7 days)
-    if (settings.backupReminderDismissedAt) {
-      const dismissedTime = new Date(settings.backupReminderDismissedAt).getTime()
-      const daysSinceDismissed = (Date.now() - dismissedTime) / (1000 * 60 * 60 * 24)
-      if (daysSinceDismissed < 7) return false
-    }
-
-    // Check if exported recently (within 14 days)
-    if (settings.lastBackupExportAt) {
-      const exportedTime = new Date(settings.lastBackupExportAt).getTime()
-      const daysSinceExport = (Date.now() - exportedTime) / (1000 * 60 * 60 * 24)
-      if (daysSinceExport < 14) return false
-    }
-
-    return true
+    if (!settings || !settings.backupReminderDismissedAt) return issues.length >= 5
+    const dismissed = new Date(settings.backupReminderDismissedAt).getTime()
+    const now = Date.now()
+    const sevenDays = 7 * 24 * 60 * 60 * 1000
+    return now - dismissed > sevenDays && issues.length >= 5
   }, [settings, issues.length])
 
-  // Content Renderer
+  // Render main tab content
   const renderTabContent = () => {
-    if (currentTab === 'projects') {
-      return (
-        <ProjectsView
-          projects={projects}
-          issues={issues}
-          onSelectProject={id => {
-            setProjectFilterId(id)
-            setCurrentTab('inbox')
-          }}
-          onCreateProject={async (name, color) => {
-            await createProject(name, color)
-            showToast('Project created')
-          }}
-          onUpdateProject={async (id, updates) => {
-            await updateProject(id, updates)
-            showToast('Project updated')
-          }}
-          onRequestDeleteProject={handleDeleteProjectRequest}
-        />
-      )
+    switch (currentTab) {
+      case 'inbox':
+        return (
+          <ListView
+            title="Inbox"
+            subtitle="Capture bugs, feedback or ideas while you build."
+            issues={openIssues}
+            projects={projects}
+            screenshotUrls={screenshotUrls}
+            selectedIssueId={selectedIssueId}
+            onSelectIssue={issue => setSelectedIssueId(issue.id)}
+            onNewIssue={() => setShowNewIssueModal(true)}
+            onToggleFixed={handleToggleFixed}
+            onCopyPrompt={handleCopyPrompt}
+            onDeleteIssue={handleDeleteIssueRequest}
+            emptyHeading="Nothing to fix. Yet."
+            emptySub="Capture bugs, feedback or ideas while you build."
+            showCaptureOnEmpty={true}
+            activeProjectFilter={projectFilterId}
+            onClearProjectFilter={() => setProjectFilterId(null)}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            typeFilter={typeFilter}
+            onTypeFilterChange={setTypeFilter}
+          />
+        )
+
+      case 'fixed':
+        return (
+          <ListView
+            title="Fixed Issues"
+            subtitle="Resolved and fixed items."
+            issues={fixedIssues}
+            projects={projects}
+            screenshotUrls={screenshotUrls}
+            selectedIssueId={selectedIssueId}
+            onSelectIssue={issue => setSelectedIssueId(issue.id)}
+            onNewIssue={() => setShowNewIssueModal(true)}
+            onToggleFixed={handleToggleFixed}
+            onCopyPrompt={handleCopyPrompt}
+            onDeleteIssue={handleDeleteIssueRequest}
+            emptyHeading="No fixed issues yet"
+            emptySub="Mark resolved issues as fixed to clear them from your inbox."
+            showCaptureOnEmpty={false}
+            activeProjectFilter={projectFilterId}
+            onClearProjectFilter={() => setProjectFilterId(null)}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            typeFilter={typeFilter}
+            onTypeFilterChange={setTypeFilter}
+          />
+        )
+
+      case 'projects':
+        return (
+          <ProjectsView
+            projects={projects}
+            issues={issues}
+            onSelectProject={id => {
+              setProjectFilterId(id)
+              setCurrentTab('inbox')
+            }}
+            onCreateProject={async (name, color) => {
+              await createProject({ name, color })
+              showToast('Project created')
+            }}
+            onUpdateProject={async (id, updates) => {
+              await updateProject(id, updates)
+              showToast('Project updated')
+            }}
+            onRequestDeleteProject={handleDeleteProjectRequest}
+            onBack={() => setCurrentTab('inbox')}
+          />
+        )
+
+      case 'settings':
+        return (
+          <SettingsView
+            onClearAllData={async () => {
+              await clearAllData()
+              setSelectedIssueId(null)
+              setProjectFilterId(null)
+              showToast('All data permanently deleted')
+            }}
+            onRestoreBackup={async data => {
+              await restoreBackup(data)
+              setSelectedIssueId(null)
+              showToast('Backup restored successfully')
+            }}
+            onToast={showToast}
+            onOpenKeyboardShortcuts={() => setShowKeyboardShortcuts(true)}
+            onOpenAbout={() => setShowAbout(true)}
+          />
+        )
+
+      default:
+        return null
     }
-
-    if (currentTab === 'settings') {
-      return (
-        <SettingsView
-          onClearAllData={clearAllData}
-          onRestoreBackup={restoreBackup}
-          onToast={showToast}
-          onOpenKeyboardShortcuts={() => setShowKeyboardShortcuts(true)}
-          onOpenAbout={() => setShowAbout(true)}
-        />
-      )
-    }
-
-    // Inbox or Fixed View
-    const isFixedView = currentTab === 'fixed'
-    const targetIssues = isFixedView ? fixedIssues : openIssues
-
-    return (
-      <ListView
-        title={isFixedView ? 'Fixed' : 'Inbox'}
-        subtitle={
-          isFixedView
-            ? 'A little less to worry about.'
-            : 'Capture it now. Fix it later.'
-        }
-        issues={targetIssues}
-        projects={projects}
-        screenshotUrls={screenshotUrls}
-        onSelectIssue={issue => setSelectedIssueId(issue.id)}
-        onNewIssue={() => setShowNewIssueModal(true)}
-        onToggleFixed={handleToggleFixed}
-        onCopyPrompt={handleCopyPrompt}
-        onDeleteIssue={handleDeleteIssueRequest}
-        emptyHeading={isFixedView ? 'No fixes yet' : 'Nothing to fix. Yet.'}
-        emptySub={
-          isFixedView
-            ? 'Issues you mark as fixed will appear here.'
-            : 'Capture bugs, feedback or ideas while you build.'
-        }
-        showCaptureOnEmpty={!isFixedView}
-        activeProjectFilter={projectFilterId}
-        onClearProjectFilter={() => setProjectFilterId(null)}
-      />
-    )
   }
 
   // Selected Issue Detail Element
@@ -340,9 +451,9 @@ export default function App() {
   ) : null
 
   return (
-    <div className="flex h-screen bg-white overflow-hidden text-gray-900 antialiased selection:bg-[#EEF0FF] selection:text-[#5B50F6]">
-      {/* Desktop Sidebar */}
-      <div className="hidden md:flex">
+    <div className="flex h-screen w-screen bg-[#F9FAFB] overflow-hidden text-slate-900 antialiased selection:bg-[#EEF0FF] selection:text-[#5B50F6]">
+      {/* Desktop Responsive Sidebar */}
+      <div className="hidden md:flex h-full">
         <Sidebar
           currentTab={currentTab}
           onSelectTab={tab => {
@@ -351,11 +462,39 @@ export default function App() {
           }}
           inboxCount={openIssues.length}
           fixedCount={fixedIssues.length}
+          projects={projects}
+          activeProjectFilterId={projectFilterId}
+          onSelectProjectFilter={id => {
+            setProjectFilterId(id)
+            setCurrentTab('inbox')
+          }}
+          onNewIssue={() => setShowNewIssueModal(true)}
+          onCreateProject={() => setShowQuickProjectModal(true)}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={handleToggleSidebar}
+          storageEstimateText={storageUsedFormatted ? `${storageUsedFormatted} stored in browser` : undefined}
         />
       </div>
 
-      {/* Main Workspace */}
-      <div className="flex-1 flex flex-col overflow-hidden relative">
+      {/* Main Web Application Canvas */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden bg-white relative min-w-0">
+        {/* Global Desktop Top Bar */}
+        <AppHeader
+          currentTab={currentTab}
+          activeProject={activeProject}
+          onClearProjectFilter={() => setProjectFilterId(null)}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          typeFilter={typeFilter}
+          onTypeFilterChange={setTypeFilter}
+          onNewIssue={() => setShowNewIssueModal(true)}
+          onOpenKeyboardShortcuts={() => setShowKeyboardShortcuts(true)}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={handleToggleSidebar}
+          issueCount={currentTab === 'inbox' ? openIssues.length : currentTab === 'fixed' ? fixedIssues.length : undefined}
+          storageUsedFormatted={storageUsedFormatted}
+        />
+
         {/* Mobile Header */}
         {!selectedIssue && (
           <MobileHeader
@@ -367,11 +506,11 @@ export default function App() {
 
         {/* Subtle Backup Reminder Banner */}
         {shouldShowBackupReminder && currentTab === 'inbox' && !selectedIssue && (
-          <div className="bg-[#EEF0FF] border-b border-[#D8DDFF] px-5 py-2.5 flex items-center justify-between text-[12px] text-[#4338CA] animate-in slide-in-from-top-2 duration-150">
+          <div className="bg-[#EEF0FF] border-b border-[#D8DDFF] px-5 py-2 flex items-center justify-between text-[12px] text-[#4338CA] shrink-0">
             <div className="flex items-center gap-2">
               <Shield size={14} className="text-[#5B50F6] shrink-0" />
               <span>
-                <strong>Backup reminder:</strong> Your data is stored only in this browser. Remember to export a backup.
+                <strong>Backup reminder:</strong> Your data is stored locally in this browser. Keep an encrypted backup.
               </span>
             </div>
             <div className="flex items-center gap-3">
@@ -395,18 +534,17 @@ export default function App() {
           </div>
         )}
 
-        {/* Center Canvas */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Desktop Split View if issue is selected */}
+        {/* Center Workspace (Split view or full content) */}
+        <div className="flex-1 flex overflow-hidden min-h-0">
           {selectedIssue ? (
             <>
-              {/* Left: list on desktop (hidden on mobile when issue is open) */}
-              <div className="hidden md:flex flex-1 overflow-hidden border-r border-gray-100">
+              {/* Left pane: list on desktop (hidden on mobile when issue is open) */}
+              <div className="hidden md:flex flex-1 overflow-hidden border-r border-slate-200/80 min-w-0">
                 {renderTabContent()}
               </div>
 
-              {/* Right: issue detail panel on desktop, full screen on mobile */}
-              <div className="flex-1 md:flex-initial md:w-[460px] lg:w-[500px] flex flex-col overflow-hidden bg-white">
+              {/* Right pane: issue detail panel on desktop, full screen on mobile */}
+              <div className="flex-1 md:flex-initial md:w-[480px] lg:w-[520px] xl:w-[560px] flex flex-col overflow-hidden bg-white shrink-0">
                 {issueDetailComponent}
               </div>
             </>
@@ -437,7 +575,7 @@ export default function App() {
             className="absolute inset-0 bg-black/40 backdrop-blur-xs"
             onClick={() => setMobileDrawerOpen(false)}
           />
-          <div className="relative w-64 bg-white h-full shadow-2xl p-4 flex flex-col animate-in slide-in-from-left duration-200">
+          <div className="relative w-64 bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-left duration-200">
             <Sidebar
               currentTab={currentTab}
               onSelectTab={tab => {
@@ -447,9 +585,37 @@ export default function App() {
               }}
               inboxCount={openIssues.length}
               fixedCount={fixedIssues.length}
+              projects={projects}
+              activeProjectFilterId={projectFilterId}
+              onSelectProjectFilter={id => {
+                setProjectFilterId(id)
+                setCurrentTab('inbox')
+                setMobileDrawerOpen(false)
+              }}
+              onNewIssue={() => {
+                setMobileDrawerOpen(false)
+                setShowNewIssueModal(true)
+              }}
+              onCreateProject={() => {
+                setMobileDrawerOpen(false)
+                setShowQuickProjectModal(true)
+              }}
+              storageEstimateText={storageUsedFormatted ? `${storageUsedFormatted} on device` : undefined}
             />
           </div>
         </div>
+      )}
+
+      {/* Quick Project Creation Modal (triggered from sidebar) */}
+      {showQuickProjectModal && (
+        <ProjectModal
+          onSave={async (name, color) => {
+            await createProject({ name, color })
+            showToast('Project created')
+            setShowQuickProjectModal(false)
+          }}
+          onClose={() => setShowQuickProjectModal(false)}
+        />
       )}
 
       {/* Capture New Issue Modal */}
