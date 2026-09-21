@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Production builds
+dist/
+build/
+
+# Cloudflare & Wrangler
+.wrangler/
+.dev.vars*
+
+# Environment & local settings
+.env
+.env.local
+.env.*.local
+
+# Vite & TypeScript cache
+.vite/
+*.tsbuildinfo
+vite.config.*.timestamp-*
+
+# Logs & temporary files
+*.log
+logs/
+.tmp-*
+.cache/
