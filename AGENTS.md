@@ -16,12 +16,15 @@ Spot it. Stow it. Fix it. A personal issue inbox designed for people who vibe co
   - `common/` - Brand icons, badges, modals, and toasts
   - `features/` - Inbox, Capture, Issue Details, Projects, and Settings
   - `layout/` - Desktop Sidebar and Mobile navigation
+- `api/backup.ts` - Vercel serverless function issuing presigned Cloudflare R2 URLs for encrypted cloud sync
+- `src/services/cloudSyncService.ts` - Client for encrypted R2 backup/restore
 - `docs/screenshots/` - Design and feature visual references
-- `wrangler.jsonc` - Cloudflare Workers / Pages static assets deployment configuration
+- `vercel.json` - Vercel framework, build, and SPA rewrite configuration
 
 ## Development
 
 - Start dev server: `npm run dev`
 - Run test suite: `npm test`
+- Typecheck: `npm run typecheck`
 - Production build: `npm run build`
-- Deploy to Cloudflare: `npm run deploy`
+- Deploy: pushes to `main` auto-deploy on Vercel (project connected to `Gr33nOps/bugstow`)

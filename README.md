@@ -38,9 +38,14 @@ Bugstow replaces the messy workflow of taking screenshots and sending them to yo
   - **Storage Estimation**: Live storage quota reporting using `navigator.storage.estimate()`.
   - **Persistent Storage**: Browser persistence request via `navigator.storage.persist()`.
   - **Clear All Data**: Safe wipe with double-confirmation prompt.
-- **100% Local-First Privacy**:
+- **Optional Encrypted Cloud Sync**:
+  - Push an AES-256-GCM–encrypted copy of your data to your own Cloudflare R2 bucket and pull it onto any device.
+  - Data is encrypted **in the browser** before upload — only ciphertext is stored in the cloud.
+  - Large screenshot backups sync via short-lived presigned URLs (browser ↔ R2 directly), so there is no serverless size limit.
+  - The app stays fully usable offline; cloud sync is a manual, opt-in action.
+- **Local-First Privacy**:
   - Works without an account.
-  - Zero external network requests, zero telemetry, zero analytics, zero cloud databases.
+  - No telemetry, no analytics. By default all data stays in your browser; nothing leaves the device unless you explicitly run a cloud backup.
   - System fonts used to eliminate external webfont tracking.
 
 ---
@@ -53,7 +58,8 @@ Bugstow replaces the messy workflow of taking screenshots and sending them to yo
 - **Database**: Browser IndexedDB with `idb`
 - **Cryptography**: Web Crypto API (PBKDF2-HMAC-SHA256, AES-256-GCM)
 - **Testing**: Vitest + `fake-indexeddb`
-- **Hosting / Deployment**: Cloudflare Workers (Static Assets) / Cloudflare Pages
+- **Hosting**: Vercel (static Vite build + serverless functions in `/api`)
+- **Cloud Sync Storage**: Cloudflare R2 (S3-compatible), accessed via presigned URLs
 
 ---
 
@@ -95,31 +101,37 @@ npm run build
 
 ---
 
-## Cloudflare Deployment
+## Deployment (Vercel + Cloudflare R2)
 
-Bugstow is packaged as a pure static application with zero backend runtime dependencies.
+Bugstow ships as a static Vite build plus one serverless function (`/api/backup`) that brokers encrypted backups to a Cloudflare R2 bucket.
 
-### Deploy with Cloudflare Workers (Static Assets)
+### 1. Deploy the app on Vercel
 
-The repository includes `wrangler.jsonc`:
+1. Import `Gr33nOps/bugstow` into Vercel (**Add New → Project**).
+2. Framework preset **Vite** is auto-detected. Build command `npm run build`, output directory `dist` (see `vercel.json`).
+3. Deploy.
 
-```bash
-npm run build
-npx wrangler deploy
-```
+### 2. Set up Cloudflare R2 (optional, for cloud sync)
 
-### Deploy with Cloudflare Pages
+1. In the Cloudflare dashboard, create an **R2 bucket** (e.g. `bugstow`).
+2. Create an **R2 API token** (S3-compatible) with read/write on that bucket. Note the **Access Key ID** and **Secret Access Key**.
+3. Add a **CORS policy** on the bucket allowing your Vercel origin(s) with methods `GET, PUT, HEAD`.
+4. In the Vercel project **Settings → Environment Variables**, add:
 
-1. Go to **Cloudflare Dashboard > Workers & Pages > Create Application > Pages**.
-2. Connect this repository (`Gr33nOps/bugstow`).
-3. Set build configuration:
-   - **Framework preset**: `Vite`
-   - **Build command**: `npm run build`
-   - **Build output directory**: `dist`
-4. Deploy site.
+   | Variable | Value |
+   |---|---|
+   | `R2_ACCOUNT_ID` | your Cloudflare account ID |
+   | `R2_ACCESS_KEY_ID` | R2 token access key ID |
+   | `R2_SECRET_ACCESS_KEY` | R2 token secret |
+   | `R2_BUCKET` | `bugstow` |
+   | `BUGSTOW_SYNC_KEY` | *(optional)* shared secret to gate the endpoint |
+
+5. Redeploy. The **Settings → Cloud Sync** section appears automatically once the endpoint is configured.
+
+See `.env.example` for the full list. If R2 is not configured, the app runs fully local-first and the Cloud Sync section stays hidden.
 
 > [!NOTE]
-> IndexedDB storage is scoped to the web origin (`protocol://domain:port`). Use **Settings > Export Backup** if you ever migrate between domains.
+> IndexedDB storage is scoped to the web origin (`protocol://domain:port`). Use **Settings → Back up to Cloud** (or **Export Backup**) if you ever migrate between domains.
 
 ---
 
@@ -141,6 +153,8 @@ Bugstow follows a clean, modular structure using the **Repository Pattern** to d
 
 ```
 bugstow/
+├── api/
+│   └── backup.ts             # Vercel serverless function: presigned R2 cloud-sync URLs
 ├── docs/
 │   └── screenshots/          # Application & design reference screenshots
 ├── public/
@@ -163,6 +177,7 @@ bugstow/
 │   │   └── indexedDbRepositories.ts # Atomic transactions with idb
 │   ├── services/
 │   │   ├── backupService.ts  # Web Crypto PBKDF2 + AES-256-GCM export/import
+│   │   ├── cloudSyncService.ts # Encrypted R2 backup/restore via presigned URLs
 │   │   ├── promptService.ts  # Vibe coding prompt generation
 │   │   └── storageService.ts # Storage estimate and persistence API
 │   ├── storage/
@@ -176,7 +191,8 @@ bugstow/
 ├── package.json              # Project scripts & dependencies
 ├── tsconfig.json             # TypeScript configuration
 ├── vite.config.ts            # Vite + Tailwind v4 + path alias configuration
-└── wrangler.jsonc            # Cloudflare Workers / Pages static assets config
+├── vercel.json               # Vercel framework, build & SPA rewrite config
+└── .env.example              # R2 cloud-sync environment variables
 ```
 
 ---
