@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { sql } from './_lib/db'
-import { teamRole } from './_lib/auth'
-import { withUser, queryParam, readJsonBody } from './_lib/http'
+import { sql } from './_lib/db.js'
+import { teamRole } from './_lib/auth.js'
+import { withUser, queryParam, readJsonBody } from './_lib/http.js'
 
 function randomToken(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(24)))

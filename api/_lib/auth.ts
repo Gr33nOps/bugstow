@@ -1,6 +1,6 @@
 import type { VercelRequest } from '@vercel/node'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
-import { sql } from './db'
+import { sql } from './db.js'
 
 /**
  * Verifies the Neon Managed Better Auth session token that the client obtains

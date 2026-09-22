@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getUser, type AuthUser } from './auth'
-import { isDbConfigured } from './db'
+import { getUser, type AuthUser } from './auth.js'
+import { isDbConfigured } from './db.js'
 
 export function json(res: VercelResponse, status: number, data: unknown) {
   res.status(status).json(data)
