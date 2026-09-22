@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { sql } from './_lib/db'
-import { teamRole } from './_lib/auth'
-import { withUser, queryParam, readJsonBody } from './_lib/http'
+import { sql } from './_lib/db.js'
+import { teamRole } from './_lib/auth.js'
+import { withUser, queryParam, readJsonBody } from './_lib/http.js'
 
 async function teamIdForProject(projectId: string): Promise<string | null> {
   const rows = (await sql`select team_id from projects where id = ${projectId} limit 1`) as Array<{

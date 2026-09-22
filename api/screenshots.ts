@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { sql } from './_lib/db'
-import { teamRole } from './_lib/auth'
-import { withUser, queryParam, readJsonBody } from './_lib/http'
+import { sql } from './_lib/db.js'
+import { teamRole } from './_lib/auth.js'
+import { withUser, queryParam, readJsonBody } from './_lib/http.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   await withUser(req, res, async user => {

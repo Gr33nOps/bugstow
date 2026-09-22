@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { sql } from './_lib/db'
-import { teamRole } from './_lib/auth'
-import { withUser, readJsonBody } from './_lib/http'
+import { sql } from './_lib/db.js'
+import { teamRole } from './_lib/auth.js'
+import { withUser, readJsonBody } from './_lib/http.js'
 
 interface GhLabel {
   name?: string
