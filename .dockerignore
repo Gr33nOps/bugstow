@@ -1,0 +1,16 @@
+node_modules
+server/node_modules
+dist
+build
+.git
+.github
+.wrangler
+**/data
+server/data
+server/testdata
+server/intdata
+*.log
+.env
+.env.*
+.claude
+docs/screenshots

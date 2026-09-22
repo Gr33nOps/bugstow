@@ -1,30 +1,41 @@
 # Bugstow
 
-Spot it. Stow it. Fix it. A personal issue inbox designed for people who vibe code.
+Spot it. Stow it. Fix it. A privacy-first issue tracker with two editions:
 
-## Architecture & Project Structure
+- **Personal mode** — browser-only, IndexedDB, offline PWA, no backend.
+- **Team mode** — self-hosted Node + Express + SQLite server the team runs itself.
 
-- `src/main.tsx` - Application entrypoint; imports `src/index.css` and mounts `src/App.tsx`
-- `src/App.tsx` - Primary application container and responsive view controller
-- `src/index.css` - Global styling and Tailwind CSS v4 entrypoint
-- `src/types/` - Core domain entities (`Issue`, `Project`, `IssueType`, `Backup`)
-- `src/storage/db.ts` - IndexedDB database configuration (`idb`)
-- `src/repositories/` - Data access layer implementing repository interfaces
-- `src/services/` - Business services (`backupService.ts`, `promptService.ts`, `storageService.ts`)
-- `src/hooks/` - Reactive hooks (`useBugstowData.ts`, `useStorageEstimate.ts`)
-- `src/components/`
-  - `common/` - Brand icons, badges, modals, and toasts
-  - `features/` - Inbox, Capture, Issue Details, Projects, and Settings
-  - `layout/` - Desktop Sidebar and Mobile navigation
-- `api/backup.ts` - Vercel serverless function issuing presigned Cloudflare R2 URLs for encrypted cloud sync
-- `src/services/cloudSyncService.ts` - Client for encrypted R2 backup/restore
-- `docs/screenshots/` - Design and feature visual references
-- `vercel.json` - Vercel framework, build, and SPA rewrite configuration
+No user/team data touches the maintainer's infrastructure.
+
+## Architecture
+
+- `src/App.tsx` - Personal (local-first) app; IndexedDB via `src/storage/db.ts`
+- `src/RootApp.tsx` - Runtime router: personal vs team (detects a team server via `/api/health`)
+- `src/lib/authClient.ts` - better-auth client (same-origin cookies) for team mode
+- `src/lib/teamServer.ts` - Detects whether a self-hosted team server is present
+- `src/hooks/useBugstowData.ts` - Personal data (IndexedDB)
+- `src/hooks/useCloudData.ts` - Team data via the server API
+- `src/services/` - `backupService` (encrypted export/import), `promptService`, `storageService`, `teamApi`, `teamMigration` (personal→team)
+- `src/components/cloud/` - `ModePicker`, `CloudAuthGate`, `CloudApp` (team workspace), `SelfHostInfo`
+- `server/` - Self-hosted team server (Express, better-auth, SQLite, filesystem screenshots)
+  - `server/src/index.ts` - App entry (migrations, auth handler, API, serves the built frontend)
+  - `server/src/auth.ts` - better-auth (SQLite, email/password, sign-up gating)
+  - `server/src/api.ts` - REST API (teams, members, projects, issues, screenshots, github-import)
+  - `server/src/db.ts`, `storage.ts`, `middleware.ts`, `config.ts`
+- `Dockerfile`, `docker-compose.yml` - Team edition packaging (persistent `/data` volume)
+- `docs/SELF_HOSTING.md` - Team install/backup/upgrade/security guide
 
 ## Development
 
-- Start dev server: `npm run dev`
-- Run test suite: `npm test`
-- Typecheck: `npm run typecheck`
-- Production build: `npm run build`
-- Deploy: pushes to `main` auto-deploy on Vercel (project connected to `Gr33nOps/bugstow`)
+- Personal app: `npm run dev` (http://localhost:8443)
+- Team server: `cd server && BUGSTOW_AUTH_SECRET=dev-secret-0123456789 npm run dev` (http://localhost:8080)
+  - Vite proxies `/api` → the server in dev.
+- Build frontend: `npm run build` · Frontend tests: `npm test` · Typecheck: `npm run typecheck`
+- Server: `cd server && npm test && npm run typecheck`
+- Public site deploys as static `dist`. Team edition deploys via Docker Compose.
+
+## Constraints
+
+- Do not reintroduce cloud dependencies (Neon, Cloudflare R2, Vercel functions).
+- Personal data stays in the browser; team data stays on the self-hosted server.
+- Migrations must remain additive/non-destructive.

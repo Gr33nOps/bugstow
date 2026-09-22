@@ -1,202 +1,181 @@
 # bugstow.
 
-> **Spot it. Stow it. Fix it.**  
-> A personal issue inbox designed for people who vibe code.
+> **Spot it. Stow it. Fix it.**
+> A privacy-first issue tracker. Use it privately in your browser, or self-host it for your team.
 
-Bugstow replaces the messy workflow of taking screenshots and sending them to your own Instagram/WhatsApp DMs or notes app. It is a lightweight, local-first personal inbox for capturing bugs, UI inconsistencies, ideas, and feedback discovered while building and testing software.
+Bugstow replaces the messy workflow of screenshotting bugs into your own DMs or
+notes. It captures bugs, UI issues, ideas, and feedback while you build — and it
+never stores your data on infrastructure you don't control.
 
----
+There are two ways to use it:
 
-## The Workflow
+- **Personal mode** — open the website and everything stays in *your* browser. No
+  account, no server, works offline.
+- **Team mode** — a teammate self-hosts Bugstow on their own machine; the team
+  connects to it and shares projects and issues. The data lives on *their*
+  machine.
 
-**Capture now. Fix later.**
-
-1. **Notice an issue** while developing or testing.
-2. **Take a screenshot** (`Cmd+Shift+4`, `Win+Shift+S`, or snipping tool).
-3. **Open Bugstow** and press `Ctrl+V` / `Cmd+V` (or click `Capture Issue` / `⌘ K`).
-4. **Add a quick note** and select project/type.
-5. **Save and keep working.**
-6. **Return later**, click **Copy as Prompt**, and feed the structured prompt directly into your coding LLM to fix it.
-
----
-
-## Key Features
-
-- **Effortless Screenshot Capture**:
-  - Global clipboard paste (`Cmd+V` / `Ctrl+V`) instantly opens the issue composer with your screenshot attached.
-  - Drag-and-drop or file upload (PNG, JPEG, WebP up to 10 MB).
-  - Screenshots are stored as binary `Blob`s in browser IndexedDB — never base64 in `localStorage`.
-- **Copy as Prompt (Vibe Coding)**:
-  - Generates tailored, LLM-ready prompts for Bugs, UI/UX issues, and Ideas.
-  - Automatically structures context, problem definition, and verification instructions for AI coding assistants.
-- **Projects Management**:
-  - Organize issues by project with custom color swatches.
-  - **Safe Project Deletion**: Deleting a project preserves all its issues and moves them into the `Unassigned` category (`projectId: null`).
-- **Data & Storage Controls**:
-  - **Encrypted Backup Export**: AES-256-GCM authenticated encryption using PBKDF2 (100,000 iterations of SHA-256 with 128-bit random salt).
-  - **Atomic Backup Restoration**: Validates schema and restores all projects, issues, and screenshots inside an atomic transaction.
-  - **Storage Estimation**: Live storage quota reporting using `navigator.storage.estimate()`.
-  - **Persistent Storage**: Browser persistence request via `navigator.storage.persist()`.
-  - **Clear All Data**: Safe wipe with double-confirmation prompt.
-- **Optional Encrypted Cloud Sync**:
-  - Push an AES-256-GCM–encrypted copy of your data to your own Cloudflare R2 bucket and pull it onto any device.
-  - Data is encrypted **in the browser** before upload — only ciphertext is stored in the cloud.
-  - Large screenshot backups sync via short-lived presigned URLs (browser ↔ R2 directly), so there is no serverless size limit.
-  - The app stays fully usable offline; cloud sync is a manual, opt-in action.
-- **Local-First Privacy**:
-  - Works without an account.
-  - No telemetry, no analytics. By default all data stays in your browser; nothing leaves the device unless you explicitly run a cloud backup.
-  - System fonts used to eliminate external webfont tracking.
+No user or team data is stored on the maintainer's infrastructure.
 
 ---
 
-## Tech Stack
+## Personal mode (browser-only)
 
-- **Frontend**: React 19, TypeScript 5.7, Vite 8
-- **Styling**: Tailwind CSS v4 with `@tailwindcss/vite`
-- **Icons**: Lucide React + custom Bugstow SVG brand assets
-- **Database**: Browser IndexedDB with `idb`
-- **Cryptography**: Web Crypto API (PBKDF2-HMAC-SHA256, AES-256-GCM)
-- **Testing**: Vitest + `fake-indexeddb`
-- **Hosting**: Vercel (static Vite build + serverless functions in `/api`)
-- **Cloud Sync Storage**: Cloudflare R2 (S3-compatible), accessed via presigned URLs
+Open the public site and start immediately:
+
+- **No account, no setup, no backend.** Everything is stored locally in your
+  browser (IndexedDB): projects, issues, screenshots, and settings.
+- **Works offline** after first load — the app shell is cached by a service
+  worker. Your data is always local, so there is nothing to sync.
+- **Screenshot capture:** clipboard paste (`Cmd/Ctrl+V`), drag-and-drop, or file
+  upload (PNG/JPEG/WebP).
+- **Copy as Prompt:** turn an issue into a structured, LLM-ready prompt.
+- **Encrypted backups:** export an AES-256-GCM–encrypted backup (PBKDF2, 100k
+  iterations) and restore it later. This is how you move between browsers or
+  devices, or seed a team.
+- **Storage controls:** see how much space you're using and request persistent
+  storage where the browser supports it.
+
+> **Where your data lives:** browser storage is convenient but not permanent.
+> Clearing site data, switching browsers, or losing the device can lose your
+> issues. Export a backup regularly. Browser storage is *not* automatically
+> encrypted at rest — only the export files are encrypted (with your passphrase).
+
+Nothing you capture in personal mode is sent to any server.
 
 ---
 
-## Getting Started Locally
+## Team mode (self-hosted)
 
-### Prerequisites
-- Node.js 18+ (tested on Node v22.15.0)
-- npm or pnpm
+Run Bugstow on a computer or server you own so your team can collaborate:
 
-### Installation
+- Node.js + Express, **SQLite** database, screenshots on the **local filesystem**.
+- Accounts, teams, roles (owner/admin/member), project & issue sharing, issue
+  assignment, invite-by-email, and GitHub issue import.
+- Shipped as **Docker Compose** with a persistent volume. No cloud provider
+  required.
+
+The team server is the source of truth; teammates cannot reach shared data while
+it is offline.
+
+**→ Full guide: [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md)**
+
+Quick start:
 
 ```bash
-# Clone the repository
 git clone https://github.com/Gr33nOps/bugstow.git
 cd bugstow
+cp server/.env.example .env      # set BUGSTOW_AUTH_SECRET
+docker compose up -d --build     # http://localhost:8080
+```
 
-# Install dependencies
+The first person to register on a fresh server becomes the administrator.
+
+---
+
+## Moving from personal to team
+
+You keep your local data; the team gets a copy:
+
+1. Personal mode → **Settings → Export Backup**.
+2. Team mode → **user menu → Import personal data** → pick the file → confirm.
+
+The import is additive and never deletes your local browser data.
+
+---
+
+## Deploying the public website (static)
+
+The public site is a **static build with no backend** — host it anywhere that
+serves static files (Vercel, Netlify, Cloudflare Pages, GitHub Pages, S3, nginx…).
+
+```bash
 npm install
-
-# Start Vite development server
-npm run dev
+npm run build      # outputs ./dist
 ```
 
-Open your browser at `http://localhost:8443` (or the URL displayed in your terminal).
+Serve `./dist`. A config for Vercel is included ([`vercel.json`](vercel.json)) with
+an SPA rewrite. The static site has **no database and no API**; it detects at
+runtime whether it is being served by a team server (via `/api/health`) and, if
+not, offers personal mode plus self-hosting instructions.
 
-### Running Tests
-
-```bash
-# Run automated Vitest test suite
-npm test
-```
-
-### Production Build
-
-```bash
-# Build optimized static bundle to ./dist
-npm run build
-```
+> One frontend build works in both places: the same `dist` is served by the
+> public static host (personal mode) and by the self-hosted team server (team
+> mode). Team mode is enabled only when a team server is present.
 
 ---
 
-## Deployment (Vercel + Cloudflare R2)
+## Data ownership & privacy
 
-Bugstow ships as a static Vite build plus one serverless function (`/api/backup`) that brokers encrypted backups to a Cloudflare R2 bucket.
-
-### 1. Deploy the app on Vercel
-
-1. Import `Gr33nOps/bugstow` into Vercel (**Add New → Project**).
-2. Framework preset **Vite** is auto-detected. Build command `npm run build`, output directory `dist` (see `vercel.json`).
-3. Deploy.
-
-### 2. Set up Cloudflare R2 (optional, for cloud sync)
-
-1. In the Cloudflare dashboard, create an **R2 bucket** (e.g. `bugstow`).
-2. Create an **R2 API token** (S3-compatible) with read/write on that bucket. Note the **Access Key ID** and **Secret Access Key**.
-3. Add a **CORS policy** on the bucket allowing your Vercel origin(s) with methods `GET, PUT, HEAD`.
-4. In the Vercel project **Settings → Environment Variables**, add:
-
-   | Variable | Value |
-   |---|---|
-   | `R2_ACCOUNT_ID` | your Cloudflare account ID |
-   | `R2_ACCESS_KEY_ID` | R2 token access key ID |
-   | `R2_SECRET_ACCESS_KEY` | R2 token secret |
-   | `R2_BUCKET` | `bugstow` |
-   | `BUGSTOW_SYNC_KEY` | *(optional)* shared secret to gate the endpoint |
-
-5. Redeploy. The **Settings → Cloud Sync** section appears automatically once the endpoint is configured.
-
-See `.env.example` for the full list. If R2 is not configured, the app runs fully local-first and the Cloud Sync section stays hidden.
-
-> [!NOTE]
-> IndexedDB storage is scoped to the web origin (`protocol://domain:port`). Use **Settings → Back up to Cloud** (or **Export Backup**) if you ever migrate between domains.
+- **You own personal data** — it lives in your browser only. Export encrypted
+  backups to keep control of it.
+- **Teams own team data** — it lives in the SQLite database and screenshots
+  folder on the host they run. Team data is readable by the team server (it is
+  not end-to-end encrypted).
+- **No telemetry, analytics, or third-party services** receive your content in
+  either mode.
+- Migrations are additive and non-destructive; existing data is preserved across
+  upgrades.
 
 ---
 
-## Screenshots
+## Tech stack
 
-| Inbox & Split View | Capture Modal |
-|---|---|
-| ![Bugstow Inbox](docs/screenshots/bugstow_02_inbox.png) | ![Bugstow Capture](docs/screenshots/bugstow_03_new_issue.png) |
-
-| Issue Details & Prompt Copy | Mobile Inbox |
-|---|---|
-| ![Bugstow Issue Details](docs/screenshots/bugstow_04_issue_details.png) | ![Bugstow Mobile](docs/screenshots/bugstow_07_mobile_inbox.png) |
+- **Frontend:** React 19, TypeScript 5.7, Vite 8, Tailwind CSS v4, `vite-plugin-pwa`
+- **Personal storage:** IndexedDB (`idb`)
+- **Crypto:** Web Crypto (PBKDF2-HMAC-SHA256, AES-256-GCM)
+- **Team server:** Node.js, Express, SQLite (`better-sqlite3`), better-auth
+- **Deployment:** static host (public site) + Docker Compose (team server)
+- **Testing:** Vitest (frontend), `node:test` (server)
 
 ---
 
-## Architecture & Project Structure
-
-Bugstow follows a clean, modular structure using the **Repository Pattern** to decouple the UI from storage:
+## Project structure
 
 ```
 bugstow/
-├── api/
-│   └── backup.ts             # Vercel serverless function: presigned R2 cloud-sync URLs
-├── docs/
-│   └── screenshots/          # Application & design reference screenshots
-├── public/
-│   └── favicon.svg           # Brand SVG favicon
-├── src/
-│   ├── components/
-│   │   ├── common/           # Custom logo, badges, modals, toasts
-│   │   ├── features/
-│   │   │   ├── capture/      # NewIssueModal (clipboard paste, drag-drop)
-│   │   │   ├── inbox/        # ListView, IssueRow, EmptyState
-│   │   │   ├── issues/       # IssueDetail (split-view & mobile full view)
-│   │   │   ├── projects/     # ProjectsView, ProjectModal
-│   │   │   └── settings/     # SettingsView, backup export/import, quota
-│   │   └── layout/           # Desktop Sidebar, MobileHeader, MobileBottomNav
-│   ├── hooks/
-│   │   ├── useBugstowData.ts # Central reactive hook with object URL lifecycle
-│   │   └── useStorageEstimate.ts
-│   ├── repositories/
-│   │   ├── interfaces.ts     # IIssueRepository, IProjectRepository, IScreenshotRepository
-│   │   └── indexedDbRepositories.ts # Atomic transactions with idb
-│   ├── services/
-│   │   ├── backupService.ts  # Web Crypto PBKDF2 + AES-256-GCM export/import
-│   │   ├── cloudSyncService.ts # Encrypted R2 backup/restore via presigned URLs
-│   │   ├── promptService.ts  # Vibe coding prompt generation
-│   │   └── storageService.ts # Storage estimate and persistence API
-│   ├── storage/
-│   │   └── db.ts             # IndexedDB schema versioning and stores
-│   ├── types/
-│   │   └── index.ts          # Core data models
-│   ├── App.tsx               # Main application container
-│   ├── index.css             # Tailwind CSS v4 entrypoint
-│   └── main.tsx              # React DOM entrypoint
-├── index.html                # Clean HTML shell
-├── package.json              # Project scripts & dependencies
-├── tsconfig.json             # TypeScript configuration
-├── vite.config.ts            # Vite + Tailwind v4 + path alias configuration
-├── vercel.json               # Vercel framework, build & SPA rewrite config
-└── .env.example              # R2 cloud-sync environment variables
+├── src/                       # React app (personal + team frontend)
+│   ├── App.tsx                # Personal (local-first) app
+│   ├── RootApp.tsx            # Chooses personal vs team at runtime
+│   ├── components/cloud/      # Team UI: ModePicker, auth, workspace, self-host info
+│   ├── hooks/                 # useBugstowData (IndexedDB), useCloudData (team API)
+│   ├── lib/                   # authClient (better-auth), teamServer detection
+│   ├── services/              # backup, prompt, storage, teamApi, teamMigration
+│   └── ...
+├── server/                    # Self-hosted team server
+│   ├── src/                   # Express app, better-auth, SQLite, API routes
+│   ├── src/storage.test.ts    # Server tests (node:test)
+│   └── .env.example
+├── docs/SELF_HOSTING.md       # Team install / backup / upgrade / security guide
+├── Dockerfile                 # Multi-stage: build frontend + run server
+├── docker-compose.yml         # Team edition, persistent volume
+└── vercel.json                # Static public-site config
+```
+
+---
+
+## Development
+
+```bash
+npm install
+npm run dev        # personal app at http://localhost:8443
+
+# Team server (separate terminal):
+cd server && npm install
+BUGSTOW_AUTH_SECRET=dev-secret-0123456789 npm run dev   # http://localhost:8080
+```
+
+In dev, the Vite server proxies `/api` to `http://localhost:8080` (override with
+`BUGSTOW_SERVER`), so the team UI can be exercised against the local server.
+
+```bash
+npm run build      # production frontend build
+npm test           # frontend tests
+cd server && npm test && npm run typecheck
 ```
 
 ---
 
 ## License
 
-MIT License. Built with care for developers who vibe code.
+MIT.

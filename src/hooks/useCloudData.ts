@@ -216,6 +216,10 @@ export function useCloudData(signedIn: boolean) {
     [activeTeamId, refreshTeamData]
   )
 
+  const reload = useCallback(async () => {
+    if (activeTeamId) await refreshTeamData(activeTeamId)
+  }, [activeTeamId, refreshTeamData])
+
   const activeTeam = teams.find(t => t.id === activeTeamId) || null
 
   return {
@@ -223,6 +227,7 @@ export function useCloudData(signedIn: boolean) {
     activeTeam,
     activeTeamId,
     setActiveTeamId,
+    reload,
     projects,
     issues,
     members,

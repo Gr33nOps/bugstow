@@ -17,11 +17,14 @@ import {
   ExternalLink,
   UserCircle2,
   HardDrive,
+  Upload,
 } from 'lucide-react'
 import { useCloudData } from '../../hooks/useCloudData'
 import { signOut } from '../../lib/authClient'
 import { generateIssuePrompt } from '../../services/promptService'
-import type { IssueType } from '../../types'
+import { validateBackupStructure, decryptBackup } from '../../services/backupService'
+import { migrateBackupToTeam } from '../../services/teamMigration'
+import type { IssueType, BackupData, EncryptedBackupPayload } from '../../types'
 import type { CloudIssue, TeamMember } from '../../types/cloud'
 
 const TYPE_META: Record<IssueType, { label: string; icon: React.ElementType; cls: string }> = {
@@ -69,6 +72,7 @@ export function CloudApp({ onUseLocal, userLabel }: { onUseLocal: () => void; us
   const [showNew, setShowNew] = useState(false)
   const [showMembers, setShowMembers] = useState(false)
   const [showImport, setShowImport] = useState(false)
+  const [showMigrate, setShowMigrate] = useState(false)
   const [showTeamMenu, setShowTeamMenu] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
@@ -165,7 +169,7 @@ export function CloudApp({ onUseLocal, userLabel }: { onUseLocal: () => void; us
           <Plus size={16} /> <span className="hidden sm:inline">New Issue</span>
         </button>
 
-        <UserMenu label={userLabel} onUseLocal={onUseLocal} />
+        <UserMenu label={userLabel} onUseLocal={onUseLocal} onImportPersonal={() => setShowMigrate(true)} />
       </header>
 
       {/* Filters */}
@@ -295,6 +299,19 @@ export function CloudApp({ onUseLocal, userLabel }: { onUseLocal: () => void; us
           onToast={notify}
         />
       )}
+      {showMigrate && activeTeamId && (
+        <MigrateModal
+          teamId={activeTeamId}
+          teamName={activeTeam?.name || 'this team'}
+          onClose={() => setShowMigrate(false)}
+          onDone={async summary => {
+            setShowMigrate(false)
+            await data.reload()
+            notify(`Imported ${summary.projects} projects, ${summary.issues} issues`)
+          }}
+          onToast={notify}
+        />
+      )}
 
       {toast && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm shadow-lg dark:bg-white dark:text-slate-900">
@@ -315,7 +332,15 @@ function TypeBadge({ type }: { type: IssueType }) {
   )
 }
 
-function UserMenu({ label, onUseLocal }: { label: string; onUseLocal: () => void }) {
+function UserMenu({
+  label,
+  onUseLocal,
+  onImportPersonal,
+}: {
+  label: string
+  onUseLocal: () => void
+  onImportPersonal: () => void
+}) {
   const [open, setOpen] = useState(false)
   return (
     <div className="relative">
@@ -329,10 +354,20 @@ function UserMenu({ label, onUseLocal }: { label: string; onUseLocal: () => void
       </button>
       {open && (
         <div
-          className="absolute right-0 z-30 mt-1 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg py-1"
+          className="absolute right-0 z-30 mt-1 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg py-1"
           onMouseLeave={() => setOpen(false)}
         >
           <div className="px-3 py-2 text-xs text-slate-400 truncate">{label}</div>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false)
+              onImportPersonal()
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            <Upload size={15} /> Import personal data
+          </button>
           <button
             type="button"
             onClick={onUseLocal}
@@ -1039,6 +1074,183 @@ function ImportModal({
           {busy ? 'Importing…' : 'Import issues'}
         </button>
       </form>
+    </ModalShell>
+  )
+}
+
+// ── Migrate personal data into the team ──────────────────────────────────────
+function MigrateModal({
+  teamId,
+  teamName,
+  onClose,
+  onDone,
+  onToast,
+}: {
+  teamId: string
+  teamName: string
+  onClose: () => void
+  onDone: (summary: { projects: number; issues: number; screenshots: number }) => void
+  onToast: (m: string) => void
+}) {
+  const [raw, setRaw] = useState<Record<string, unknown> | null>(null)
+  const [encrypted, setEncrypted] = useState(false)
+  const [passphrase, setPassphrase] = useState('')
+  const [data, setData] = useState<BackupData | null>(null)
+  const [summary, setSummary] = useState<{ projects: number; issues: number; screenshots: number } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const onFile = (file: File) => {
+    setError(null)
+    setData(null)
+    setSummary(null)
+    const reader = new FileReader()
+    reader.onload = e => {
+      try {
+        const parsed = JSON.parse(e.target?.result as string)
+        setRaw(parsed)
+        const check = validateBackupStructure(parsed)
+        if (!check.isValid) {
+          setError(check.error || 'Invalid backup file.')
+          return
+        }
+        if (check.isEncrypted) {
+          setEncrypted(true)
+        } else if (check.data) {
+          setEncrypted(false)
+          setData(check.data)
+          setSummary({
+            projects: check.data.projects.length,
+            issues: check.data.issues.length,
+            screenshots: check.data.screenshots.length,
+          })
+        }
+      } catch {
+        setError('Could not read that file.')
+      }
+    }
+    reader.readAsText(file)
+  }
+
+  const decrypt = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const decrypted = await decryptBackup(raw as unknown as EncryptedBackupPayload, passphrase)
+      const check = validateBackupStructure(decrypted)
+      if (!check.isValid || !check.data) {
+        setError(check.error || 'Decrypted backup is invalid.')
+        return
+      }
+      setData(check.data)
+      setSummary({
+        projects: check.data.projects.length,
+        issues: check.data.issues.length,
+        screenshots: check.data.screenshots.length,
+      })
+    } catch {
+      setError('Incorrect passphrase or corrupted file.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const run = async () => {
+    if (!data) return
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await migrateBackupToTeam(data, teamId, msg => onToast(msg))
+      onDone(result)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Import failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <ModalShell onClose={onClose}>
+      <div className="flex flex-col gap-3.5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold flex items-center gap-2">
+            <Upload size={18} /> Import personal data
+          </h3>
+          <button type="button" onClick={onClose} className="text-slate-400">
+            <X size={16} />
+          </button>
+        </div>
+        <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+          Copy the projects, issues, and screenshots from a personal backup file into{' '}
+          <span className="font-semibold text-slate-700 dark:text-slate-200">{teamName}</span>. This adds to the
+          team — it never touches or deletes your local browser data.
+        </p>
+        {error && (
+          <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
+            <AlertCircle size={14} /> {error}
+          </div>
+        )}
+
+        {!raw && (
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex items-center justify-center gap-2 py-6 text-sm text-slate-500 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl hover:border-[#5B50F6]"
+          >
+            <Upload size={18} /> Select a personal backup (.json)
+          </button>
+        )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".json"
+          className="hidden"
+          onChange={e => {
+            const f = e.target.files?.[0]
+            if (f) onFile(f)
+          }}
+        />
+
+        {raw && encrypted && !data && (
+          <div className="flex flex-col gap-2.5">
+            <input
+              autoFocus
+              type="password"
+              placeholder="Backup passphrase"
+              value={passphrase}
+              onChange={e => setPassphrase(e.target.value)}
+              className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-[#5B50F6]"
+            />
+            <button
+              type="button"
+              disabled={busy || !passphrase}
+              onClick={decrypt}
+              className="w-full py-2.5 text-sm font-semibold text-white bg-[#5B50F6] rounded-xl disabled:opacity-50"
+            >
+              {busy ? 'Decrypting…' : 'Decrypt'}
+            </button>
+          </div>
+        )}
+
+        {summary && (
+          <>
+            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs text-slate-700 dark:text-slate-200 space-y-1">
+              <p>• {summary.projects} projects</p>
+              <p>• {summary.issues} issues</p>
+              <p>• {summary.screenshots} screenshots</p>
+            </div>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={run}
+              className="w-full py-2.5 text-sm font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] rounded-xl disabled:opacity-50"
+            >
+              {busy ? 'Importing…' : `Import into ${teamName}`}
+            </button>
+          </>
+        )}
+      </div>
     </ModalShell>
   )
 }
