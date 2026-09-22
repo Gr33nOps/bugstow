@@ -35,3 +35,7 @@ server/testdata/
 server/intdata/
 *.sqlite
 *.sqlite-*
+
+# Offline bundle output + server test data dirs
+offline-bundle/
+server/*data/

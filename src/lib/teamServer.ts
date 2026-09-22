@@ -11,6 +11,8 @@ export interface TeamServerInfo {
   available: boolean
   setupComplete: boolean
   openSignup: boolean
+  /** Server is in strict offline mode (GitHub import disabled). */
+  offline: boolean
 }
 
 let cached: TeamServerInfo | null = null
@@ -23,12 +25,18 @@ export async function detectTeamServer(): Promise<TeamServerInfo> {
       credentials: 'include',
     })
     if (res.ok) {
-      const data = (await res.json()) as { app?: string; setupComplete?: boolean; openSignup?: boolean }
+      const data = (await res.json()) as {
+        app?: string
+        setupComplete?: boolean
+        openSignup?: boolean
+        offline?: boolean
+      }
       if (data && data.app === 'bugstow-team') {
         cached = {
           available: true,
           setupComplete: Boolean(data.setupComplete),
           openSignup: Boolean(data.openSignup),
+          offline: Boolean(data.offline),
         }
         return cached
       }
@@ -36,6 +44,6 @@ export async function detectTeamServer(): Promise<TeamServerInfo> {
   } catch {
     // Network error / no backend → public static site.
   }
-  cached = { available: false, setupComplete: false, openSignup: false }
+  cached = { available: false, setupComplete: false, openSignup: false, offline: false }
   return cached
 }

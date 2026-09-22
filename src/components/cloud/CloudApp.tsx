@@ -52,7 +52,15 @@ function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }>
   })
 }
 
-export function CloudApp({ onUseLocal, userLabel }: { onUseLocal: () => void; userLabel: string }) {
+export function CloudApp({
+  onUseLocal,
+  userLabel,
+  offline = false,
+}: {
+  onUseLocal: () => void
+  userLabel: string
+  offline?: boolean
+}) {
   const data = useCloudData(true)
   const {
     teams,
@@ -147,13 +155,15 @@ export function CloudApp({ onUseLocal, userLabel }: { onUseLocal: () => void; us
 
         <div className="flex-1" />
 
-        <button
-          type="button"
-          onClick={() => setShowImport(true)}
-          className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
-        >
-          <GitBranch size={16} /> Import
-        </button>
+        {!offline && (
+          <button
+            type="button"
+            onClick={() => setShowImport(true)}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
+          >
+            <GitBranch size={16} /> Import
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setShowMembers(true)}

@@ -5,6 +5,7 @@ import { db, getUserByEmail, userCount } from './db.ts'
 import { config } from './config.ts'
 import { requireAuth, teamRole, asyncRoute } from './middleware.ts'
 import { saveScreenshot, resolveScreenshot, deleteScreenshotFile } from './storage.ts'
+import { runBackup, listBackups } from './backup.ts'
 
 const TYPES = ['bug', 'uiux', 'idea']
 const STATUSES = ['open', 'fixed']
@@ -46,11 +47,32 @@ export const api = Router()
 
 // ── Health / setup state (public: no auth) ───────────────────────────────────
 api.get('/health', (_req, res) => {
-  res.json({ ok: true, app: 'bugstow-team', setupComplete: userCount() > 0, openSignup: config.openSignup })
+  res.json({
+    ok: true,
+    app: 'bugstow-team',
+    setupComplete: userCount() > 0,
+    openSignup: config.openSignup,
+    offline: config.offline,
+  })
 })
 
 // Everything below requires a session.
 api.use(requireAuth)
+
+// ── Backups (any signed-in member; the data is local and shared) ──────────────
+api.get(
+  '/admin/backups',
+  asyncRoute(async (_req, res) => {
+    res.json({ backups: listBackups() })
+  })
+)
+api.post(
+  '/admin/backup',
+  asyncRoute(async (_req, res) => {
+    const { manifest } = await runBackup()
+    res.status(201).json({ ok: true, manifest })
+  })
+)
 
 // ── Teams ─────────────────────────────────────────────────────────────────────
 api.get(
@@ -483,6 +505,12 @@ function mapType(labels: Array<{ name?: string } | string>): 'bug' | 'uiux' | 'i
 api.post(
   '/github-import',
   asyncRoute(async (req, res) => {
+    if (config.offline) {
+      res.status(403).json({
+        error: 'GitHub import is disabled in offline mode. Set BUGSTOW_OFFLINE=false to enable it.',
+      })
+      return
+    }
     const teamId = String(req.body?.teamId || '')
     if (!teamId || !teamRole(req.user!.id, teamId)) {
       res.status(403).json({ error: 'Not a member of this team.' })

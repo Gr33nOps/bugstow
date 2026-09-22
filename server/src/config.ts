@@ -9,9 +9,19 @@ import fs from 'node:fs'
 
 const DATA_DIR = process.env.BUGSTOW_DATA_DIR || path.resolve(process.cwd(), 'data')
 const SCREENSHOTS_DIR = path.join(DATA_DIR, 'screenshots')
+const BACKUPS_DIR = path.join(DATA_DIR, 'backups')
+const CERTS_DIR = path.join(DATA_DIR, 'certs')
 
 fs.mkdirSync(DATA_DIR, { recursive: true })
 fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true })
+fs.mkdirSync(BACKUPS_DIR, { recursive: true })
+fs.mkdirSync(CERTS_DIR, { recursive: true })
+
+function boolEnv(name: string, dflt: boolean): boolean {
+  const v = process.env[name]
+  if (v === undefined) return dflt
+  return v === 'true' || v === '1'
+}
 
 function requireSecretInProd(value: string | undefined): string {
   if (value && value.length >= 16) return value
@@ -29,9 +39,28 @@ export const config = {
   port: parseInt(process.env.PORT || '8080', 10),
   dataDir: DATA_DIR,
   screenshotsDir: SCREENSHOTS_DIR,
+  backupsDir: BACKUPS_DIR,
+  certsDir: CERTS_DIR,
   dbPath: path.join(DATA_DIR, 'bugstow.sqlite'),
   /** Directory of the built frontend (dist) to serve. Empty disables static serving (dev). */
   publicDir: process.env.BUGSTOW_PUBLIC_DIR || '',
+
+  /**
+   * Strict offline mode. Disables every feature that would reach the public
+   * internet (currently only GitHub import). Default true — this is a
+   * self-hosted, LAN-first app. Set BUGSTOW_OFFLINE=false to allow GitHub import.
+   */
+  offline: boolEnv('BUGSTOW_OFFLINE', true),
+
+  /** Serve over HTTPS with a locally generated self-signed certificate. */
+  tls: boolEnv('BUGSTOW_TLS', false),
+  tlsCertPath: process.env.BUGSTOW_TLS_CERT || path.join(CERTS_DIR, 'server.crt'),
+  tlsKeyPath: process.env.BUGSTOW_TLS_KEY || path.join(CERTS_DIR, 'server.key'),
+
+  /** Automatic local backups. */
+  backupEnabled: boolEnv('BUGSTOW_BACKUP_ENABLED', true),
+  backupIntervalHours: parseFloat(process.env.BUGSTOW_BACKUP_INTERVAL_HOURS || '24'),
+  backupRetention: parseInt(process.env.BUGSTOW_BACKUP_RETENTION || '7', 10),
   authSecret: requireSecretInProd(process.env.BUGSTOW_AUTH_SECRET),
   /** Public base URL of this server, used by better-auth for cookies/links. */
   baseURL: process.env.BUGSTOW_BASE_URL || `http://localhost:${process.env.PORT || '8080'}`,

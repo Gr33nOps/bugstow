@@ -17,6 +17,10 @@ There are two ways to use it:
 
 No user or team data is stored on the maintainer's infrastructure.
 
+**Both editions run fully offline** — no external APIs, fonts, CDNs, analytics, or
+online update checks. Download once, install, and operate entirely on your own
+computer or private LAN. See **[`docs/OFFLINE.md`](docs/OFFLINE.md)**.
+
 ---
 
 ## Personal mode (browser-only)

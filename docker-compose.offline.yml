@@ -1,0 +1,26 @@
+# Offline deployment: runs a pre-built image loaded with `docker load` — it never
+# builds or pulls anything from the network.
+#
+#   docker load -i bugstow-image.tar
+#   docker compose -f docker-compose.offline.yml up -d
+#
+# See docs/OFFLINE.md.
+services:
+  bugstow:
+    image: bugstow:latest
+    container_name: bugstow
+    restart: unless-stopped
+    ports:
+      - '8080:8080'
+    env_file:
+      - .env
+    volumes:
+      - bugstow-data:/data
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://localhost:8080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  bugstow-data:
