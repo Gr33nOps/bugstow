@@ -23,9 +23,11 @@ function Loading() {
  */
 function TeamGate({
   setupComplete,
+  offline,
   onUseLocal,
 }: {
   setupComplete: boolean
+  offline: boolean
   onUseLocal: () => void
 }) {
   const session = useSession()
@@ -34,7 +36,9 @@ function TeamGate({
     return <CloudAuthGate setupComplete={setupComplete} onUseLocal={onUseLocal} />
   }
   const user = session.data.user
-  return <CloudApp onUseLocal={onUseLocal} userLabel={user.email || user.name || 'Account'} />
+  return (
+    <CloudApp onUseLocal={onUseLocal} userLabel={user.email || user.name || 'Account'} offline={offline} />
+  )
 }
 
 /**
@@ -84,7 +88,11 @@ export default function RootApp() {
     }
     return (
       <div className="h-full">
-        <TeamGate setupComplete={team.setupComplete} onUseLocal={() => setMode('local')} />
+        <TeamGate
+          setupComplete={team.setupComplete}
+          offline={team.offline}
+          onUseLocal={() => setMode('local')}
+        />
       </div>
     )
   }

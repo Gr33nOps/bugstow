@@ -1,6 +1,8 @@
 import express from 'express'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
+import http from 'node:http'
+import https from 'node:https'
 import path from 'node:path'
 import fs from 'node:fs'
 import { toNodeHandler } from 'better-auth/node'
@@ -9,6 +11,8 @@ import { auth, authOptions } from './auth.ts'
 import { migrateAppSchema, userCount } from './db.ts'
 import { api } from './api.ts'
 import { config } from './config.ts'
+import { startBackupScheduler } from './backup.ts'
+import { ensureCert } from './tls.ts'
 
 async function main() {
   // 1. Run migrations: better-auth tables first, then application tables.
@@ -20,9 +24,32 @@ async function main() {
   app.disable('x-powered-by')
   app.set('trust proxy', 1) // correct client IPs behind a reverse proxy
 
-  // Security headers. CSP is left to the reverse proxy / disabled here so the
-  // static SPA and its inline module script load without extra configuration.
-  app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: 'same-origin' } }))
+  // Strict Content-Security-Policy. `connect-src 'self'` is the hard guarantee
+  // that the browser cannot make requests to any external host — the app is
+  // sealed to its own origin. This holds even if a future dependency tried to
+  // phone home.
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        useDefaults: false,
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'"], // inline theme script + module
+          styleSrc: ["'self'", "'unsafe-inline'"], // Tailwind inline styles
+          imgSrc: ["'self'", 'data:', 'blob:'], // screenshots via object/data URLs
+          connectSrc: ["'self'"], // no external network from the browser
+          fontSrc: ["'self'", 'data:'],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          frameAncestors: ["'self'"],
+          manifestSrc: ["'self'"],
+          workerSrc: ["'self'", 'blob:'], // service worker
+          formAction: ["'self'"],
+        },
+      },
+      crossOriginResourcePolicy: { policy: 'same-origin' },
+    })
+  )
 
   // Throttle auth endpoints to blunt credential stuffing.
   app.use(
@@ -33,8 +60,6 @@ async function main() {
   // better-auth handler must be mounted BEFORE express.json().
   app.all('/api/auth/*', toNodeHandler(auth))
 
-  // JSON body parsing for our API. Allow headroom over the raw upload cap for
-  // base64 inflation (~33%) plus metadata.
   app.use(express.json({ limit: Math.ceil(config.maxUploadBytes * 1.4) + 1024 }))
 
   app.use('/api', api)
@@ -51,15 +76,25 @@ async function main() {
 
   app.use((_req, res) => res.status(404).json({ error: 'Not found.' }))
 
-  app.listen(config.port, () => {
-    const setup = userCount() === 0
-    console.log(`\n  Bugstow team server running on ${config.baseURL}`)
+  const server = config.tls
+    ? https.createServer(ensureCert(), app)
+    : http.createServer(app)
+
+  startBackupScheduler()
+
+  server.listen(config.port, () => {
+    const scheme = config.tls ? 'https' : 'http'
+    console.log(`\n  Bugstow team server running on ${scheme}://localhost:${config.port}`)
+    console.log(`  Base URL: ${config.baseURL}`)
     console.log(`  Data dir: ${config.dataDir}`)
-    if (setup) {
-      console.log('  Setup: no accounts yet — the first person to register becomes the administrator.\n')
-    } else {
-      console.log('  Setup: complete. Teammates can sign in.\n')
-    }
+    console.log(`  Offline mode: ${config.offline ? 'ON (GitHub import disabled)' : 'off'}`)
+    console.log(`  TLS: ${config.tls ? 'on (self-signed LAN cert)' : 'off'}`)
+    console.log(`  Auto-backups: ${config.backupEnabled ? `every ${config.backupIntervalHours}h, keep ${config.backupRetention}` : 'off'}`)
+    console.log(
+      userCount() === 0
+        ? '  Setup: no accounts yet — the first person to register becomes the administrator.\n'
+        : '  Setup: complete. Teammates can sign in.\n'
+    )
   })
 }
 
