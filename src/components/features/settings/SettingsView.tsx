@@ -20,7 +20,8 @@ import {
   Monitor,
   CloudUpload,
   CloudDownload,
-  Cloud
+  Cloud,
+  Users
 } from 'lucide-react'
 import type { BackupData, EncryptedBackupPayload } from '../../../types'
 import type { Theme } from '../../../hooks/useTheme'
@@ -48,6 +49,7 @@ interface SettingsViewProps {
   onToast: (msg: string, type?: 'success' | 'error' | 'info') => void
   onOpenKeyboardShortcuts: () => void
   onOpenAbout: () => void
+  onSwitchToCloud?: () => void
 }
 
 export function SettingsView({
@@ -58,6 +60,7 @@ export function SettingsView({
   onToast,
   onOpenKeyboardShortcuts,
   onOpenAbout,
+  onSwitchToCloud,
 }: SettingsViewProps) {
   const { estimate, requestPersistence } = useStorageEstimate()
 
@@ -168,6 +171,29 @@ export function SettingsView({
             </div>
           </div>
         </div>
+
+        {/* Team / Cloud mode */}
+        {onSwitchToCloud && (
+          <div>
+            <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+              Workspace
+            </h3>
+            <button
+              type="button"
+              onClick={onSwitchToCloud}
+              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs p-4 flex items-center gap-3.5 text-left hover:border-[#5B50F6] transition-colors"
+            >
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-[#5B50F6] dark:text-indigo-300">
+                <Users size={18} />
+              </div>
+              <div className="flex-1">
+                <span className="text-[15px] font-semibold text-slate-900 dark:text-white block">Switch to Team mode</span>
+                <span className="text-xs text-slate-400">Sign in to share issues, assign teammates, and import from GitHub</span>
+              </div>
+              <span className="text-slate-400 text-lg font-bold">&rsaquo;</span>
+            </button>
+          </div>
+        )}
 
         {/* Data & Backup Section */}
         <div>
