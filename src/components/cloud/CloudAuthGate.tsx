@@ -6,8 +6,15 @@ import { authClient } from '../../lib/authClient'
  * Email/password sign-in and sign-up against the Neon-hosted Better Auth
  * server. On success, the session updates and the workspace renders.
  */
-export function CloudAuthGate({ onUseLocal }: { onUseLocal: () => void }) {
-  const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in')
+export function CloudAuthGate({
+  onUseLocal,
+  setupComplete = true,
+}: {
+  onUseLocal: () => void
+  setupComplete?: boolean
+}) {
+  // Before any admin exists, default to sign-up: the first account is the admin.
+  const [mode, setMode] = useState<'sign-in' | 'sign-up'>(setupComplete ? 'sign-in' : 'sign-up')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -49,11 +56,21 @@ export function CloudAuthGate({ onUseLocal }: { onUseLocal: () => void }) {
           </div>
           <div>
             <h1 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">
-              {mode === 'sign-in' ? 'Sign in to your team' : 'Create your account'}
+              {!setupComplete
+                ? 'Create the administrator'
+                : mode === 'sign-in'
+                  ? 'Sign in to your team'
+                  : 'Create your account'}
             </h1>
-            <p className="text-xs text-slate-400">Bugstow Cloud</p>
+            <p className="text-xs text-slate-400">Bugstow Team</p>
           </div>
         </div>
+
+        {!setupComplete && (
+          <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 rounded-xl text-xs text-indigo-800 dark:text-indigo-300">
+            This server has no accounts yet. The first account you create becomes the administrator.
+          </div>
+        )}
 
         {error && (
           <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-700 dark:text-red-300 flex items-start gap-2">

@@ -27,3 +27,11 @@ logs/
 
 # Editor / tooling local config
 .claude/
+
+# Server (self-hosted) artifacts
+server/node_modules/
+server/data/
+server/testdata/
+server/intdata/
+*.sqlite
+*.sqlite-*

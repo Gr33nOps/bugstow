@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef } from 'react'
 import {
   Download,
   Upload,
@@ -18,9 +18,6 @@ import {
   Sun,
   Moon,
   Monitor,
-  CloudUpload,
-  CloudDownload,
-  Cloud,
   Users
 } from 'lucide-react'
 import type { BackupData, EncryptedBackupPayload } from '../../../types'
@@ -31,13 +28,6 @@ import {
   validateBackupStructure,
   decryptBackup
 } from '../../../services/backupService'
-import {
-  backupToCloud,
-  restoreFromCloud,
-  getCloudBackupMeta,
-  isCloudSyncAvailable,
-  type CloudBackupMeta
-} from '../../../services/cloudSyncService'
 import { formatBytes } from '../../../services/storageService'
 import { useStorageEstimate } from '../../../hooks/useStorageEstimate'
 
@@ -67,32 +57,7 @@ export function SettingsView({
   const [showExportModal, setShowExportModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
-  const [showCloudBackup, setShowCloudBackup] = useState(false)
-  const [showCloudRestore, setShowCloudRestore] = useState(false)
   const [isPersisting, setIsPersisting] = useState(false)
-
-  const cloudAvailable = isCloudSyncAvailable()
-  const [cloudMeta, setCloudMeta] = useState<CloudBackupMeta | null>(null)
-  const [cloudConfigured, setCloudConfigured] = useState<boolean | null>(null)
-
-  const refreshCloudMeta = React.useCallback(async () => {
-    if (!cloudAvailable) {
-      setCloudConfigured(false)
-      return
-    }
-    try {
-      const meta = await getCloudBackupMeta()
-      setCloudMeta(meta)
-      setCloudConfigured(true)
-    } catch {
-      // Endpoint not configured (503) or unreachable — hide the feature quietly.
-      setCloudConfigured(false)
-    }
-  }, [cloudAvailable])
-
-  useEffect(() => {
-    refreshCloudMeta()
-  }, [refreshCloudMeta])
 
   const handleRequestPersistence = async () => {
     setIsPersisting(true)
@@ -289,68 +254,6 @@ export function SettingsView({
           </div>
         </div>
 
-        {/* Cloud Sync Section */}
-        {cloudConfigured && (
-          <div>
-            <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-              Cloud Sync
-            </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-3.5">
-              Push an encrypted copy to your private cloud storage and pull it onto any device.
-            </p>
-
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs divide-y divide-slate-100 dark:divide-slate-800">
-              {/* Back up to cloud */}
-              <button
-                type="button"
-                onClick={() => setShowCloudBackup(true)}
-                className="w-full flex items-center gap-3.5 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
-              >
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-[#5B50F6] dark:text-indigo-300">
-                  <CloudUpload size={18} />
-                </div>
-                <div className="flex-1">
-                  <span className="text-[15px] font-semibold text-slate-900 dark:text-white block">Back up to Cloud</span>
-                  <span className="text-xs text-slate-400">Encrypt and upload your latest data to R2</span>
-                </div>
-                <span className="text-slate-400 text-lg font-bold">&rsaquo;</span>
-              </button>
-
-              {/* Restore from cloud */}
-              <button
-                type="button"
-                onClick={() => setShowCloudRestore(true)}
-                className="w-full flex items-center gap-3.5 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
-              >
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-[#5B50F6] dark:text-indigo-300">
-                  <CloudDownload size={18} />
-                </div>
-                <div className="flex-1">
-                  <span className="text-[15px] font-semibold text-slate-900 dark:text-white block">Restore from Cloud</span>
-                  <span className="text-xs text-slate-400">Download and decrypt your cloud backup into this device</span>
-                </div>
-                <span className="text-slate-400 text-lg font-bold">&rsaquo;</span>
-              </button>
-
-              {/* Cloud status */}
-              <div className="px-5 py-3.5 bg-slate-50/70 dark:bg-slate-850 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <Cloud size={14} className="text-slate-400 shrink-0" />
-                {cloudMeta?.exists ? (
-                  <span>
-                    Last cloud backup:{' '}
-                    <span className="font-semibold text-slate-700 dark:text-slate-300">
-                      {cloudMeta.lastModified ? new Date(cloudMeta.lastModified).toLocaleString() : 'unknown date'}
-                    </span>
-                    {typeof cloudMeta.size === 'number' && ` · ${formatBytes(cloudMeta.size)}`}
-                  </span>
-                ) : (
-                  <span>No cloud backup yet. Use “Back up to Cloud” to create one.</span>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Application Information Section */}
         <div>
           <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
@@ -429,33 +332,6 @@ export function SettingsView({
           onRestoreDone={() => {
             setShowImportModal(false)
             onToast('Backup restored successfully!')
-          }}
-          onError={err => onToast(err, 'error')}
-        />
-      )}
-
-      {/* Cloud Backup Modal */}
-      {showCloudBackup && (
-        <CloudBackupModal
-          onClose={() => setShowCloudBackup(false)}
-          onDone={async () => {
-            setShowCloudBackup(false)
-            onToast('Encrypted backup uploaded to cloud')
-            await refreshCloudMeta()
-          }}
-          onError={err => onToast(err, 'error')}
-        />
-      )}
-
-      {/* Cloud Restore Modal */}
-      {showCloudRestore && (
-        <CloudRestoreModal
-          meta={cloudMeta}
-          onRestore={onRestoreBackup}
-          onClose={() => setShowCloudRestore(false)}
-          onDone={() => {
-            setShowCloudRestore(false)
-            onToast('Cloud backup restored to this device')
           }}
           onError={err => onToast(err, 'error')}
         />
@@ -930,269 +806,6 @@ function ClearDataModal({
           </button>
         </div>
       </div>
-    </div>
-  )
-}
-
-// ── Cloud Backup Modal ────────────────────────────────────────────────────
-
-function CloudBackupModal({
-  onClose,
-  onDone,
-  onError,
-}: {
-  onClose: () => void
-  onDone: () => Promise<void>
-  onError: (msg: string) => void
-}) {
-  const [passphrase, setPassphrase] = useState('')
-  const [confirmPass, setConfirmPass] = useState('')
-  const [showPass, setShowPass] = useState(false)
-  const [isBusy, setIsBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-
-    if (!passphrase || passphrase.length < 6) {
-      setError('Passphrase must be at least 6 characters long.')
-      return
-    }
-    if (passphrase !== confirmPass) {
-      setError('Passphrases do not match.')
-      return
-    }
-
-    setIsBusy(true)
-    try {
-      await backupToCloud(passphrase)
-      await onDone()
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Cloud backup failed.'
-      setError(msg)
-      onError(msg)
-    } finally {
-      setIsBusy(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
-      <div className="absolute inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-xs" onClick={onClose} />
-      <form
-        onSubmit={handleUpload}
-        className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200/80 dark:border-slate-800 w-full max-w-md p-6 sm:p-7 flex flex-col gap-4 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100"
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <CloudUpload size={20} className="text-[#5B50F6]" />
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Back up to Cloud</h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-          Your data is encrypted in this browser with AES-256-GCM before it ever leaves your device. Only the ciphertext is stored in the cloud, and this passphrase is the only way to read it back.
-        </p>
-
-        {error && (
-          <div className="p-3.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
-            <AlertCircle size={15} className="shrink-0 text-red-500" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <div>
-          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1 uppercase tracking-wider">
-            Passphrase
-          </label>
-          <div className="relative">
-            <input
-              autoFocus
-              type={showPass ? 'text' : 'password'}
-              placeholder="Enter a secure passphrase"
-              value={passphrase}
-              onChange={e => setPassphrase(e.target.value)}
-              className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-[#5B50F6] pr-10 text-slate-900 dark:text-white"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPass(!showPass)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            >
-              {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1 uppercase tracking-wider">
-            Confirm Passphrase
-          </label>
-          <input
-            type={showPass ? 'text' : 'password'}
-            placeholder="Confirm your passphrase"
-            value={confirmPass}
-            onChange={e => setConfirmPass(e.target.value)}
-            className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-[#5B50F6] text-slate-900 dark:text-white"
-          />
-        </div>
-
-        <div className="flex gap-3 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isBusy}
-            className="flex-1 py-2.5 text-sm font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] rounded-xl shadow-sm disabled:opacity-50"
-          >
-            {isBusy ? 'Uploading...' : 'Encrypt & Upload'}
-          </button>
-        </div>
-      </form>
-    </div>
-  )
-}
-
-// ── Cloud Restore Modal ───────────────────────────────────────────────────
-
-function CloudRestoreModal({
-  meta,
-  onRestore,
-  onClose,
-  onDone,
-  onError,
-}: {
-  meta: CloudBackupMeta | null
-  onRestore: (data: BackupData) => Promise<void>
-  onClose: () => void
-  onDone: () => void
-  onError: (msg: string) => void
-}) {
-  const [passphrase, setPassphrase] = useState('')
-  const [isBusy, setIsBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const noBackup = meta ? meta.exists === false : false
-
-  const handleRestore = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-
-    if (!passphrase) {
-      setError('Enter the passphrase used for this cloud backup.')
-      return
-    }
-
-    setIsBusy(true)
-    try {
-      const data = await restoreFromCloud(passphrase)
-      if (!data) {
-        setError('No cloud backup was found.')
-        return
-      }
-      await onRestore(data)
-      onDone()
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Cloud restore failed.'
-      setError(msg)
-      onError(msg)
-    } finally {
-      setIsBusy(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
-      <div className="absolute inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-xs" onClick={onClose} />
-      <form
-        onSubmit={handleRestore}
-        className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200/80 dark:border-slate-800 w-full max-w-md p-6 sm:p-7 flex flex-col gap-4 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100"
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <CloudDownload size={20} className="text-[#5B50F6]" />
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Restore from Cloud</h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {noBackup ? (
-          <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-xl text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
-            <AlertTriangle size={15} className="shrink-0 text-amber-600 mt-0.5" />
-            <span>No cloud backup exists yet. Create one with “Back up to Cloud” first.</span>
-          </div>
-        ) : (
-          <>
-            <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-              This downloads your encrypted cloud backup and decrypts it here. It will replace all current issues and projects in this browser.
-            </p>
-
-            {error && (
-              <div className="p-3.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
-                <AlertCircle size={15} className="shrink-0 text-red-500" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <div>
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1 uppercase tracking-wider">
-                Passphrase
-              </label>
-              <input
-                autoFocus
-                type="password"
-                placeholder="Enter the backup passphrase"
-                value={passphrase}
-                onChange={e => setPassphrase(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-[#5B50F6] text-slate-900 dark:text-white"
-              />
-            </div>
-
-            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-xl text-xs text-amber-900 dark:text-amber-300 flex items-start gap-2">
-              <AlertTriangle size={15} className="shrink-0 text-amber-600 mt-0.5" />
-              <span>Restoring replaces everything currently in this browser with the cloud contents.</span>
-            </div>
-          </>
-        )}
-
-        <div className="flex gap-3 pt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800"
-          >
-            {noBackup ? 'Close' : 'Cancel'}
-          </button>
-          {!noBackup && (
-            <button
-              type="submit"
-              disabled={isBusy}
-              className="flex-1 py-2.5 text-sm font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] rounded-xl shadow-sm disabled:opacity-50"
-            >
-              {isBusy ? 'Restoring...' : 'Download & Restore'}
-            </button>
-          )}
-        </div>
-      </form>
     </div>
   )
 }

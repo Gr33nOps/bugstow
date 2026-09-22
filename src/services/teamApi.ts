@@ -1,15 +1,12 @@
-import { getAuthToken } from '../lib/authClient'
 import type { IssueType } from '../types'
 import type { Team, TeamMember, TeamInvite, CloudProject, CloudIssue } from '../types/cloud'
 
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = await getAuthToken()
-  if (!token) throw new Error('You are signed out. Please sign in again.')
   const res = await fetch(`/api/${path}`, {
     ...init,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
       ...(init.headers || {}),
     },
   })
@@ -129,9 +126,8 @@ export async function uploadScreenshot(
   ).id
 }
 export async function fetchScreenshotBlob(id: string): Promise<Blob> {
-  const token = await getAuthToken()
   const res = await fetch(`/api/screenshots?id=${encodeURIComponent(id)}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    credentials: 'include',
   })
   if (!res.ok) throw new Error('Could not load screenshot.')
   return res.blob()
