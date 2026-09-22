@@ -17,6 +17,27 @@ function Loading() {
 }
 
 /**
+ * Sign-in gate + workspace for team mode. Isolated in its own component so that
+ * `useSession()` (which probes /api/auth/get-session) only runs when a team
+ * server is actually present — the public static site never mounts this.
+ */
+function TeamGate({
+  setupComplete,
+  onUseLocal,
+}: {
+  setupComplete: boolean
+  onUseLocal: () => void
+}) {
+  const session = useSession()
+  if (session.isPending) return <Loading />
+  if (!session.data?.user) {
+    return <CloudAuthGate setupComplete={setupComplete} onUseLocal={onUseLocal} />
+  }
+  const user = session.data.user
+  return <CloudApp onUseLocal={onUseLocal} userLabel={user.email || user.name || 'Account'} />
+}
+
+/**
  * Top-level router between Personal (local, in-browser) and Team (self-hosted)
  * modes. A single build works on the public static site and on a team server;
  * it detects which one it is at runtime via /api/health.
@@ -25,7 +46,6 @@ export default function RootApp() {
   const { mode, setMode } = useAppMode()
   const [team, setTeam] = useState<TeamServerInfo | null>(null)
   const [showSelfHost, setShowSelfHost] = useState(false)
-  const session = useSession()
 
   useEffect(() => {
     detectTeamServer().then(setTeam)
@@ -62,21 +82,9 @@ export default function RootApp() {
         </div>
       )
     }
-    if (session.isPending) return <Loading />
-    if (!session.data?.user) {
-      return (
-        <div className="h-full">
-          <CloudAuthGate
-            setupComplete={team.setupComplete}
-            onUseLocal={() => setMode('local')}
-          />
-        </div>
-      )
-    }
-    const user = session.data.user
     return (
       <div className="h-full">
-        <CloudApp onUseLocal={() => setMode('local')} userLabel={user.email || user.name || 'Account'} />
+        <TeamGate setupComplete={team.setupComplete} onUseLocal={() => setMode('local')} />
       </div>
     )
   }
