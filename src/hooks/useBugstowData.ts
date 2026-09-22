@@ -7,6 +7,7 @@ import {
   IndexedDbSettingsRepository
 } from '../repositories/indexedDbRepositories'
 import { restoreBackupData, type BackupData } from '../services/backupService'
+import { clearAllData as clearAllDataStores } from '../storage/db'
 
 export function useBugstowData() {
   const [issues, setIssues] = useState<Issue[]>([])
@@ -256,6 +257,8 @@ export function useBugstowData() {
 
   // Clear all data
   const clearAllData = useCallback(async (): Promise<void> => {
+    // Wipe the underlying IndexedDB stores first, then reset local state.
+    await clearAllDataStores()
     Object.values(screenshotUrlsRef.current).forEach(url => URL.revokeObjectURL(url))
     setScreenshotUrls({})
     setIssues([])

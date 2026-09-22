@@ -6,7 +6,9 @@ export interface IIssueRepository {
   getByProject(projectId: string | null): Promise<Issue[]>
   getByStatus(status: IssueStatus): Promise<Issue[]>
   create(
-    issue: Omit<Issue, 'id' | 'createdAt' | 'updatedAt' | 'screenshotId' | 'screenshotIds'>,
+    issue: Omit<Issue, 'id' | 'createdAt' | 'updatedAt' | 'screenshotId' | 'screenshotIds' | 'status'> & {
+      status?: IssueStatus
+    },
     screenshotBlob?: Blob | null,
     filename?: string,
     additionalBlobs?: Array<{ blob: Blob; filename?: string }>

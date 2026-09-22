@@ -24,3 +24,6 @@ vite.config.*.timestamp-*
 logs/
 .tmp-*
 .cache/
+
+# Editor / tooling local config
+.claude/

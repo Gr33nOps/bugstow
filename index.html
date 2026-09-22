@@ -6,8 +6,21 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Bugstow — Spot it. Stow it. Fix it.</title>
     <meta name="description" content="A personal issue inbox for people who vibe code. Spot it. Stow it. Fix it." />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b0f19" media="(prefers-color-scheme: dark)" />
+    <script>
+      // Apply the saved theme before first paint to avoid a flash of the wrong theme.
+      (function () {
+        try {
+          var stored = localStorage.getItem('bugstow_theme')
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+          var isDark = stored === 'dark' || ((stored === 'system' || !stored) && prefersDark)
+          if (isDark) document.documentElement.classList.add('dark')
+        } catch (e) {}
+      })()
+    </script>
   </head>
-  <body class="bg-[#0D0E12] text-slate-100 antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
+  <body class="antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
