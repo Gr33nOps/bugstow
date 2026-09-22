@@ -112,8 +112,8 @@ export default function App() {
   const fixedIssues = useMemo(() => issues.filter(i => i.status === 'fixed'), [issues])
 
   const storageUsedFormatted = useMemo(() => {
-    if (!estimate || estimate.usage === undefined) return undefined
-    return formatBytes(estimate.usage)
+    if (!estimate || estimate.usageBytes === undefined) return undefined
+    return formatBytes(estimate.usageBytes)
   }, [estimate])
 
   // Global Keyboard Shortcuts (⌘K, ⌘B, /, Esc, ?)

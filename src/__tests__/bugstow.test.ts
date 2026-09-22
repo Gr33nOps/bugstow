@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import 'fake-indexeddb/auto'
-import { getDB, resetDBConnection, closeDB, DB_NAME } from '../storage/db'
+import { getDB, resetDBConnection, closeDB, clearAllData, DB_NAME } from '../storage/db'
 import {
   IndexedDbIssueRepository,
   IndexedDbProjectRepository,
@@ -487,5 +487,38 @@ describe('Bugstow Local-First Application Test Suite', () => {
     for (const sid of updated.screenshotIds!) {
       expect(await screenshotRepo.getById(sid)).toBeUndefined()
     }
+  })
+
+  // ── Test 19: Clear All Data wipes every store and resets settings ─────────
+  it('Test 19: clearAllData permanently wipes projects, issues, screenshots and resets settings', async () => {
+    const project = await projectRepo.create('To be wiped', '#5B50F6')
+    await issueRepo.create(
+      {
+        title: 'Doomed issue',
+        description: 'This should not survive a wipe',
+        projectId: project.id,
+        type: 'bug',
+      },
+      new Blob(['shot'], { type: 'image/png' }),
+      'shot.png'
+    )
+    await settingsRepo.update({ backupReminderDismissedAt: new Date().toISOString() })
+
+    // Sanity check: data exists before the wipe
+    expect(await projectRepo.getAll()).toHaveLength(1)
+    expect(await issueRepo.getAll()).toHaveLength(1)
+    expect(await screenshotRepo.getAll()).toHaveLength(1)
+
+    await clearAllData()
+
+    // Everything is gone and does not reappear on reload
+    expect(await projectRepo.getAll()).toHaveLength(0)
+    expect(await issueRepo.getAll()).toHaveLength(0)
+    expect(await screenshotRepo.getAll()).toHaveLength(0)
+
+    // Settings are reset back to defaults
+    const settings = await settingsRepo.get()
+    expect(settings.backupReminderDismissedAt).toBeNull()
+    expect(settings.lastBackupExportAt).toBeNull()
   })
 })

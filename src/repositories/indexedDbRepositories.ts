@@ -49,7 +49,9 @@ export class IndexedDbIssueRepository implements IIssueRepository {
   }
 
   async create(
-    issueData: Omit<Issue, 'id' | 'createdAt' | 'updatedAt' | 'screenshotId' | 'screenshotIds'>,
+    issueData: Omit<Issue, 'id' | 'createdAt' | 'updatedAt' | 'screenshotId' | 'screenshotIds' | 'status'> & {
+      status?: IssueStatus
+    },
     screenshotBlob?: Blob | null,
     filename?: string,
     additionalBlobs?: Array<{ blob: Blob; filename?: string }>

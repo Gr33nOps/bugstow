@@ -88,6 +88,23 @@ export async function getDB(): Promise<IDBPDatabase<BugstowDBSchema>> {
   return dbPromise
 }
 
+export async function clearAllData(): Promise<void> {
+  const db = await getDB()
+  // Atomically wipe every user data store and reset settings to defaults.
+  const tx = db.transaction(['projects', 'issues', 'screenshots', 'settings'], 'readwrite')
+  try {
+    await tx.objectStore('projects').clear()
+    await tx.objectStore('issues').clear()
+    await tx.objectStore('screenshots').clear()
+    await tx.objectStore('settings').clear()
+    await tx.objectStore('settings').put({ id: 'app_settings', ...DEFAULT_SETTINGS })
+    await tx.done
+  } catch (err) {
+    tx.abort()
+    throw err
+  }
+}
+
 export async function closeDB(): Promise<void> {
   if (dbPromise) {
     const db = await dbPromise
