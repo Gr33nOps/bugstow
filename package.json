@@ -12,7 +12,8 @@
     "format": "oxfmt",
     "test": "vitest run",
     "serve:personal": "node scripts/serve-personal.mjs",
-    "bundle:offline": "node scripts/build-offline-bundle.mjs"
+    "bundle:offline": "node scripts/build-offline-bundle.mjs",
+    "acceptance": "node scripts/acceptance-test.mjs"
   },
   "dependencies": {
     "better-auth": "^1.7.5",

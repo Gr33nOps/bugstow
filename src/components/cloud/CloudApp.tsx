@@ -18,6 +18,7 @@ import {
   UserCircle2,
   HardDrive,
   Upload,
+  WifiOff,
 } from 'lucide-react'
 import { useCloudData } from '../../hooks/useCloudData'
 import { signOut } from '../../lib/authClient'
@@ -152,6 +153,15 @@ export function CloudApp({
             </div>
           )}
         </div>
+
+        {offline && (
+          <span
+            title="This server runs in offline mode. All features work locally; only GitHub import is disabled."
+            className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+          >
+            <WifiOff size={12} /> Offline
+          </span>
+        )}
 
         <div className="flex-1" />
 
@@ -1048,6 +1058,9 @@ function ImportModal({
           <button type="button" onClick={onClose} className="text-slate-400">
             <X size={16} />
           </button>
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+          <WifiOff size={12} /> Online-only feature — this reaches GitHub over the internet.
         </div>
         {err && (
           <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-700 dark:text-red-300">

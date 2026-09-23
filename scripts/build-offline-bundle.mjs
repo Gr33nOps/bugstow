@@ -58,6 +58,7 @@ copy('docker-compose.offline.yml', path.join(teamDir, 'docker-compose.offline.ym
 copy('server/.env.example', path.join(teamDir, '.env.example'))
 copy('docs/OFFLINE.md', path.join(teamDir, 'OFFLINE.md'))
 copy('docs/SELF_HOSTING.md', path.join(teamDir, 'SELF_HOSTING.md'))
+copy('scripts/acceptance-test.mjs', path.join(teamDir, 'acceptance-test.mjs'))
 
 // 4. Assemble the personal package.
 copy('dist', path.join(personalDir, 'dist'))
@@ -76,7 +77,27 @@ fs.writeFileSync(
   ].join('\n')
 )
 
-// 5. Checksums for verification.
+// 5. Version stamp + top-level readme.
+const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version
+fs.writeFileSync(path.join(out, 'VERSION'), `bugstow ${version}\nbuilt ${new Date().toISOString()}\n`)
+copy('docs/RELEASE_OFFLINE.md', path.join(out, 'RELEASE_OFFLINE.md'))
+fs.writeFileSync(
+  path.join(out, 'README.txt'),
+  [
+    `Bugstow ${version} — offline release bundle`,
+    '',
+    '1. Verify:   sha256sum -c SHA256SUMS.txt   (macOS: shasum -a 256 -c)',
+    '2. Team:     cd team && cp .env.example .env  (set BUGSTOW_AUTH_SECRET)',
+    '             docker load -i bugstow-image.tar',
+    '             docker compose -f docker-compose.offline.yml up -d',
+    '             then open http://localhost:8080 and register the admin.',
+    '3. Personal: cd personal && node serve-personal.mjs   (open http://localhost:8000)',
+    '',
+    'Full instructions: RELEASE_OFFLINE.md',
+  ].join('\n')
+)
+
+// 6. Checksums for verification.
 const sums = walk(out)
   .filter(f => path.basename(f) !== 'SHA256SUMS.txt')
   .map(f => `${sha256(f)}  ${path.relative(out, f).replace(/\\/g, '/')}`)
