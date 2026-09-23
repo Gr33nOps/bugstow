@@ -1,9 +1,14 @@
 # Bugstow
 
-Spot it. Stow it. Fix it. A privacy-first issue tracker with two editions:
+Spot it. Stow it. Fix it. A privacy-first issue tracker. There is **no hosted site**
+(the Vercel deployment was retired in 2.2.0); people install it:
 
-- **Personal mode** — browser-only, IndexedDB, offline PWA, no backend.
-- **Team mode** — self-hosted Node + Express + SQLite server the team runs itself.
+- **Desktop app** — one command (`install.ps1` / `install.sh`) installs a private Node.js
+  plus the BugsTow server on the user's PC, bound to 127.0.0.1:5757 (`BUGSTOW_DESKTOP=true`).
+  The `bugstow` launcher (`desktop/bugstow.mjs`) starts it in the background and opens the browser.
+  Choices on first open: data folder on this PC (server mode), only this browser, or browser + own-cloud sync.
+- **Team server** — the same server via Docker Compose for a team.
+- **Browser storage mode** — IndexedDB, offline PWA, no backend (also `serve-personal.mjs` in the offline bundle).
 
 No user/team data touches the maintainer's infrastructure.
 
@@ -16,7 +21,7 @@ No user/team data touches the maintainer's infrastructure.
 - `src/hooks/useBugstowData.ts` - Personal data (IndexedDB)
 - `src/hooks/useTeamData.ts` - Team data via the server API (optimistic concurrency on issue edits)
 - `src/services/` - `backupService` (encrypted export/import), `promptService`, `storageService`, `teamApi`, `teamMigration` (personal→team)
-- `src/components/team/` - `ModePicker`, `SelfHostInfo` (eager); `TeamRoot` → `TeamAuthGate`, `TeamApp` (lazy-loaded chunk, never fetched by the public Personal site)
+- `src/components/team/` - `ModePicker`, `SelfHostInfo` (eager); `TeamRoot` → `TeamAuthGate`, `TeamApp` (lazy-loaded chunk, only fetched when served by the BugsTow server)
 - `src/lib/connection.ts` - localhost / LAN HTTP / LAN HTTPS classification for honest warnings
 - `src/sync/` - Personal cloud sync (bring your own cloud, end-to-end encrypted): `crypto` (PBKDF2 + AES-GCM), `merge` (3-way, edit beats delete), `engine` (one sync round), `store` (separate `bugstow_sync` IndexedDB), `controller`, `oauth` (Google implicit / Dropbox PKCE redirects), `providers/` (googleDrive, dropbox, webdav, folder, memory = sync file)
 - `src/hooks/useCloudSync.ts`, `src/components/features/settings/CloudSyncPanel.tsx` - automatic sync + Settings → Sync UI
@@ -31,7 +36,12 @@ No user/team data touches the maintainer's infrastructure.
   - `server/src/backup.ts` - Verified local backups + optional external copy (`BUGSTOW_BACKUP_EXTERNAL_DIR`)
   - `server/src/tls.ts` - Local self-signed certificate (covers BASE_URL host; regenerates on change/expiry)
   - `server/src/db.ts`, `storage.ts` (upload signature checks), `middleware.ts`, `config.ts`
+- `desktop/bugstow.mjs` - Launcher of the installed app (start/stop/status/--lan/reset-password/uninstall; reads optional `<home>/bugstow.env` for BUGSTOW_BACKUP_*)
+- `install.ps1`, `install.sh` - One-command installers (download release package + checksum-verified private Node.js, `npm ci`, shortcuts)
+- `scripts/build-app-package.mjs` - Builds `release/bugstow-app-<version>.tar.gz` (+ .sha256), the asset the installers download
+- `server/src/desktop.test.ts` - Desktop edition: Host-header allowlist (DNS rebinding), edition marker, CSP
 - `Dockerfile`, `docker-compose.yml` - Team edition packaging (persistent `/data` volume)
+- `docs/INSTALL.md` - Installing and using the desktop app
 - `docs/SELF_HOSTING.md` - Team install/backup/upgrade/security guide
 - `docs/RELEASE_OFFLINE.md` - Offline bundle, HTTPS trust, backups/restore, two-computer test (§13b)
 - `docs/RELEASE_CHECKLIST.md` - Manual browser checks before a release
@@ -45,11 +55,12 @@ No user/team data touches the maintainer's infrastructure.
 - Build frontend: `npm run build` · Frontend tests: `npm test` · Typecheck: `npm run typecheck`
 - Server: `cd server && npm test && npm run typecheck`
 - Acceptance: `node scripts/acceptance-test.mjs --url <server> --setup-token <token from log>` against a fresh server
-- Public site deploys as static `dist`. Team edition deploys via Docker Compose.
+- Releases: attach `bugstow-app-<version>.tar.gz` + `.sha256` (from `scripts/build-app-package.mjs`) to the GitHub release; the installers download the latest release. Team edition deploys via Docker Compose.
+- Test an installer locally: `BUGSTOW_PACKAGE=release/bugstow-app-<v>.tar.gz BUGSTOW_HOME=<scratch> BUGSTOW_NO_PATH=1 BUGSTOW_SHORTCUT_DIR=<scratch> BUGSTOW_NO_BROWSER=1`. The detached server inherits the launcher's stdout, so a piped caller waits until `bugstow stop`.
 
 ## Constraints
 
-- Do not reintroduce cloud dependencies (Neon, Cloudflare R2, Vercel functions).
+- Do not reintroduce cloud dependencies (Neon, Cloudflare R2, Vercel functions) or a hosted site.
 - The only cloud use allowed is the user's **own** storage, opt-in, and end-to-end encrypted before upload (Personal sync, Team cloud backups). Never plaintext, never maintainer infrastructure.
 - Personal data stays in the browser; team data stays on the self-hosted server.
 - Migrations must remain additive/non-destructive.

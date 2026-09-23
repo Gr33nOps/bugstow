@@ -3,7 +3,7 @@
  * (which exposes /api/health) or as the public static site (no backend).
  *
  * This lets a single frontend build work in both places: on a team server it
- * offers sign-in and the shared workspace; on the public site it offers
+ * offers sign-in and the shared workspace; on a static build it offers
  * personal mode plus self-hosting instructions.
  */
 
@@ -35,7 +35,7 @@ export function isDesktopEdition(): boolean {
 
 /**
  * True when this page was served by a Bugstow team server. The team server
- * injects `<meta name="bugstow-server" content="team">`; the static public site
+ * injects `<meta name="bugstow-server" content="team">`; a static build
  * never has it, so Personal mode makes no API request at all. In development
  * (Vite dev server proxying /api) we always probe.
  */

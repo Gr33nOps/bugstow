@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import type { Tab, Project } from '../../types'
 import { BugstowLogoIcon, BRAND_PRIMARY } from '../common/Icon'
+import { shortcut } from '../../lib/platform'
 
 interface SidebarProps {
   currentTab: Tab
@@ -60,7 +61,7 @@ export function Sidebar({
               onSelectProjectFilter(null)
             }}
             className="p-2.5 rounded-xl hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
-            title="Bugstow Inbox"
+            title="BugsTow Inbox"
           >
             <BugstowLogoIcon size={26} color={BRAND_PRIMARY} />
           </button>
@@ -70,7 +71,7 @@ export function Sidebar({
             type="button"
             onClick={onNewIssue}
             className="w-11 h-11 rounded-xl bg-[#5B50F6] hover:bg-[#4E44E6] text-white flex items-center justify-center shadow-xs transition-transform active:scale-95"
-            title="New Issue (⌘K)"
+            title={`Capture Issue (${shortcut('K')})`}
           >
             <Plus size={20} strokeWidth={2.5} />
           </button>
@@ -177,9 +178,7 @@ export function Sidebar({
               <Plus size={18} strokeWidth={2.5} />
               <span>Capture Issue</span>
             </div>
-            <kbd className="px-2 py-0.5 rounded-md bg-white/20 text-xs font-mono text-white/90">
-              ⌘K
-            </kbd>
+            <kbd className="px-2 py-0.5 rounded-md bg-white/20 text-xs font-mono text-white/90">{shortcut('K')}</kbd>
           </button>
         </div>
 

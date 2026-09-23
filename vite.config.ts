@@ -30,8 +30,8 @@ export default defineConfig({
         ],
       },
       manifest: {
-        name: 'Bugstow',
-        short_name: 'Bugstow',
+        name: 'BugsTow',
+        short_name: 'BugsTow',
         description: 'A privacy-first issue tracker. Spot it. Stow it. Fix it.',
         theme_color: '#5B50F6',
         background_color: '#0b0f19',

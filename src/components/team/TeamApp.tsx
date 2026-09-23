@@ -192,13 +192,13 @@ function Workspace({ onUseLocal, userLabel, offline = false, me }: TeamAppProps 
           <button
             type="button"
             onClick={() => setShowTeamMenu(v => !v)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold text-sm"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold text-sm max-w-[45vw] sm:max-w-xs"
           >
-            <span className="w-6 h-6 rounded-lg bg-[#5B50F6] text-white flex items-center justify-center text-xs">
+            <span className="w-6 h-6 shrink-0 rounded-lg bg-[#5B50F6] text-white flex items-center justify-center text-xs">
               {activeTeam ? activeTeam.name.slice(0, 1).toUpperCase() : '?'}
             </span>
-            {activeTeam?.name || 'Select team'}
-            <ChevronDown size={15} className="text-slate-400" />
+            <span className="truncate">{activeTeam?.name || (isDesktopEdition() ? 'Select workspace' : 'Select team')}</span>
+            <ChevronDown size={15} className="shrink-0 text-slate-400" />
           </button>
           {showTeamMenu && (
             <div
@@ -214,9 +214,9 @@ function Workspace({ onUseLocal, userLabel, offline = false, me }: TeamAppProps 
                     setSelectedId(null)
                     setShowTeamMenu(false)
                   }}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
-                  <span>{t.name}</span>
+                  <span className="truncate">{t.name}</span>
                   {t.id === activeTeamId && <Check size={14} className="text-[#5B50F6]" />}
                 </button>
               ))}
@@ -318,14 +318,23 @@ function Workspace({ onUseLocal, userLabel, offline = false, me }: TeamAppProps 
           {loading ? (
             <div className="p-8 text-center text-sm text-slate-400">Loading…</div>
           ) : filtered.length === 0 ? (
-            <div className="p-8 text-center text-sm text-slate-400">No issues here yet.</div>
+            <div className="p-8 flex flex-col items-center gap-3 text-center text-sm text-slate-500 dark:text-slate-400">
+              No issues here yet.
+              <button
+                type="button"
+                onClick={() => setShowNew(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-xl bg-[#5B50F6] hover:bg-[#4E44E6] text-white"
+              >
+                <Plus size={15} /> New Issue
+              </button>
+            </div>
           ) : (
             filtered.map(issue => (
               <button
                 key={issue.id}
                 type="button"
                 onClick={() => setSelectedId(issue.id)}
-                className={`text-left px-4 py-3 border-b border-slate-100 dark:border-slate-800/70 hover:bg-slate-50 dark:hover:bg-slate-800/40 ${
+                className={`w-full text-left px-4 py-3 border-b border-slate-100 dark:border-slate-800/70 hover:bg-slate-50 dark:hover:bg-slate-800/40 ${
                   selectedId === issue.id ? 'bg-indigo-50/60 dark:bg-indigo-950/30' : ''
                 }`}
               >
@@ -339,8 +348,8 @@ function Workspace({ onUseLocal, userLabel, offline = false, me }: TeamAppProps 
                   )}
                 </div>
                 <p className="text-sm font-medium text-slate-800 dark:text-slate-100 line-clamp-2">{issue.title}</p>
-                <div className="flex items-center gap-2 mt-1.5 text-[11px] text-slate-400">
-                  {issue.project_name && <span>{issue.project_name}</span>}
+                <div className="flex items-center gap-2 mt-1.5 text-[11px] text-slate-400 min-w-0">
+                  {issue.project_name && <span className="truncate">{issue.project_name}</span>}
                   {issue.screenshot_count > 0 && <span>· {issue.screenshot_count} img</span>}
                   <span className="flex-1" />
                   {issue.assignee_id && (

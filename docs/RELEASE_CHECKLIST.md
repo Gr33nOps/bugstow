@@ -6,16 +6,31 @@ as passed until a person has done it.
 
 **Status for this release: NOT YET PERFORMED.**
 
-Setup: a fresh Team server with HTTPS on (`BUGSTOW_TLS=true`, `BUGSTOW_BASE_URL=https://<IP>:8080`),
-a second browser or computer for the teammate, and the public site
-(https://bugstow.vercel.app) or `node serve-personal.mjs` for Personal mode.
+Setup: the app installed with the one-command installer (docs/INSTALL.md) on a
+Windows PC and, if possible, a Mac or Linux computer; a fresh Team server with
+HTTPS on (`BUGSTOW_TLS=true`, `BUGSTOW_BASE_URL=https://<IP>:8080`); and a second
+browser or computer for the teammate.
+
+## Installed app
+
+| # | Check | Expected | PASS/FAIL |
+|---|---|---|---|
+| D1 | Run the install command in a new terminal | Node.js and BugsTow download with "Checksum OK"; the browser opens http://localhost:5757 | |
+| D2 | Choose **In a folder on this PC** | The sign-in form opens without asking for a setup token | |
+| D3 | Create the sign-in, capture an issue with a screenshot | Saved; `bugstow status` shows the data folder, which contains `bugstow.sqlite` | |
+| D4 | Close the browser, run `bugstow stop`, then click the **BugsTow** shortcut | BugsTow starts and opens; you are still signed in; the issue is there | |
+| D5 | Restart the computer and click the shortcut | Same as D4 | |
+| D6 | Disconnect from the internet and repeat D4 | Works the same | |
+| D7 | Run the install command again (update) | Finishes; data and sign-in unchanged | |
+| D8 | `bugstow start --lan`, open the printed address on a phone on the same Wi-Fi | Certificate warning once; after accepting, sign in and see the issues | |
+| D9 | `bugstow uninstall` | Shortcuts and the command are gone; the data folder is still there | |
 
 ## Personal mode
 
 | # | Check | Expected | PASS/FAIL |
 |---|---|---|---|
-| P1 | First visit to the public site | "Welcome to Bugstow" picker; nothing else loads until you choose | |
-| P2 | Choose **Just me · Local**, capture an issue with title + description | Appears in the inbox | |
+| P1 | First open of the installed app (or `node serve-personal.mjs`) | "Welcome to BugsTow" picker; nothing else loads until you choose | |
+| P2 | Choose **Only in this browser** (or **Just me · Local**), capture an issue with title + description | Appears in the inbox | |
 | P3 | Copy an image, focus the capture dialog, press Ctrl/⌘+V | Screenshot preview appears; saved with the issue | |
 | P4 | Settings → Export Backup with *Encrypt* ticked and a passphrase | A `.json` file downloads | |
 | P5 | Clear data (Settings → danger zone) then Import that file with the passphrase | All issues and screenshots return. Wrong passphrase is refused with a message | |
@@ -25,7 +40,7 @@ a second browser or computer for the teammate, and the public site
 
 ## Personal cloud sync (docs/CLOUD_SYNC.md)
 
-Use a laptop **and** a phone. Google Drive and Dropbox need `VITE_GOOGLE_CLIENT_ID` / `VITE_DROPBOX_CLIENT_ID` set on the site.
+Use a laptop **and** a phone. Google Drive and Dropbox need `VITE_GOOGLE_CLIENT_ID` / `VITE_DROPBOX_CLIENT_ID` set when the app package is built. The phone opens the laptop's BugsTow over Wi-Fi (`bugstow start --lan`) or another computer's installed app.
 
 | # | Check | Expected | PASS/FAIL |
 |---|---|---|---|

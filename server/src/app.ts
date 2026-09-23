@@ -84,7 +84,10 @@ export async function createApp(): Promise<express.Express> {
           scriptSrc: ["'self'", ...(indexHtml ? inlineScriptHashes(indexHtml) : [])],
           styleSrc: ["'self'", "'unsafe-inline'"], // Tailwind inline styles
           imgSrc: ["'self'", 'data:', 'blob:'], // screenshots via object/data URLs
-          connectSrc: ["'self'"], // no external network from the browser
+          // Team server: no external network from the browser. The desktop app
+          // (one person, this computer only) also allows https: so its Personal
+          // sync can reach the user's own Google Drive, Dropbox or WebDAV.
+          connectSrc: config.desktop ? ["'self'", 'https:'] : ["'self'"],
           fontSrc: ["'self'", 'data:'],
           objectSrc: ["'none'"],
           baseUri: ["'self'"],

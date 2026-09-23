@@ -244,7 +244,7 @@ export function IssueDetail({
 
     const res = await copyPromptAndImageToClipboard(issue, project, mainBlob)
     if (res.textCopied && res.imageCopied) {
-      onToast?.('Copied prompt + image! Paste into ChatGPT/Claude (⌘V)')
+      onToast?.('Copied prompt + image! Paste it into your AI assistant')
     } else if (res.textCopied) {
       onToast?.('Copied prompt text to clipboard!')
     } else {
@@ -394,36 +394,42 @@ export function IssueDetail({
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block uppercase tracking-wider">
+              <label className="min-w-0">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block uppercase tracking-wider">
                   Project
-                </label>
-                <select
-                  value={editProject || ''}
-                  onChange={e => setEditProject(e.target.value || null)}
-                  className="w-full px-3.5 py-2.5 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:border-[#5B50F6]"
-                >
-                  <option value="">Unassigned</option>
-                  {projects.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
+                </span>
+                <span className="relative block">
+                  <select
+                    value={editProject || ''}
+                    onChange={e => setEditProject(e.target.value || null)}
+                    className="w-full min-w-0 appearance-none pl-3.5 pr-9 py-2.5 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:border-[#5B50F6] cursor-pointer truncate"
+                  >
+                    <option value="">No project</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </span>
+              </label>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block uppercase tracking-wider">
+              <label className="min-w-0">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block uppercase tracking-wider">
                   Issue Type
-                </label>
-                <select
-                  value={editType}
-                  onChange={e => setEditType(e.target.value as IssueType)}
-                  className="w-full px-3.5 py-2.5 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:border-[#5B50F6]"
-                >
-                  <option value="bug">Bug</option>
-                  <option value="uiux">UI/UX</option>
-                  <option value="idea">Idea</option>
-                </select>
-              </div>
+                </span>
+                <span className="relative block">
+                  <select
+                    value={editType}
+                    onChange={e => setEditType(e.target.value as IssueType)}
+                    className="w-full min-w-0 appearance-none pl-3.5 pr-9 py-2.5 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:border-[#5B50F6] cursor-pointer truncate"
+                  >
+                    <option value="bug">Bug</option>
+                    <option value="uiux">UI/UX</option>
+                    <option value="idea">Idea</option>
+                  </select>
+                  <ChevronDown size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </span>
+              </label>
             </div>
 
             {/* Screenshots Edit: View existing + add more images */}
@@ -433,7 +439,7 @@ export function IssueDetail({
                   Screenshots & Attachments
                 </label>
                 <span className="text-xs text-slate-400">
-                  {keepScreenshotIds.length + newScreenshotsToAdd.length} image(s)
+                  {keepScreenshotIds.length + newScreenshotsToAdd.length === 1 ? "1 image" : `${keepScreenshotIds.length + newScreenshotsToAdd.length} images`}
                 </span>
               </div>
 
@@ -558,7 +564,7 @@ export function IssueDetail({
                   <Sparkles size={14} className="text-[#5B50F6]" />
                   <span>AI Prompt Tools</span>
                 </span>
-                <span className="text-[11px] text-slate-400">Ready for ChatGPT, Claude, Cursor</span>
+                <span className="hidden sm:inline text-[11px] text-slate-400">Ready for ChatGPT, Claude, Cursor</span>
               </div>
 
               {/* Primary: Copy Prompt + Image button */}
@@ -616,7 +622,7 @@ export function IssueDetail({
                     <ImageIcon size={14} />
                     <span>Screenshots ({currentScreenshotIds.length})</span>
                   </h3>
-                  <span className="text-xs text-slate-400">Click image to zoom full screen</span>
+                  <span className="hidden sm:inline text-xs text-slate-400">Click an image to enlarge it</span>
                 </div>
 
                 <div className="flex flex-col gap-3">

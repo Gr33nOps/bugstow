@@ -63,9 +63,25 @@ BugsTow doesn't start by itself when you turn the computer on. Open it when you 
 It holds the database (`bugstow.sqlite`), the screenshots and daily backups (`backups/`,
 the last 7 are kept). Installing, updating or uninstalling never changes this folder.
 
-To keep a copy somewhere else, copy the data folder while BugsTow is stopped, or use the
-backup options in [CLOUD_SYNC.md](CLOUD_SYNC.md) (encrypted archives to a folder your
-Google Drive, Dropbox, OneDrive, Mega or Terabox app syncs, or to WebDAV).
+### Extra copies: a second drive or your own cloud
+
+Backups in the data folder don't help if the disk dies. BugsTow can also copy every backup to a
+second drive, and send **encrypted** copies to a folder your Google Drive, Dropbox, OneDrive,
+Mega or Terabox app syncs (or to WebDAV). Create a text file named `bugstow.env` in the BugsTow
+folder (the one that contains `data`) with the lines you need, then run `bugstow restart`:
+
+```env
+# A second drive (create an empty file named .bugstow-backup-target in that folder first)
+BUGSTOW_BACKUP_EXTERNAL_DIR=D:/BugsTow backups
+
+# Encrypted copies to a folder your cloud app syncs (same marker file needed)
+BUGSTOW_BACKUP_ENCRYPTION_PASSPHRASE=a long passphrase you keep in a password manager
+BUGSTOW_BACKUP_CLOUD_DIR=C:/Users/you/Dropbox/BugsTow backups
+```
+
+Without the passphrase nothing is sent to the cloud. Every option is explained in
+[CLOUD_SYNC.md](CLOUD_SYNC.md#team-backups-to-your-cloud); `bugstow logs` shows whether
+backups succeed. Copying the data folder while BugsTow is stopped also works.
 
 The two browser-only choices on the welcome screen ("Only in this browser", "Synced with my
 own cloud") keep issues in the browser instead of the data folder. See the README.

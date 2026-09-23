@@ -61,7 +61,7 @@ export default function RootApp() {
   }
 
   if (mode === 'team') {
-    // Saved team choice but no team server here (e.g. public site) → info.
+    // Saved team choice but no team server here (e.g. a static build) → info.
     if (!team.available) {
       return (
         <div className="h-full">

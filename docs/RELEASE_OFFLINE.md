@@ -380,16 +380,14 @@ open in the browser like any link. They are not requests the app makes.
 
 Browsers enforce part of this too. The Team server sends a
 Content-Security-Policy with `connect-src 'self'`: pages it serves cannot
-connect anywhere else. The public site allows `'self' https:`, because
-Personal sync has to reach the cloud or WebDAV server you pick; there, the
-code (not the browser) is what limits connections to the one you connected.
+connect anywhere else. The installed desktop app allows `'self' https:`,
+because Personal sync has to reach the cloud or WebDAV server you pick; there,
+the code (not the browser) is what limits connections to the one you connected.
 On both, scripts are limited to the app's own files plus one fixed inline
 theme script (by hash).
 
-**The public website** (the static host serving Personal mode, currently
-Vercel) receives normal web-request information when someone loads the page,
-such as IP address, browser type and access logs. It never receives projects,
-issues or screenshots: Personal mode keeps them in the browser and has no API.
+There is no public BugsTow website any more: the app is installed and served
+from the user's own computer, so no web host sees requests for it.
 
 ---
 

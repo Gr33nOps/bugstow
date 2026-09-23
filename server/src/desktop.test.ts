@@ -60,6 +60,15 @@ test('requests for other host names are refused (DNS rebinding)', async () => {
   assert.equal((await get('/', `[::1]:${PORT}`)).status, 200)
 })
 
+test('the page may reach https: hosts (Personal sync to your own cloud)', async () => {
+  const res = await new Promise<http.IncomingMessage>((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port: PORT, path: '/', headers: { Host: `localhost:${PORT}` } }, resolve).on('error', reject)
+  })
+  res.resume()
+  const csp = String(res.headers['content-security-policy'])
+  assert.match(csp, /connect-src 'self' https:/)
+})
+
 test('127.0.0.1 is a trusted origin as well as localhost', () => {
   assert.ok(config.trustedOrigins.includes(`http://127.0.0.1:${PORT}`))
 })

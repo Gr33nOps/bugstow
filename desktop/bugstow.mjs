@@ -217,6 +217,21 @@ function lastLogLines(n = 25) {
   return text ? text.split(/\r?\n/).slice(-n).join('\n') : '(no log yet)'
 }
 
+/**
+ * Optional server settings in <home>/bugstow.env (KEY=VALUE lines, # comments),
+ * for example encrypted backups to a cloud folder. Only BUGSTOW_BACKUP_* and
+ * BUGSTOW_OFFLINE are used; the launcher manages everything else.
+ */
+const ENV_FILE = path.join(HOME, 'bugstow.env')
+function userSettings() {
+  const out = {}
+  for (const line of readText(ENV_FILE).split(/\r?\n/)) {
+    const m = /^\s*(BUGSTOW_BACKUP_[A-Z_]+|BUGSTOW_OFFLINE)\s*=\s*(.*?)\s*$/.exec(line)
+    if (m) out[m[1]] = m[2].replace(/^(['"])(.*)\1$/, '$2')
+  }
+  return out
+}
+
 // ── server process ───────────────────────────────────────────────────────────
 function serverEnv(s) {
   let secret = readText(SECRET_FILE)
@@ -227,6 +242,7 @@ function serverEnv(s) {
   const u = urls(s)
   const env = {
     ...process.env,
+    ...userSettings(),
     NODE_ENV: 'production',
     PORT: String(s.port),
     BUGSTOW_DESKTOP: 'true',

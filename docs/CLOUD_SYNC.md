@@ -22,7 +22,7 @@ the app what will happen before you connect.
 |---|---|---|
 | **Google Drive** | Syncs automatically. Files go in a hidden BugsTow folder in your Drive that only BugsTow can see (not the rest of your Drive). Google limits browser access to about an hour, so after that you tap **Reconnect** once. | Yes |
 | **Dropbox** | Syncs automatically. Files go in *Dropbox › Apps › BugsTow*; BugsTow can't see anything else. Stays connected until you turn it off. | Yes |
-| **WebDAV** | Syncs automatically with a server you run: Nextcloud, ownCloud, a Synology NAS… It must use `https://` and allow the BugsTow site (CORS, below). | Yes |
+| **WebDAV** | Syncs automatically with a server you run: Nextcloud, ownCloud, a Synology NAS… It must use `https://` and allow BugsTow's address (CORS, below). | Yes |
 | **Synced folder** | Pick a folder that your cloud's desktop app syncs: **Mega, Terabox, OneDrive, iCloud Drive**, or Google Drive / Dropbox for desktop. BugsTow writes its files there and the cloud app uploads them. Desktop Chrome/Edge only. | Not automatically (use a sync file) |
 | **Sync file** | Export one encrypted file, put it in any cloud, import it on your other device to merge. Nothing happens automatically. | Yes |
 
@@ -79,17 +79,28 @@ keep their data and upload it again on the next sync).
   for folder access again after a restart (one click).
 - Sync happens while the app is open. A phone that hasn't opened BugsTow for a
   week catches up the next time it does.
-- When BugsTow is opened **from a Team server**, only the synced-folder and
-  sync-file options are offered: the Team server blocks connections to other
+- In the installed app (`bugstow`), sync works from the browser options
+  ("Only in this browser" / "Synced with my own cloud"). The "In a folder on
+  this PC" option keeps data in the data folder instead; back that up with the
+  server backup settings below.
+- When BugsTow is opened **from a shared Team server**, only the synced-folder
+  and sync-file options are offered: a Team server blocks connections to other
   sites on purpose.
 
 ---
 
-## For the site owner: enabling Google Drive and Dropbox
+## For the maintainer: enabling Google Drive and Dropbox
 
-The public site needs a free app registration with each provider. The IDs are
-**not secrets**; they go in the site's build settings. There's no server
-component and no client secret.
+Google and Dropbox only show their sign-in screen to a registered app. Register
+BugsTow once with each; the IDs are **not secrets** and are built into the app
+package. There's no server component and no client secret. Every user still
+signs in with their **own** Google or Dropbox account, and their files go to
+their own storage; the registration only identifies the app.
+
+The installed app runs at `http://localhost:5757`, so that is the address to
+register. (Someone who moves BugsTow to another port with `--port` can't use
+Google Drive or Dropbox sync, because the providers only accept the registered
+address; the other options still work.)
 
 ### Google Drive
 
@@ -100,9 +111,9 @@ component and no client secret.
    `https://www.googleapis.com/auth/drive.appdata` (a non-sensitive scope).
    Publish the app (while it's in "Testing" only listed test users can sign in).
 4. *Credentials → Create credentials → OAuth client ID* → **Web application**.
-   - Authorized JavaScript origins: `https://bugstow.vercel.app` (and
+   - Authorized JavaScript origins: `http://localhost:5757` (and
      `http://localhost:8443` for development)
-   - Authorized redirect URIs: `https://bugstow.vercel.app/oauth/callback`
+   - Authorized redirect URIs: `http://localhost:5757/oauth/callback`
      (and `http://localhost:8443/oauth/callback`)
 5. Copy the client ID (`….apps.googleusercontent.com`).
 
@@ -112,7 +123,7 @@ component and no client secret.
 2. **Scoped access** → **App folder** → name "BugsTow".
 3. *Permissions* tab: tick `files.content.read` and `files.content.write`, then
    **Submit**.
-4. *Settings* tab: add redirect URI `https://bugstow.vercel.app/oauth/callback`
+4. *Settings* tab: add redirect URI `http://localhost:5757/oauth/callback`
    (and `http://localhost:8443/oauth/callback`). Leave "Allow public clients
    (Implicit Grant & PKCE)" **allowed**.
 5. *Settings* tab: under "Development users" click **Enable additional users**
@@ -122,35 +133,33 @@ component and no client secret.
    users have connected, Dropbox gives you two weeks to get approval before it
    stops new users from connecting (and an unapproved app is capped at 500).
 
-### Put the IDs into the site
+### Build the IDs into the app package
 
-In Vercel: *Project → Settings → Environment Variables*:
+Set them when building the package the installers download:
 
+```sh
+VITE_GOOGLE_CLIENT_ID=<Google client ID> VITE_DROPBOX_CLIENT_ID=<Dropbox app key>   node scripts/build-app-package.mjs
 ```
-VITE_GOOGLE_CLIENT_ID   = <Google client ID>
-VITE_DROPBOX_CLIENT_ID  = <Dropbox app key>
-```
 
-Redeploy. Until these are set, Google Drive and Dropbox show "Not set up on
-this site yet"; the other three options work regardless. Self-hosting the
-static site? Register your own origin and build with the same variables.
+Without them, Google Drive and Dropbox show "Not available in this copy of
+BugsTow"; the other three options work regardless.
 
 ---
 
-## WebDAV: allowing the BugsTow site (CORS)
+## WebDAV: allowing BugsTow's address (CORS)
 
 Browsers only let the BugsTow page talk to your WebDAV server if the server
 says so. Nextcloud and ownCloud don't do this out of the box, so add it in the
-reverse proxy in front of them. Replace the origin if you host BugsTow
-elsewhere.
+reverse proxy in front of them. The installed app's address is
+`http://localhost:5757`; use yours if you changed the port.
 
 **Caddy**
 
 ```
 cloud.example.com {
-    @bugstow header Origin https://bugstow.vercel.app
+    @bugstow header Origin http://localhost:5757
     header @bugstow {
-        Access-Control-Allow-Origin "https://bugstow.vercel.app"
+        Access-Control-Allow-Origin "http://localhost:5757"
         Access-Control-Allow-Methods "GET, PUT, DELETE, PROPFIND, MKCOL, OPTIONS"
         Access-Control-Allow-Headers "Authorization, Depth, If-Match, If-None-Match, Content-Type"
         Access-Control-Expose-Headers "ETag"
@@ -158,7 +167,7 @@ cloud.example.com {
     }
     @preflight {
         method OPTIONS
-        header Origin https://bugstow.vercel.app
+        header Origin http://localhost:5757
     }
     respond @preflight 204
     reverse_proxy nextcloud:80
@@ -169,7 +178,7 @@ cloud.example.com {
 
 ```
 if ($request_method = OPTIONS) { set $bugstow_preflight 1; }
-add_header Access-Control-Allow-Origin "https://bugstow.vercel.app" always;
+add_header Access-Control-Allow-Origin "http://localhost:5757" always;
 add_header Access-Control-Allow-Methods "GET, PUT, DELETE, PROPFIND, MKCOL, OPTIONS" always;
 add_header Access-Control-Allow-Headers "Authorization, Depth, If-Match, If-None-Match, Content-Type" always;
 add_header Access-Control-Expose-Headers "ETag" always;
@@ -263,8 +272,8 @@ BugsTow from writing into an empty mount point if the cloud app isn't running.
 - The BugsTow maintainer receives nothing.
 - Your cloud provider stores only encrypted files. It can see how many files
   there are, their sizes and when they change, but not their contents.
-- The public BugsTow site allows the browser to make HTTPS connections, which
-  is needed to reach the cloud or WebDAV server you choose. BugsTow's code
-  connects only to the one you connected, and only after you connect it.
-- A Team server keeps its strict policy (connections to itself only). Its cloud
-  backups are sent by the server, not the browser.
+- The installed app lets the page make HTTPS connections, which is needed to
+  reach the cloud or WebDAV server you choose. BugsTow's code connects only to
+  the one you connected, and only after you connect it.
+- A shared Team server keeps its strict policy (connections to itself only).
+  Its cloud backups are sent by the server, not the browser.

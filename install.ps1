@@ -32,7 +32,12 @@ function Install-BugsTow {
 
   function Say($m) { Write-Host "  $m" }
   function Step($m) { Write-Host "`n> $m" -ForegroundColor Cyan }
-  function Get-Sha256($file) { (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLowerInvariant() }
+  # .NET directly: Get-FileHash can be missing when Windows PowerShell is started from PowerShell 7.
+  function Get-Sha256($file) {
+    $stream = [IO.File]::OpenRead($file)
+    try { -join ([Security.Cryptography.SHA256]::Create().ComputeHash($stream) | ForEach-Object { $_.ToString('x2') }) }
+    finally { $stream.Dispose() }
+  }
   function Fetch($url, $dest) { Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $dest -Headers @{ 'User-Agent' = 'bugstow-installer' } }
 
   Write-Host "`nBugsTow installer" -ForegroundColor White
@@ -152,7 +157,10 @@ function Install-BugsTow {
     # ── 6. Start ─────────────────────────────────────────────────────────────
     Write-Host "`nDone. Your data folder: $(Join-Path $Root 'data')" -ForegroundColor Green
     if ($env:BUGSTOW_NO_START -ne '1') {
-      & $nodeExe (Join-Path $AppDir 'bugstow.mjs') start
+      # Start-Process, not `& node`: BugsTow keeps running in the background, and
+      # PowerShell would otherwise wait for it when this script's output is captured.
+      $launcher = Start-Process -FilePath $nodeExe -ArgumentList @("`"$(Join-Path $AppDir 'bugstow.mjs')`"", 'start') -NoNewWindow -PassThru
+      $launcher.WaitForExit()
     } else {
       Say 'Start it from the BugsTow shortcut or with: bugstow'
     }

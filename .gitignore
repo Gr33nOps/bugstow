@@ -50,3 +50,6 @@ bugstow-backup-*.tgz
 
 # Desktop app packages (scripts/build-app-package.mjs)
 release/
+
+# Browser-test artifacts
+.playwright-mcp/

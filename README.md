@@ -2,65 +2,73 @@
 
 > **Spot it. Stow it. Fix it.**
 > An issue tracker for bugs, UI problems and ideas you notice while building.
-> Use it on your own in the browser, or run it on your own server for your team.
+> It runs on your own computer, or on your own server for your team.
 
 BugsTow replaces screenshotting bugs into your DMs or notes: capture an issue,
 paste a screenshot, and turn it into a ready-to-paste prompt for your coding
 assistant later.
 
 BugsTow does not store your project data on infrastructure operated by the
-BugsTow maintainer. No cloud service is required for normal operation.
+BugsTow maintainer. There is no hosted BugsTow service: you install it.
 
-- **Personal mode:** your projects, issues and screenshots stay in your
-  browser. BugsTow does not require an account or backend for Personal mode.
-- **Team mode:** your team runs its own BugsTow server. Shared project data is
-  stored on infrastructure your team controls.
-- **Your own cloud (optional):** sync Personal mode between your phone and
-  computers, or send Team backups, through cloud storage you choose (Google
-  Drive, Dropbox, WebDAV, or any cloud via a synced folder or file).
-  Everything is encrypted with your passphrase before it leaves your device.
-  See [`docs/CLOUD_SYNC.md`](docs/CLOUD_SYNC.md).
-- **Offline:** BugsTow can operate entirely offline after installation.
-  Optional internet-dependent features such as GitHub import and cloud sync
-  are off unless you turn them on. See [`docs/OFFLINE.md`](docs/OFFLINE.md).
+## Install
+
+**Windows** (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/Gr33nOps/bugstow/main/install.ps1 | iex
+```
+
+**macOS / Linux**:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Gr33nOps/bugstow/main/install.sh | sh
+```
+
+The command installs BugsTow for your user (no administrator rights, nothing to
+install first), adds a **BugsTow** shortcut and a `bugstow` command, and opens
+http://localhost:5757. After that BugsTow works offline. Run the same command
+again to update; `bugstow uninstall` removes it and keeps your data.
+
+**→ Details: [`docs/INSTALL.md`](docs/INSTALL.md)** (where data is kept,
+commands, phones on your Wi-Fi, troubleshooting).
 
 ---
 
-## Personal mode (in your browser)
+## Where your issues are kept
 
-Open https://bugstow.vercel.app, or serve the built app yourself:
+On first open, BugsTow asks where to keep your issues:
 
-- **No account, no backend.** Projects, issues, screenshots and settings are
-  stored in your browser's IndexedDB.
-- **Works offline** after the first visit (installable app).
-- **Screenshots:** paste (`Cmd/Ctrl+V`), drag and drop, or pick a file
+- **In a folder on this PC** (recommended): saved in BugsTow's data folder
+  (`bugstow.sqlite` plus the screenshots) and backed up there automatically while BugsTow runs.
+  Clearing the browser doesn't touch them. You create a sign-in once.
+- **Only in this browser:** no sign-in; stored in the browser's IndexedDB.
+  Clearing the browser's data erases them, so export backups.
+- **Synced with my own cloud:** in the browser, plus encrypted sync through
+  your own Google Drive, Dropbox, WebDAV server, a folder your cloud app syncs
+  (Mega, Terabox, OneDrive…) or a sync file. See
+  [`docs/CLOUD_SYNC.md`](docs/CLOUD_SYNC.md).
+
+Everything you can do:
+
+- **Screenshots:** paste (`Ctrl/Cmd+V`), drag and drop, or pick a file
   (PNG/JPEG/WebP).
 - **Copy as Prompt:** turn an issue into a structured prompt for an AI assistant.
 - **Backups:** export a file you can restore later, optionally encrypted with a
-  passphrase (AES-256-GCM, PBKDF2 with 100,000 iterations). Also how you move
-  data to another browser or into a team.
-- **Sync across devices (optional):** Settings → Sync connects your own Google
-  Drive, Dropbox, WebDAV server, a folder your cloud app syncs (Mega, Terabox,
-  OneDrive…), or a portable sync file. End-to-end encrypted with your
-  passphrase; your cloud only stores unreadable files.
+  passphrase (AES-256-GCM, PBKDF2 with 100,000 iterations).
+- **Offline:** nothing needs the internet after installing. Optional
+  internet features (GitHub import, cloud sync) are off unless you turn them
+  on. See [`docs/OFFLINE.md`](docs/OFFLINE.md).
 
-> **Good to know:** browser storage is not permanent. Clearing site data,
-> switching browsers or losing the device loses it, so export backups. Browser
-> storage is **not encrypted on disk**; only exported files you choose to encrypt
-> are.
->
-> The public website is a static host (currently Vercel). Like any website, it
-> receives normal request information when the page loads (such as your IP
-> address and browser type, kept in its access logs). It never receives your
-> projects, issues or screenshots: Personal mode has no API. If you turn on
-> sync, your browser talks directly to the cloud you chose, sending only
-> encrypted files.
+> **Good to know:** browser storage is **not encrypted on disk**, and neither
+> is the data folder; only exported files you choose to encrypt are. Anyone who
+> can use your computer account can read them.
 
 ---
 
-## Team mode (self-hosted)
+## For a team (self-hosted server)
 
-Run BugsTow on a computer or server your team controls:
+Run the same app on a computer or server your team controls:
 
 - Node.js + Express, a **SQLite** database and screenshots on the **local
   disk**, packaged with **Docker Compose**.
@@ -70,7 +78,8 @@ Run BugsTow on a computer or server your team controls:
   setup token printed in the server log.
 - **HTTPS on your LAN** with a certificate generated locally (recommended
   whenever other computers connect).
-- **Automatic backups**, optionally copied to a second drive, USB disk or NAS.
+- **Automatic backups**, optionally copied to a second drive, USB disk or NAS,
+  or sent encrypted to your own cloud.
 - Two people editing the same issue can't silently overwrite each other: the
   later save is refused with a "reload first" message.
 
@@ -93,39 +102,20 @@ docker compose logs bugstow      # copy the one-time setup token
 
 Open the server, choose **My team** and create the administrator with the token.
 
----
-
-## Moving from Personal to Team
-
-You keep your local data; the team gets a copy:
-
-1. Personal mode → **Settings → Export Backup**.
-2. Team mode → **user menu → Import personal data** → pick the file → confirm.
-
-The import only adds data. It never deletes anything in your browser.
+For just yourself plus a phone on the same Wi-Fi, the installed app is enough:
+`bugstow start --lan` (see [`docs/INSTALL.md`](docs/INSTALL.md)).
 
 ---
 
-## Deploying the public website (static)
+## Moving issues between places
 
-The public site is a static build with no backend. Host it anywhere that serves
-static files.
+You keep the original; the destination gets a copy:
 
-```bash
-npm ci
-npm run build      # outputs ./dist
-```
+1. Where the issues are now → **Settings → Export Backup**.
+2. Where they should go → **Settings → Import Backup** (browser storage), or
+   **user menu → Import personal data** (the PC folder or a team server).
 
-[`vercel.json`](vercel.json) adds an SPA rewrite and security headers (a
-Content-Security-Policy that only allows scripts from the site itself, and
-connections to the site or to HTTPS hosts, which cloud sync needs). The same
-`dist` works on a team server: it only looks for a team server when the page
-was served by one, so the public site makes no API requests.
-
-To offer Google Drive and Dropbox sync, set `VITE_GOOGLE_CLIENT_ID` and
-`VITE_DROPBOX_CLIENT_ID` at build time (setup steps in
-[`docs/CLOUD_SYNC.md`](docs/CLOUD_SYNC.md)). Without them those two options
-show "not set up"; the others work regardless.
+Importing only adds data. It never deletes anything.
 
 ---
 
@@ -140,10 +130,11 @@ access rules, but no independent audit. To report a vulnerability, see
 ## Tech stack
 
 - **Frontend:** React 19, TypeScript, Vite, Tailwind CSS v4, `vite-plugin-pwa`
-- **Personal storage:** IndexedDB (`idb`)
-- **Crypto (exports):** Web Crypto (PBKDF2-HMAC-SHA256, AES-256-GCM)
-- **Team server:** Node.js, Express, SQLite (`better-sqlite3`), better-auth
-- **Deployment:** static host (public site) + Docker Compose (team server)
+- **Browser storage:** IndexedDB (`idb`)
+- **Crypto (exports, sync):** Web Crypto (PBKDF2-HMAC-SHA256, AES-256-GCM)
+- **Server:** Node.js, Express, SQLite (`better-sqlite3`), better-auth
+- **Distribution:** one-command installers (`install.ps1`, `install.sh`) with
+  a private Node.js runtime; Docker Compose for team servers
 - **Tests:** Vitest (frontend), `node:test` (server), two-client acceptance test
 
 ---
@@ -152,19 +143,19 @@ access rules, but no independent audit. To report a vulnerability, see
 
 ```
 bugstow/
-├── src/                       # React app (Personal + Team frontend)
-│   ├── App.tsx                # Personal app
-│   ├── RootApp.tsx            # Chooses Personal vs Team at runtime
-│   ├── components/team/       # Team UI (loaded only from a team server)
-│   ├── hooks/                 # useBugstowData (IndexedDB), useTeamData (team API)
-│   ├── lib/                   # authClient, teamServer detection, connection
-│   └── services/              # backup, prompt, storage, teamApi, teamMigration
-├── server/                    # Self-hosted team server
+├── src/                       # React app
+│   ├── App.tsx                # Browser-storage app
+│   ├── RootApp.tsx            # Picks browser storage vs server at runtime
+│   ├── components/team/       # Server-backed UI (PC folder / team)
+│   ├── sync/                  # Bring-your-own-cloud sync
+│   ├── hooks/, lib/, services/
+├── server/                    # The BugsTow server (desktop app and team server)
 │   └── src/                   # Express app, auth, SQLite, backups, TLS, tests
-├── scripts/                   # acceptance test, offline bundle builder, static server
-├── docs/                      # SELF_HOSTING, OFFLINE, RELEASE_OFFLINE, RELEASE_CHECKLIST
-├── Dockerfile, docker-compose.yml, docker-compose.offline.yml
-└── vercel.json                # Static public-site config
+├── desktop/bugstow.mjs        # The `bugstow` launcher of the installed app
+├── install.ps1, install.sh    # One-command installers
+├── scripts/                   # app package + offline bundle builders, acceptance test
+├── docs/                      # INSTALL, SELF_HOSTING, CLOUD_SYNC, OFFLINE, RELEASE_*
+└── Dockerfile, docker-compose.yml, docker-compose.offline.yml
 ```
 
 ---
@@ -173,9 +164,9 @@ bugstow/
 
 ```bash
 npm ci
-npm run dev        # http://localhost:8443
+npm run dev        # http://localhost:8443 (browser storage)
 
-# Team server (separate terminal):
+# Server (separate terminal):
 cd server && npm ci
 BUGSTOW_AUTH_SECRET=dev-secret-0123456789 npm run dev   # http://localhost:8080
 ```
@@ -186,7 +177,11 @@ In development, Vite proxies `/api` to `http://localhost:8080` (override with
 ```bash
 npm run typecheck && npm test && npm run build
 cd server && npm run typecheck && npm test
+node scripts/build-app-package.mjs    # release/bugstow-app-<version>.tar.gz for the installers
 ```
+
+To try an installer against a local package:
+`BUGSTOW_PACKAGE=release/bugstow-app-<version>.tar.gz sh install.sh`.
 
 ---
 
