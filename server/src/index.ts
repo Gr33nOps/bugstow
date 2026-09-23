@@ -22,7 +22,7 @@ async function main() {
 
   const app = express()
   app.disable('x-powered-by')
-  app.set('trust proxy', 1) // correct client IPs behind a reverse proxy
+  app.set('trust proxy', config.trustProxy) // BUGSTOW_TRUST_PROXY; off unless behind a reverse proxy
 
   // Strict Content-Security-Policy. `connect-src 'self'` is the hard guarantee
   // that the browser cannot make requests to any external host — the app is

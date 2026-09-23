@@ -16,11 +16,19 @@
 // TLS note: for a self-signed HTTPS server, run with
 //   NODE_TLS_REJECT_UNAUTHORIZED=0 node scripts/acceptance-test.mjs --url https://localhost:8080
 
+import { randomBytes } from 'node:crypto'
+
 const urlFlag = process.argv.indexOf('--url')
 const BASE = (urlFlag !== -1 && process.argv[urlFlag + 1]) || process.env.BUGSTOW_URL || 'http://localhost:8080'
 
 const PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMCAQGYR54AAAAASUVORK5CYII='
+
+// Throwaway credentials, generated per run (never real accounts).
+const newPassword = () => randomBytes(12).toString('base64url')
+const ADMIN_PW = newPassword()
+const BOB_PW = newPassword()
+const BOB_PW_2 = newPassword()
 
 let pass = 0
 let fail = 0
@@ -87,7 +95,7 @@ async function main() {
   const adminEmail = `admin+${Date.now()}@lan.local`
   const su = await A('/api/auth/sign-up/email', {
     method: 'POST',
-    body: { email: adminEmail, password: 'admin-pass-1234', name: 'Admin A' },
+    body: { email: adminEmail, password: ADMIN_PW, name: 'Admin A' },
   })
   check(su.status === 200, 'admin account created (first account = admin)')
   const me = await A('/api/teams')
@@ -127,7 +135,7 @@ async function main() {
   check(invite.status === 201 && invite.data?.invited === true, 'admin invites teammate by email')
   const bobSignup = await B('/api/auth/sign-up/email', {
     method: 'POST',
-    body: { email: bobEmail, password: 'bob-pass-12345', name: 'Bob B' },
+    body: { email: bobEmail, password: BOB_PW, name: 'Bob B' },
   })
   check(bobSignup.status === 200, 'teammate registers (invited) and auto-joins')
   const bobTeams = await B('/api/teams')
@@ -167,7 +175,7 @@ async function main() {
   const outsider = client()
   await outsider('/api/auth/sign-up/email', {
     method: 'POST',
-    body: { email: `x+${Date.now()}@lan.local`, password: 'x-pass-123456', name: 'X' },
+    body: { email: `x+${Date.now()}@lan.local`, password: newPassword(), name: 'X' },
   }).catch(() => {})
   const bobPrivate = await B('/api/teams', { method: 'POST', body: { name: 'Bob Private' } })
   const bobTeamId = bobPrivate.data?.team?.id
@@ -191,6 +199,55 @@ async function main() {
   check(backup.status === 201 && backup.data?.ok === true, 'a backup can be created')
   const backups = await A('/api/admin/backups')
   check((backups.data?.backups?.length ?? 0) >= 1, 'backups are listed')
+
+  // ── Server admin vs. regular member ─────────────────────────────────────
+  const adminMe = await A('/api/me')
+  check(adminMe.data?.isServerAdmin === true, 'first account is the server administrator')
+  const bobMe = await B('/api/me')
+  check(bobMe.data?.isServerAdmin === false, 'teammate is not a server administrator')
+  const bobBackup = await B('/api/admin/backup', { method: 'POST' })
+  check(bobBackup.status === 403, 'teammate cannot trigger a backup')
+  const bobReset = await B('/api/admin/users/reset-password', { method: 'POST', body: { userId: adminMe.data?.id } })
+  check(bobReset.status === 403, 'teammate cannot reset passwords')
+
+  // ── Cross-team references are rejected ──────────────────────────────────
+  const bobProj = await B(`/api/projects?teamId=${bobTeamId}`, { method: 'POST', body: { name: 'Private' } })
+  const foreignProject = await A(`/api/issues?teamId=${teamId}`, {
+    method: 'POST',
+    body: { title: 'x', projectId: bobProj.data?.project?.id },
+  })
+  check(foreignProject.status === 400, "issue cannot point at another team's project")
+  const foreignAssignee = await B(`/api/issues?teamId=${bobTeamId}`, {
+    method: 'POST',
+    body: { title: 'x', assigneeId: adminMe.data?.id },
+  })
+  check(foreignAssignee.status === 400, 'issue cannot be assigned to a non-member')
+
+  // ── Admin password reset (offline, no email) ────────────────────────────
+  const selfReset = await A('/api/admin/users/reset-password', { method: 'POST', body: { userId: adminMe.data?.id } })
+  check(selfReset.status === 400, 'admin is told to use "Change password" for their own account')
+  const reset = await A('/api/admin/users/reset-password', { method: 'POST', body: { userId: bobId } })
+  const temp = reset.data?.temporaryPassword
+  check(reset.status === 200 && typeof temp === 'string' && temp.length >= 16, 'admin resets the teammate’s password')
+  const kicked = await B('/api/teams')
+  check(kicked.status === 401, 'teammate’s existing session is signed out')
+  const oldPw = await B('/api/auth/sign-in/email', { method: 'POST', body: { email: bobEmail, password: BOB_PW } })
+  check(oldPw.status !== 200, 'old password no longer works')
+  const tempIn = await B('/api/auth/sign-in/email', { method: 'POST', body: { email: bobEmail, password: temp } })
+  check(tempIn.status === 200, 'teammate signs in with the temporary password')
+  const forced = await B('/api/me')
+  check(forced.data?.mustChangePassword === true, 'teammate must choose a new password')
+  const blocked = await B(`/api/issues?teamId=${teamId}`)
+  check(blocked.status === 403 && blocked.data?.code === 'PASSWORD_CHANGE_REQUIRED', 'app data is blocked until then')
+  const changed = await B('/api/auth/change-password', {
+    method: 'POST',
+    body: { currentPassword: temp, newPassword: BOB_PW_2, revokeOtherSessions: true }, // ggignore: runtime-generated test values
+  })
+  check(changed.status === 200, 'teammate sets a new password')
+  const cleared = await B('/api/me')
+  check(cleared.data?.mustChangePassword === false, 'the forced-change flag is cleared')
+  const back = await B(`/api/issues?teamId=${teamId}`)
+  check(back.status === 200, 'teammate has access again')
 
   console.log(`\nResult: ${pass} passed, ${fail} failed\n`)
   process.exit(fail === 0 ? 0 : 1)

@@ -66,6 +66,7 @@ curl http://localhost:8080/api/health
 | `BUGSTOW_BACKUP_ENABLED` | No | `true` (default) takes automatic local backups. |
 | `BUGSTOW_BACKUP_INTERVAL_HOURS` | No | Hours between automatic backups (default `24`). |
 | `BUGSTOW_BACKUP_RETENTION` | No | How many backups to keep (default `7`). |
+| `BUGSTOW_TRUST_PROXY` | No | Set to `1` only when a reverse proxy (Caddy/nginx) sits in front. Leave unset for direct/LAN access. |
 
 See [`server/.env.example`](../server/.env.example) for the annotated template.
 
@@ -83,9 +84,13 @@ See [`server/.env.example`](../server/.env.example) for the annotated template.
    registration is closed unless you invite people (or set `BUGSTOW_OPEN_SIGNUP=true`).
 4. Create a team, then invite teammates by email from **Members**.
 
-There is no default password and no secret admin account — the admin is simply
+There is no default password and no secret admin account. The admin is simply
 the first person to register on a fresh server. Do this yourself immediately
 after install so nobody else can claim it.
+
+The first account is also the **server administrator**: the only one who can
+run on-demand backups and reset other people's passwords. Invites expire after
+7 days; invite again if someone missed the window.
 
 ---
 
@@ -185,7 +190,8 @@ Do **not** expose the server directly to the public internet. Choose one:
   `BUGSTOW_BASE_URL`. Nothing is exposed publicly.
 - **HTTPS reverse proxy:** front the server with Caddy or nginx terminating TLS
   on your domain, forwarding to `bugstow:8080`. Set
-  `BUGSTOW_BASE_URL=https://bugstow.example.com`. Over HTTPS the server issues
+  `BUGSTOW_BASE_URL=https://bugstow.example.com` and `BUGSTOW_TRUST_PROXY=1`
+  (so rate limiting sees real client IPs). Over HTTPS the server issues
   **secure** cookies automatically.
 
 Additional hardening:
@@ -207,7 +213,8 @@ Additional hardening:
 | **Teammates can't connect** | Confirm same network, correct host IP, and host firewall allows the port. |
 | **`better-sqlite3` build errors during image build** | The Dockerfile installs build tools; ensure the build isn't running with `--platform` mismatched to your host. |
 | **Container won't start, mentions `BUGSTOW_AUTH_SECRET`** | Set a secret of at least 16 characters in `.env` (production requires it). |
-| **Forgot the admin password** | There is no email reset in this version. Restore from a backup, or (last resort) create a new admin: `docker compose down`, remove the `user`/`session` rows via `sqlite3 /data/bugstow.sqlite`, restart, and register again. Back up first. |
+| **A teammate forgot their password** | The server administrator opens **Members**, clicks the key icon next to them, and gives them the temporary password shown. They choose a new one after signing in. |
+| **Forgot the admin password** | On the host: `docker exec -it bugstow npm run reset-password -- you@example.com`. It prints a temporary password; sign in with it and choose a new one. |
 | **Check logs** | `docker compose logs -f bugstow` |
 | **Health check** | `curl http://localhost:8080/api/health` |
 

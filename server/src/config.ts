@@ -23,6 +23,13 @@ function boolEnv(name: string, dflt: boolean): boolean {
   return v === 'true' || v === '1'
 }
 
+function parseTrustProxy(v: string | undefined): boolean | number {
+  if (!v || v === 'false' || v === '0') return false
+  if (v === 'true') return 1
+  const n = parseInt(v, 10)
+  return Number.isFinite(n) && n > 0 ? n : false
+}
+
 function requireSecretInProd(value: string | undefined): string {
   if (value && value.length >= 16) return value
   if (process.env.NODE_ENV === 'production') {
@@ -79,6 +86,13 @@ export const config = {
    * exists, new members are created by admins / invited by email.
    */
   openSignup: process.env.BUGSTOW_OPEN_SIGNUP === 'true',
+  /**
+   * Express "trust proxy" setting. Leave unset (false) when clients connect
+   * directly; otherwise rate limiting could be bypassed with a forged
+   * X-Forwarded-For header. Set to the number of reverse proxies in front of
+   * the server (usually 1) when behind Caddy/nginx.
+   */
+  trustProxy: parseTrustProxy(process.env.BUGSTOW_TRUST_PROXY),
   isProd: process.env.NODE_ENV === 'production',
 }
 

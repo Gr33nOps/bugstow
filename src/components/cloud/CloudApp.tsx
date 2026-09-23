@@ -19,14 +19,16 @@ import {
   HardDrive,
   Upload,
   WifiOff,
+  KeyRound,
 } from 'lucide-react'
 import { useCloudData } from '../../hooks/useCloudData'
-import { signOut } from '../../lib/authClient'
+import { signOut, authClient } from '../../lib/authClient'
+import { getMe, resetUserPassword } from '../../services/teamApi'
 import { generateIssuePrompt } from '../../services/promptService'
 import { validateBackupStructure, decryptBackup } from '../../services/backupService'
 import { migrateBackupToTeam } from '../../services/teamMigration'
 import type { IssueType, BackupData, EncryptedBackupPayload } from '../../types'
-import type { CloudIssue, TeamMember } from '../../types/cloud'
+import type { CloudIssue, TeamMember, CurrentUser } from '../../types/cloud'
 
 const TYPE_META: Record<IssueType, { label: string; icon: React.ElementType; cls: string }> = {
   bug: { label: 'Bug', icon: Bug, cls: 'text-rose-600 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300' },
@@ -53,15 +55,83 @@ function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }>
   })
 }
 
-export function CloudApp({
-  onUseLocal,
-  userLabel,
-  offline = false,
-}: {
+interface CloudAppProps {
   onUseLocal: () => void
   userLabel: string
   offline?: boolean
-}) {
+}
+
+/**
+ * Loads the signed-in user first: after an admin password reset the server
+ * refuses every other request until a new password is chosen, so that screen
+ * must come before the workspace.
+ */
+export function CloudApp(props: CloudAppProps) {
+  const [me, setMe] = useState<CurrentUser | null>(null)
+  const [meError, setMeError] = useState<string | null>(null)
+
+  const loadMe = () => {
+    setMeError(null)
+    getMe()
+      .then(setMe)
+      .catch(e => setMeError(e instanceof Error ? e.message : 'Could not reach the team server.'))
+  }
+  useEffect(loadMe, [])
+
+  if (meError) {
+    return (
+      <CenteredPanel>
+        <h1 className="text-lg font-bold">Can't load your account</h1>
+        <p className="text-sm text-slate-600 dark:text-slate-300">{meError}</p>
+        <div className="flex gap-2">
+          <button type="button" onClick={loadMe} className="px-4 py-2 text-sm font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] rounded-xl">
+            Try again
+          </button>
+          <button type="button" onClick={() => signOut()} className="px-4 py-2 text-sm font-medium rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800">
+            Sign out
+          </button>
+        </div>
+      </CenteredPanel>
+    )
+  }
+  if (!me) {
+    return <div className="h-full flex items-center justify-center text-sm text-slate-500">Loading…</div>
+  }
+  if (me.mustChangePassword) {
+    return (
+      <CenteredPanel>
+        <h1 className="text-lg font-bold flex items-center gap-2">
+          <KeyRound size={18} /> Choose a new password
+        </h1>
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          Your password was reset by the server administrator. Enter the temporary password they gave you, then pick
+          a new one that only you know.
+        </p>
+        <PasswordForm
+          currentLabel="Temporary password"
+          submitLabel="Set new password"
+          onDone={() => setMe({ ...me, mustChangePassword: false })}
+        />
+        <button type="button" onClick={() => signOut()} className="self-start text-sm text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">
+          Sign out instead
+        </button>
+      </CenteredPanel>
+    )
+  }
+  return <Workspace {...props} me={me} />
+}
+
+function CenteredPanel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="h-full overflow-y-auto flex items-center justify-center p-4 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+      <div className="w-full max-w-sm flex flex-col gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function Workspace({ onUseLocal, userLabel, offline = false, me }: CloudAppProps & { me: CurrentUser }) {
   const data = useCloudData(true)
   const {
     teams,
@@ -83,6 +153,7 @@ export function CloudApp({
   const [showImport, setShowImport] = useState(false)
   const [showMigrate, setShowMigrate] = useState(false)
   const [showTeamMenu, setShowTeamMenu] = useState(false)
+  const [showChangePassword, setShowChangePassword] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
   const notify = (msg: string) => {
@@ -189,7 +260,12 @@ export function CloudApp({
           <Plus size={16} /> <span className="hidden sm:inline">New Issue</span>
         </button>
 
-        <UserMenu label={userLabel} onUseLocal={onUseLocal} onImportPersonal={() => setShowMigrate(true)} />
+        <UserMenu
+          label={userLabel}
+          onUseLocal={onUseLocal}
+          onImportPersonal={() => setShowMigrate(true)}
+          onChangePassword={() => setShowChangePassword(true)}
+        />
       </header>
 
       {/* Filters */}
@@ -303,6 +379,7 @@ export function CloudApp({
       {showMembers && activeTeam && (
         <MembersModal
           role={activeTeam.role}
+          me={me}
           members={members}
           invites={data.invites}
           onInvite={data.inviteMember}
@@ -333,6 +410,27 @@ export function CloudApp({
         />
       )}
 
+      {showChangePassword && (
+        <ModalShell onClose={() => setShowChangePassword(false)}>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold">Change password</h3>
+              <button type="button" aria-label="Close" onClick={() => setShowChangePassword(false)} className="text-slate-400">
+                <X size={16} />
+              </button>
+            </div>
+            <PasswordForm
+              currentLabel="Current password"
+              submitLabel="Change password"
+              onDone={() => {
+                setShowChangePassword(false)
+                notify('Password changed. Other devices were signed out.')
+              }}
+            />
+          </div>
+        </ModalShell>
+      )}
+
       {toast && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm shadow-lg dark:bg-white dark:text-slate-900">
           {toast}
@@ -356,10 +454,12 @@ function UserMenu({
   label,
   onUseLocal,
   onImportPersonal,
+  onChangePassword,
 }: {
   label: string
   onUseLocal: () => void
   onImportPersonal: () => void
+  onChangePassword: () => void
 }) {
   const [open, setOpen] = useState(false)
   return (
@@ -387,6 +487,16 @@ function UserMenu({
             className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             <Upload size={15} /> Import personal data
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false)
+              onChangePassword()
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            <KeyRound size={15} /> Change password
           </button>
           <button
             type="button"
@@ -892,6 +1002,7 @@ function NewIssueModal({
 
 function MembersModal({
   role,
+  me,
   members,
   invites,
   onInvite,
@@ -900,6 +1011,7 @@ function MembersModal({
   onToast,
 }: {
   role: 'owner' | 'admin' | 'member'
+  me: CurrentUser
   members: TeamMember[]
   invites: { id: string; email: string; role: string }[]
   onInvite: (email: string, role: 'admin' | 'member') => Promise<void>
@@ -911,6 +1023,11 @@ function MembersModal({
   const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member')
   const [busy, setBusy] = useState(false)
   const canManage = role === 'owner' || role === 'admin'
+  const [resetTarget, setResetTarget] = useState<TeamMember | null>(null)
+
+  if (resetTarget) {
+    return <ResetPasswordDialog member={resetTarget} onClose={() => setResetTarget(null)} />
+  }
 
   return (
     <ModalShell onClose={onClose}>
@@ -935,6 +1052,17 @@ function MembersModal({
                 <p className="text-[11px] text-slate-400 truncate">{m.email}</p>
               </div>
               <span className="text-[11px] font-semibold text-slate-500 capitalize">{m.role}</span>
+              {me.isServerAdmin && m.user_id !== me.id && (
+                <button
+                  type="button"
+                  onClick={() => setResetTarget(m)}
+                  title="Reset password"
+                  aria-label={`Reset password for ${m.name || m.email}`}
+                  className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                >
+                  <KeyRound size={14} />
+                </button>
+              )}
               {canManage && m.role !== 'owner' && (
                 <button
                   type="button"
@@ -978,7 +1106,7 @@ function MembersModal({
               try {
                 await onInvite(email.trim(), inviteRole)
                 setEmail('')
-                onToast('Invite sent')
+                onToast('Invited. They join when they sign up with that email.')
               } catch (e2) {
                 onToast(e2 instanceof Error ? e2.message : 'Failed')
               } finally {
@@ -1003,8 +1131,224 @@ function MembersModal({
           </form>
         )}
         <p className="text-[11px] text-slate-400">
-          People with an existing account are added instantly; others join automatically when they sign up with that email.
+          People with an existing account are added instantly. Others join when they sign up with that email; the
+          invite expires after 7 days.
         </p>
+      </div>
+    </ModalShell>
+  )
+}
+
+const INPUT_CLS =
+  'w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-[#5B50F6]'
+
+/** Current + new password form backed by better-auth's change-password. */
+function PasswordForm({
+  currentLabel,
+  submitLabel,
+  onDone,
+}: {
+  currentLabel: string
+  submitLabel: string
+  onDone: () => void
+}) {
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (next.length < 8) return setErr('The new password needs at least 8 characters.')
+    if (next !== confirm) return setErr("The new passwords don't match.")
+    if (next === current) return setErr('Pick a password different from the current one.')
+    setBusy(true)
+    setErr(null)
+    try {
+      const { error } = await authClient.changePassword({
+        currentPassword: current,
+        newPassword: next,
+        revokeOtherSessions: true,
+      })
+      if (error) {
+        setErr(
+          error.code === 'INVALID_PASSWORD'
+            ? `${currentLabel} is incorrect.`
+            : error.message || 'Could not change the password.'
+        )
+        return
+      }
+      onDone()
+    } catch {
+      setErr('Could not reach the team server.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-3">
+      {err && (
+        <div
+          role="alert"
+          className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-700 dark:text-red-300 flex items-center gap-2"
+        >
+          <AlertCircle size={14} className="shrink-0" /> {err}
+        </div>
+      )}
+      <label className="flex flex-col gap-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+        {currentLabel}
+        <input
+          type="password"
+          autoComplete="current-password"
+          required
+          autoFocus
+          value={current}
+          onChange={e => setCurrent(e.target.value)}
+          className={INPUT_CLS}
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+        New password
+        <input
+          type="password"
+          autoComplete="new-password"
+          required
+          minLength={8}
+          value={next}
+          onChange={e => setNext(e.target.value)}
+          className={INPUT_CLS}
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+        Repeat new password
+        <input
+          type="password"
+          autoComplete="new-password"
+          required
+          value={confirm}
+          onChange={e => setConfirm(e.target.value)}
+          className={INPUT_CLS}
+        />
+      </label>
+      <button
+        type="submit"
+        disabled={busy}
+        className="w-full py-2.5 text-sm font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] rounded-xl disabled:opacity-50"
+      >
+        {busy ? 'Saving…' : submitLabel}
+      </button>
+    </form>
+  )
+}
+
+/** Server admin: issue a one-time temporary password for a teammate. */
+function ResetPasswordDialog({ member, onClose }: { member: TeamMember; onClose: () => void }) {
+  const who = member.name || member.email || 'this person'
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [temp, setTemp] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const reset = async () => {
+    setBusy(true)
+    setErr(null)
+    try {
+      setTemp(await resetUserPassword(member.user_id))
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not reset the password.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const copy = async () => {
+    if (!temp) return
+    try {
+      await navigator.clipboard.writeText(temp)
+      setCopied(true)
+    } catch {
+      // Clipboard can be unavailable over plain-HTTP LAN; the text is selectable.
+      setErr('Copy is blocked here. Select the password and copy it manually.')
+    }
+  }
+
+  return (
+    <ModalShell onClose={onClose}>
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold flex items-center gap-2">
+            <KeyRound size={18} /> Reset password
+          </h3>
+          <button type="button" aria-label="Close" onClick={onClose} className="text-slate-400">
+            <X size={16} />
+          </button>
+        </div>
+        {err && (
+          <div
+            role="alert"
+            className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-700 dark:text-red-300 flex items-center gap-2"
+          >
+            <AlertCircle size={14} className="shrink-0" /> {err}
+          </div>
+        )}
+        {temp ? (
+          <>
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              Temporary password for <strong className="text-slate-900 dark:text-slate-100">{who}</strong>. Give it
+              to them in person or over a channel you trust. It won't be shown again.
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 font-mono text-base tracking-wide select-all break-all">
+                {temp}
+              </code>
+              <button
+                type="button"
+                onClick={copy}
+                className="flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              They were signed out everywhere and will be asked to choose a new password when they sign in.
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full py-2.5 text-sm font-semibold rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+            >
+              Done
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              This creates a one-time password for{' '}
+              <strong className="text-slate-900 dark:text-slate-100">{who}</strong>
+              {member.name && member.email ? ` (${member.email})` : ''}. Their current password stops working and
+              they're signed out on every device.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-sm font-medium rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={reset}
+                disabled={busy}
+                className="px-4 py-2 text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl disabled:opacity-50"
+              >
+                {busy ? 'Resetting…' : 'Reset password'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </ModalShell>
   )

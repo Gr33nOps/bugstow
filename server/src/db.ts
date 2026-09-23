@@ -8,6 +8,9 @@ import { config } from './config.ts'
 export const db = new Database(config.dbPath)
 db.pragma('journal_mode = WAL')
 db.pragma('foreign_keys = ON')
+// Wait instead of failing if another process (e.g. the reset-password command)
+// holds a write lock briefly.
+db.pragma('busy_timeout = 5000')
 
 /** Create the application tables (better-auth manages its own tables). */
 export function migrateAppSchema(): void {
@@ -83,6 +86,17 @@ export function migrateAppSchema(): void {
       created_at text not null
     );
     create index if not exists screenshots_issue_idx on screenshots(issue_id);
+
+    create table if not exists server_settings (
+      key text primary key,
+      value text not null
+    );
+
+    create table if not exists user_flags (
+      user_id text primary key,
+      must_change_password integer not null default 0,
+      updated_at text not null
+    );
   `)
 }
 
@@ -121,11 +135,20 @@ export function getUserByEmail(email: string): DbUser | undefined {
   }
 }
 
-/** Whether a pending invite exists for an email (used to gate sign-up). */
+/** Invites expire so a stale, unclaimed invite can't be used later. */
+export const INVITE_TTL_DAYS = 7
+
+export function inviteCutoff(): string {
+  return new Date(Date.now() - INVITE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString()
+}
+
+/** Whether a pending, unexpired invite exists for an email (used to gate sign-up). */
 export function hasPendingInvite(email: string): boolean {
   const row = db
-    .prepare('select 1 from team_invites where lower(email) = lower(?) and accepted_at is null limit 1')
-    .get(email)
+    .prepare(
+      'select 1 from team_invites where lower(email) = lower(?) and accepted_at is null and created_at > ? limit 1'
+    )
+    .get(email, inviteCutoff())
   return Boolean(row)
 }
 
@@ -133,8 +156,10 @@ export function hasPendingInvite(email: string): boolean {
 export function acceptInvitesForEmail(userId: string, email: string): void {
   const now = new Date().toISOString()
   const invites = db
-    .prepare('select id, team_id, role from team_invites where lower(email) = lower(?) and accepted_at is null')
-    .all(email) as Array<{ id: string; team_id: string; role: string }>
+    .prepare(
+      'select id, team_id, role from team_invites where lower(email) = lower(?) and accepted_at is null and created_at > ?'
+    )
+    .all(email, inviteCutoff()) as Array<{ id: string; team_id: string; role: string }>
   const addMember = db.prepare(
     'insert or ignore into team_members (team_id, user_id, role, created_at) values (?, ?, ?, ?)'
   )
@@ -146,4 +171,53 @@ export function acceptInvitesForEmail(userId: string, email: string): void {
     }
   })
   tx()
+}
+
+// ── Server administrator ─────────────────────────────────────────────────────
+// The first account ever registered is the server administrator. It is
+// recorded explicitly; installs from before this was recorded fall back to the
+// earliest account.
+
+export function getServerAdminId(): string | null {
+  const row = db.prepare("select value from server_settings where key = 'admin_user_id'").get() as
+    | { value: string }
+    | undefined
+  if (row) return row.value
+  try {
+    const first = db.prepare('select id from user order by createdAt asc limit 1').get() as { id: string } | undefined
+    if (first) {
+      setServerAdmin(first.id)
+      return first.id
+    }
+  } catch {
+    // user table not created yet
+  }
+  return null
+}
+
+export function setServerAdmin(userId: string): void {
+  db.prepare(
+    "insert into server_settings (key, value) values ('admin_user_id', ?) on conflict(key) do update set value = excluded.value"
+  ).run(userId)
+}
+
+export function isServerAdmin(userId: string): boolean {
+  return getServerAdminId() === userId
+}
+
+// ── Forced password change after an admin reset ─────────────────────────────
+
+export function setMustChangePassword(userId: string, value: boolean): void {
+  db.prepare(
+    `insert into user_flags (user_id, must_change_password, updated_at) values (?, ?, ?)
+     on conflict(user_id) do update set must_change_password = excluded.must_change_password,
+       updated_at = excluded.updated_at`
+  ).run(userId, value ? 1 : 0, new Date().toISOString())
+}
+
+export function mustChangePassword(userId: string): boolean {
+  const row = db.prepare('select must_change_password as m from user_flags where user_id = ?').get(userId) as
+    | { m: number }
+    | undefined
+  return row?.m === 1
 }

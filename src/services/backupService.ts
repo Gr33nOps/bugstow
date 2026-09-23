@@ -4,7 +4,7 @@ export type { BackupData, EncryptedBackupPayload, ExportPayload }
 import { IndexedDbSettingsRepository } from '../repositories/indexedDbRepositories'
 
 const PBKDF2_ITERATIONS = 100_000
-const APP_VERSION = '2.0.0'
+const APP_VERSION = '2.0.1'
 
 // ── Binary & Base64 Helpers ──────────────────────────────────────────────
 

@@ -205,8 +205,8 @@ Automatic backups are **on by default**: one shortly after startup, then every
 `/data/backups/<timestamp>/` with a consistent `bugstow.sqlite` snapshot, a copy
 of every screenshot, and a `manifest.json`.
 
-Trigger one on demand (signed-in member): `POST /api/admin/backup`; list with
-`GET /api/admin/backups`.
+Trigger one on demand (server administrator only): `POST /api/admin/backup`;
+list with `GET /api/admin/backups`.
 
 ### Restore
 
@@ -220,6 +220,26 @@ docker compose -f docker-compose.offline.yml up -d
 ```
 
 (The volume name is `<folder>_bugstow-data`; check with `docker volume ls`.)
+
+---
+
+### Forgotten passwords (no email needed)
+
+Bugstow never sends email, so password resets are done by a person:
+
+- **A teammate forgot theirs:** the server administrator (the first account on
+  the server) opens **Members**, clicks the key icon next to the person, and
+  chooses **Reset password**. A one-time temporary password is shown once; hand
+  it over in person or over a channel you trust. The teammate is signed out
+  everywhere, signs in with the temporary password, and must pick a new one
+  before they can see any data.
+- **The administrator forgot theirs:** from the host,
+  ```bash
+  docker exec -it bugstow npm run reset-password -- admin@example.com
+  ```
+  prints a temporary password for that account (works for any account).
+- **Changing your own password:** user menu → **Change password**. Your other
+  devices are signed out.
 
 ---
 
@@ -284,6 +304,9 @@ physically blocked from reaching any external host — verified: an in-app
   packages into the saved image). Install and run afterward are fully offline.
 - **Self-signed HTTPS shows a first-visit warning** until the certificate is
   trusted on each client (section 7). This is inherent to not using a public CA.
+- **No email.** Invites and password resets are handed over by a person (the
+  invite is just "sign up with this email"; resets give a temporary password).
+  Invites expire after 7 days.
 - **Team edition requires the host running.** Teammates cannot reach shared data
   while Computer A's server is off — it is the single source of truth.
 
@@ -303,7 +326,7 @@ node scripts/acceptance-test.mjs --url http://localhost:8080
 # TLS: NODE_TLS_REJECT_UNAUTHORIZED=0 node scripts/acceptance-test.mjs --url https://192.168.1.20:8080
 ```
 
-It verifies, and this was **run and passed 25/25** during release prep:
+It verifies, and this was **run and passed 41/41** during release prep:
 
 - server health + fresh-setup + offline flag
 - account creation and authentication (admin)
@@ -316,6 +339,11 @@ It verifies, and this was **run and passed 25/25** during release prep:
 - deletion; teammate no longer sees the deleted issue
 - GitHub import refused in offline mode (graceful 403)
 - backup creation and listing
+- only the server administrator can back up or reset passwords (teammate gets 403)
+- issues cannot reference another team's project or a non-member assignee (400)
+- admin password reset: teammate is signed out, old password stops working,
+  temporary password works, data is blocked until a new password is set, then
+  access returns
 
 Restart persistence was verified separately: after stopping and restarting the
 server on the same data, `setupComplete` stays true and the database is intact
@@ -352,11 +380,13 @@ machines:
 
 | Item | Status |
 |---|---|
-| Two-client full workflow (auth, teams, projects, issues, screenshots, assignment, edit propagation, permissions, deletion, backup) | **Verified automatically** (`acceptance-test.mjs`, 25/25) |
+| Two-client full workflow (auth, teams, projects, issues, screenshots, assignment, edit propagation, permissions, deletion, backup, admin-only actions, cross-team validation, password reset + forced change) | **Verified automatically** (`acceptance-test.mjs`, 41/41) |
+| Host-side `npm run reset-password` (success, unknown email, missing argument) | **Verified manually** |
+| Password screens in the browser (forced change, Change password, admin Reset dialog) | **Typechecked and built; not click-tested by the maintainer tooling.** The same API calls are covered by the acceptance test. Try them once after install. |
 | Restart persistence of the Team database + sessions | **Verified automatically** (stop/restart on same data) |
 | Offline GitHub-import gate, CSP blocking external fetch, HTTPS self-signed LAN cert generation, auto/manual backups on disk | **Verified automatically / manually** during release prep |
 | Server-side "no external calls" (code audit) | **Verified** (audit in section 11 + `docs/OFFLINE.md`) |
-| Docker image build, `docker-compose.offline.yml` install, container health check, and the 25/25 acceptance test **inside the real container** | **Verified automatically** |
+| Docker image build, `docker-compose.offline.yml` install, container health check, and the 41/41 acceptance test **inside the real container** | **Verified automatically** |
 | Container restart persistence (`docker compose restart`: users, teams, sessions intact) | **Verified automatically** |
 | Offline bundle build (`npm run bundle:offline`) + `sha256sum -c` of all 19 files | **Verified automatically** |
 | Two **physical** computers with internet **hardware-disabled** over a real LAN | **Requires real-device verification** — cannot be done in the build sandbox; follow 13b |

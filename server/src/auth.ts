@@ -1,6 +1,13 @@
 import { betterAuth } from 'better-auth'
-import { APIError } from 'better-auth/api'
-import { db, userCount, hasPendingInvite, acceptInvitesForEmail } from './db.ts'
+import { APIError, createAuthMiddleware } from 'better-auth/api'
+import {
+  db,
+  userCount,
+  hasPendingInvite,
+  acceptInvitesForEmail,
+  setServerAdmin,
+  setMustChangePassword,
+} from './db.ts'
 import { config } from './config.ts'
 
 /**
@@ -32,6 +39,17 @@ export const authOptions = {
     // secure off so cookies work; document HTTPS for remote access.
     useSecureCookies: config.isProd && config.baseURL.startsWith('https://'),
   },
+  hooks: {
+    // After a successful password change, lift the "must change password" flag
+    // set by an admin reset. Done server-side so it can't be skipped.
+    after: createAuthMiddleware(async ctx => {
+      if (ctx.path !== '/change-password') return
+      const returned = ctx.context.returned
+      if (!returned || returned instanceof Error) return
+      const userId = ctx.context.session?.user?.id
+      if (userId) setMustChangePassword(userId, false)
+    }),
+  },
   databaseHooks: {
     user: {
       create: {
@@ -45,6 +63,8 @@ export const authOptions = {
           })
         },
         after: async user => {
+          // The very first account on the server is its administrator.
+          if (userCount() === 1) setServerAdmin(user.id)
           if (user.email) acceptInvitesForEmail(user.id, user.email)
         },
       },
