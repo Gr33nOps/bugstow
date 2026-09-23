@@ -48,8 +48,23 @@ function requireSecretInProd(value: string | undefined): string {
   return 'dev-insecure-secret-change-me-0123456789'
 }
 
+const DESKTOP = boolEnv('BUGSTOW_DESKTOP', false)
+const PORT = parseInt(process.env.PORT || '8080', 10)
+
 export const config = {
-  port: parseInt(process.env.PORT || '8080', 10),
+  port: PORT,
+  /**
+   * Network interface to listen on. Empty = all interfaces (the team server
+   * default). The installed desktop app uses 127.0.0.1, so only this computer
+   * can reach it.
+   */
+  host: (process.env.BUGSTOW_HOST || '').trim(),
+  /**
+   * Desktop edition: the one-command local install (`bugstow` launcher). The
+   * same server, used by one person on their own computer. Only changes wording
+   * in the app and adds a Host-header check (see app.ts).
+   */
+  desktop: DESKTOP,
   dataDir: DATA_DIR,
   screenshotsDir: SCREENSHOTS_DIR,
   backupsDir: BACKUPS_DIR,
@@ -126,7 +141,14 @@ export const config = {
   trustedOrigins: (process.env.BUGSTOW_TRUSTED_ORIGINS || '')
     .split(',')
     .map(s => s.trim())
-    .filter(Boolean),
+    .filter(Boolean)
+    // The desktop app may be opened as localhost or 127.0.0.1 on this computer,
+    // besides its base URL (a LAN address when phones connect over Wi-Fi).
+    .concat(
+      DESKTOP
+        ? ['localhost', '127.0.0.1'].map(h => `${boolEnv('BUGSTOW_TLS', false) ? 'https' : 'http'}://${h}:${PORT}`)
+        : []
+    ),
   /** Max screenshot upload size in bytes (default 10 MB). */
   maxUploadBytes: parseInt(process.env.BUGSTOW_MAX_UPLOAD_BYTES || String(10 * 1024 * 1024), 10),
   /**

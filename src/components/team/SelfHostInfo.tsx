@@ -4,7 +4,7 @@ const REPO_URL = 'https://github.com/Gr33nOps/bugstow'
 
 /**
  * Shown on the public static site when a visitor chooses the team option.
- * The public site has no backend to sign into, so this explains how to run
+ * A static build (no server) has no backend to sign into, so this explains how to run
  * your own team server and links to the repository and docs.
  */
 export function SelfHostInfo({ onBack }: { onBack: () => void }) {
@@ -19,7 +19,7 @@ export function SelfHostInfo({ onBack }: { onBack: () => void }) {
           <ArrowLeft size={16} /> Back
         </button>
 
-        <h1 className="text-2xl font-bold tracking-tight">Self-host Bugstow for your team</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Self-host BugsTow for your team</h1>
         <p className="text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">
           Team mode runs on a computer or server that <span className="font-semibold">your team</span> controls.
           Teammates connect to it over your network and share projects, issues and screenshots. Shared data is

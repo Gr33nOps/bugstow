@@ -55,27 +55,35 @@ export function IssueRow({
     ? issue.screenshotIds.length
     : (issue.screenshotId ? 1 : 0)
 
+  // The row adapts to the width of the list (a container query), not the
+  // window: with the details panel open the list is narrow even on a wide
+  // screen, so project and time move under the title instead of squeezing it.
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-current={selected ? 'true' : undefined}
       onClick={onClick}
-      className={`flex items-center gap-4 px-5 py-4 cursor-pointer transition-all border-b border-slate-100 dark:border-slate-800/80 last:border-0 group select-none relative ${
+      onKeyDown={e => {
+        if (e.target !== e.currentTarget) return
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
+      className={`flex items-center gap-3 @xl:gap-4 px-4 @xl:px-5 py-3.5 cursor-pointer transition-colors border-b border-slate-100 dark:border-slate-800/80 last:border-0 group select-none relative outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#5B50F6] ${
         selected
-          ? 'bg-[#EEF0FF]/80 dark:bg-[#5B50F6]/15 border-l-4 border-l-[#5B50F6] pl-[calc(1.25rem-4px)]'
+          ? 'bg-[#EEF0FF]/80 dark:bg-[#5B50F6]/15 shadow-[inset_4px_0_0_#5B50F6]'
           : 'hover:bg-slate-50/90 dark:hover:bg-slate-800/60 bg-white dark:bg-slate-900'
       }`}
     >
       {/* Thumbnail or Type Icon */}
-      <div className="w-16 h-13 shrink-0 rounded-xl overflow-hidden border border-slate-200/80 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 flex items-center justify-center relative">
+      <div className="w-14 h-11 @xl:w-16 @xl:h-13 shrink-0 rounded-xl overflow-hidden border border-slate-200/80 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 flex items-center justify-center relative">
         {screenshotUrl ? (
           <>
-            <img
-              src={screenshotUrl}
-              alt={issue.title}
-              className="w-full h-full object-cover"
-              loading="lazy"
-            />
+            <img src={screenshotUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
             {screenshotCount > 1 && (
-              <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-md">
+              <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md">
                 +{screenshotCount - 1}
               </span>
             )}
@@ -89,49 +97,57 @@ export function IssueRow({
         )}
       </div>
 
-      {/* Main info: Title, Type badge, and description */}
+      {/* Title, then type / project / time underneath */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <span
-            className={`text-[15px] font-semibold truncate ${
-              issue.status === 'fixed'
-                ? 'line-through text-slate-400 dark:text-slate-500 font-normal'
-                : 'text-slate-900 dark:text-slate-100'
-            }`}
-          >
-            {issue.title}
-          </span>
+        <p
+          className={`text-[15px] font-semibold truncate ${
+            issue.status === 'fixed'
+              ? 'line-through text-slate-400 dark:text-slate-500 font-normal'
+              : 'text-slate-900 dark:text-slate-100'
+          }`}
+        >
+          {issue.title}
+        </p>
+        <div className="flex items-center gap-2 mt-1 min-w-0 text-xs text-slate-500 dark:text-slate-400">
           <TypeBadge type={issue.type} />
-        </div>
-        {issue.description ? (
-          <p className="text-sm text-slate-500 dark:text-slate-400 truncate mt-1 max-w-xl">
-            {issue.description}
-          </p>
-        ) : null}
-      </div>
-
-      {/* Project badge (desktop) */}
-      <div className="hidden sm:block shrink-0 w-36 text-xs text-slate-500 dark:text-slate-400 truncate">
-        {project ? (
-          <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 font-semibold text-slate-700 dark:text-slate-200">
-            <span
-              className="w-2 h-2 rounded-full shrink-0"
-              style={{ backgroundColor: project.color }}
-            />
-            <span className="truncate max-w-[110px]">{project.name}</span>
+          <span className="@xl:hidden flex items-center gap-2 min-w-0">
+            <span aria-hidden="true">·</span>
+            {project ? (
+          <span className="inline-flex items-center gap-1.5 min-w-0">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: project.color }} />
+            <span className="truncate">{project.name}</span>
           </span>
         ) : (
-          <span className="text-slate-300 dark:text-slate-600 italic">Unassigned</span>
+          <span className="italic">Unassigned</span>
+        )}
+            <span aria-hidden="true">·</span>
+            <span className="whitespace-nowrap">{timeAgo(issue.createdAt)}</span>
+          </span>
+          {issue.description ? (
+            <span className="hidden @xl:block truncate">{issue.description}</span>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Project (wide list only) */}
+      <div className="hidden @xl:block shrink-0 w-36 text-xs text-slate-500 dark:text-slate-400 truncate">
+        {project ? (
+          <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 font-semibold text-slate-700 dark:text-slate-200 max-w-full">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: project.color }} />
+            <span className="truncate">{project.name}</span>
+          </span>
+        ) : (
+          <span className="text-slate-400 dark:text-slate-500 italic">Unassigned</span>
         )}
       </div>
 
-      {/* Timestamp */}
-      <div className="shrink-0 text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap">
+      {/* Timestamp (wide list only) */}
+      <div className="hidden @xl:block shrink-0 w-16 text-right text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap">
         {timeAgo(issue.createdAt)}
       </div>
 
       {/* Quick Action Buttons on Desktop Hover (Linear style) */}
-      <div className="hidden md:flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="hidden @3xl:flex items-center gap-1.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
         <button
           type="button"
           onClick={onCopyPrompt}

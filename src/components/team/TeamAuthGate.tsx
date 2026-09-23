@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Users, AlertCircle } from 'lucide-react'
+import { Users, HardDrive, AlertCircle } from 'lucide-react'
 import { authClient } from '../../lib/authClient'
 import { ConnectionNotice } from './ConnectionNotice'
+import { isDesktopEdition } from '../../lib/teamServer'
 
 /** Must match SETUP_TOKEN_HEADER in server/src/setup.ts. */
 const SETUP_TOKEN_HEADER = 'x-bugstow-setup-token'
@@ -9,6 +10,19 @@ const SETUP_TOKEN_HEADER = 'x-bugstow-setup-token'
 const INPUT_CLS =
   'w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-[#5B50F6] text-slate-900 dark:text-white'
 const LABEL_CLS = 'flex flex-col gap-1 text-xs font-medium text-slate-600 dark:text-slate-300'
+
+/**
+ * The desktop launcher opens the app at `/#setup=<token>` on first run, so the
+ * person who installed it doesn't have to copy the token by hand. Read once,
+ * when this (lazy) module loads, and removed from the address bar.
+ */
+const LINK_SETUP_TOKEN = (() => {
+  if (typeof location === 'undefined') return ''
+  const m = /^#setup=([A-Za-z0-9-]{20,})$/.exec(location.hash)
+  if (!m) return ''
+  history.replaceState(null, '', location.pathname + location.search)
+  return m[1]
+})()
 
 /**
  * Email/password sign-in and sign-up against the self-hosted team server's
@@ -51,7 +65,8 @@ export function TeamAuthGate({
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [setupToken, setSetupToken] = useState('')
+  const desktop = isDesktopEdition()
+  const [setupToken, setSetupToken] = useState(LINK_SETUP_TOKEN)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -59,7 +74,7 @@ export function TeamAuthGate({
     e.preventDefault()
     setError(null)
     if (firstRun && !setupToken.trim()) {
-      setError('Enter the setup token from the server log.')
+      setError(desktop ? 'Enter the setup token (run: bugstow setup-token).' : 'Enter the setup token from the server log.')
       return
     }
     if (!email.includes('@') || password.length < 8) {
@@ -99,19 +114,35 @@ export function TeamAuthGate({
       >
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-[#5B50F6]">
-            <Users size={18} />
+            {desktop ? <HardDrive size={18} /> : <Users size={18} />}
           </div>
           <div>
             <h1 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">
-              {firstRun ? 'Set up this server' : mode === 'sign-in' ? 'Sign in to your team' : 'Create your account'}
+              {desktop
+                ? firstRun
+                  ? 'Create your sign-in'
+                  : mode === 'sign-in'
+                    ? 'Sign in'
+                    : 'Create your account'
+                : firstRun
+                  ? 'Set up this server'
+                  : mode === 'sign-in'
+                    ? 'Sign in to your team'
+                    : 'Create your account'}
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400">BugsTow Team</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{desktop ? 'Saved on this PC' : 'BugsTow Team'}</p>
           </div>
         </div>
 
         <ConnectionNotice />
 
-        {firstRun && (
+        {firstRun && desktop && (
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            You'll use this to open BugsTow on this PC. The email is only your sign-in name: it isn't sent anywhere
+            and nothing is emailed to it.
+          </p>
+        )}
+        {firstRun && !desktop && (
           <p className="text-sm text-slate-600 dark:text-slate-300">
             No accounts exist yet. The account you create now becomes the server administrator. To prove you run
             this server, enter the setup token from its log.
@@ -128,7 +159,7 @@ export function TeamAuthGate({
           </div>
         )}
 
-        {firstRun && (
+        {firstRun && !(desktop && LINK_SETUP_TOKEN) && (
           <label className={LABEL_CLS}>
             Setup token
             <input
@@ -141,8 +172,16 @@ export function TeamAuthGate({
               className={`${INPUT_CLS} font-mono`}
             />
             <span className="font-normal text-slate-500 dark:text-slate-400">
-              On the server computer run <code className="font-mono">docker compose logs bugstow</code> or{' '}
+              {desktop ? (
+                <>
+                  In a terminal, run <code className="font-mono">bugstow setup-token</code>.
+                </>
+              ) : (
+                <>
+                  On the server computer run <code className="font-mono">docker compose logs bugstow</code> or{' '}
               <code className="font-mono">docker exec bugstow npm run -s setup-token</code>.
+                </>
+              )}
             </span>
           </label>
         )}
@@ -179,11 +218,11 @@ export function TeamAuthGate({
           disabled={busy}
           className="w-full py-2.5 text-sm font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] rounded-xl disabled:opacity-50"
         >
-          {busy ? 'Please wait…' : firstRun ? 'Create administrator' : mode === 'sign-in' ? 'Sign in' : 'Create account'}
+          {busy ? 'Please wait…' : firstRun ? (desktop ? 'Create sign-in' : 'Create administrator') : mode === 'sign-in' ? 'Sign in' : 'Create account'}
         </button>
 
         <div className="flex items-center justify-between text-xs">
-          {!firstRun ? (
+          {!firstRun && !desktop ? (
             <button
               type="button"
               onClick={() => {
@@ -202,7 +241,7 @@ export function TeamAuthGate({
             onClick={onUseLocal}
             className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
           >
-            Use Personal mode
+            {desktop ? 'Keep issues in this browser instead' : 'Use Personal mode'}
           </button>
         </div>
       </form>

@@ -331,10 +331,10 @@ export function NewIssueModal({
                 onChange={e => setProjectId(e.target.value || null)}
                 className="w-full appearance-none px-4 py-2.5 text-sm font-medium border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#5B50F6] transition-colors pr-9 cursor-pointer"
               >
-                <option value="">No Project (Unassigned)</option>
+                <option value="">No project</option>
                 {projects.map(p => (
                   <option key={p.id} value={p.id}>
-                    📁 {p.name}
+                    {p.name}
                   </option>
                 ))}
               </select>
@@ -353,9 +353,9 @@ export function NewIssueModal({
                 onChange={e => setType(e.target.value as IssueType)}
                 className="w-full appearance-none px-4 py-2.5 text-sm font-medium border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#5B50F6] transition-colors pr-9 cursor-pointer"
               >
-                <option value="bug">🔴 Bug (Problem or malfunction)</option>
-                <option value="uiux">🟣 UI/UX (Design or visual polish)</option>
-                <option value="idea">🟡 Idea (Feature or enhancement)</option>
+                <option value="bug">Bug</option>
+                <option value="uiux">UI/UX</option>
+                <option value="idea">Idea</option>
               </select>
               <ChevronDown size={15} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             </div>

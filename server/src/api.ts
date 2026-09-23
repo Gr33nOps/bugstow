@@ -64,6 +64,7 @@ api.get('/health', (_req, res) => {
     setupComplete: userCount() > 0,
     openSignup: config.openSignup,
     offline: config.offline,
+    edition: config.desktop ? 'desktop' : 'team',
   })
 })
 

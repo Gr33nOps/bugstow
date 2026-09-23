@@ -48,6 +48,7 @@ export default function RootApp() {
       <div className="h-full">
         <ModePicker
           teamAvailable={team.available}
+          desktop={team.edition === 'desktop'}
           onChoose={setMode}
           onSelfHost={() => setShowSelfHost(true)}
           onUseOwnCloud={() => {
@@ -60,7 +61,7 @@ export default function RootApp() {
   }
 
   if (mode === 'team') {
-    // Saved team choice but no team server here (e.g. public site) → info.
+    // Saved team choice but no team server here (e.g. a static build) → info.
     if (!team.available) {
       return (
         <div className="h-full">

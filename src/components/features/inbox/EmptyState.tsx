@@ -1,5 +1,6 @@
 import React from 'react'
 import { Plus } from 'lucide-react'
+import { shortcut } from '../../../lib/platform'
 import { EmptyStateIllustration, BRAND_PRIMARY } from '../../common/Icon'
 
 interface EmptyStateProps {
@@ -39,7 +40,7 @@ export function EmptyState({
       )}
 
       {onAction && showShortcutHint && (
-        <p className="text-[12px] text-gray-400 mt-3 font-medium">or press ⌘ K</p>
+        <p className="hidden md:block text-[12px] text-gray-400 mt-3 font-medium">or press {shortcut('K')}</p>
       )}
     </div>
   )

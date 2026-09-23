@@ -212,7 +212,7 @@ test('the served page has a strict CSP without inline-script allowances', async 
   const scriptSrc = csp.split(';').find(d => d.trim().startsWith('script-src')) || ''
   assert.ok(!scriptSrc.includes('unsafe-inline'), scriptSrc)
   assert.match(scriptSrc, /'sha256-[A-Za-z0-9+/=]+'/)
-  assert.match(csp, /connect-src 'self'/)
+  assert.match(csp, /connect-src 'self'(;|$)/) // team server: own origin only
   assert.match(String(page.data), /<meta name="bugstow-server" content="team" \/>/)
 })
 

@@ -1,5 +1,6 @@
 import { Lock, AlertTriangle, Monitor } from 'lucide-react'
 import { connectionKind } from '../../lib/connection'
+import { isDesktopEdition } from '../../lib/teamServer'
 
 /** One line (or a warning box) describing whether this connection is encrypted. */
 export function ConnectionNotice() {
@@ -14,6 +15,8 @@ export function ConnectionNotice() {
   }
 
   if (kind === 'localhost') {
+    // The installed desktop app is meant to run on localhost; nothing to warn about.
+    if (isDesktopEdition()) return null
     return (
       <p className="flex items-start gap-1.5 text-xs text-slate-500 dark:text-slate-400">
         <Monitor size={13} className="shrink-0 mt-px" />

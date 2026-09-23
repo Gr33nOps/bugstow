@@ -91,9 +91,12 @@ export function useBugstowData() {
   useEffect(() => {
     refreshData()
 
-    // Cleanup object URLs on unmount
+    // Cleanup object URLs on unmount. Forget them too, so a remount (or a hot
+    // reload in development) creates fresh ones instead of reusing dead URLs.
     return () => {
       Object.values(screenshotUrlsRef.current).forEach(url => URL.revokeObjectURL(url))
+      screenshotUrlsRef.current = {}
+      setScreenshotUrls({})
     }
   }, [refreshData])
 

@@ -56,7 +56,11 @@ export default function App({
     refreshData,
   } = useBugstowData()
 
-  const { estimate } = useStorageEstimate()
+  const { estimate, refreshEstimate } = useStorageEstimate()
+  // Keep "… stored in browser" current as issues and screenshots change.
+  useEffect(() => {
+    refreshEstimate()
+  }, [issues, refreshEstimate])
   const { theme, setTheme, toggleTheme } = useTheme()
 
   // Navigation & View States
@@ -410,7 +414,8 @@ export default function App({
             issues={issues}
             onSelectProject={id => {
               setProjectFilterId(id)
-              setCurrentTab('inbox')
+              // Picking a project shows its issues; clearing the filter keeps the current view.
+              if (id) setCurrentTab('inbox')
             }}
             onCreateProject={async (name, color) => {
               await createProject(name, color)
@@ -500,7 +505,8 @@ export default function App({
           activeProjectFilterId={projectFilterId}
           onSelectProjectFilter={id => {
             setProjectFilterId(id)
-            setCurrentTab('inbox')
+            // Picking a project shows its issues; clearing the filter keeps the current view.
+            if (id) setCurrentTab('inbox')
           }}
           onNewIssue={() => setShowNewIssueModal(true)}
           onCreateProject={() => setShowQuickProjectModal(true)}
@@ -571,7 +577,7 @@ export default function App({
         )}
 
         {/* Center Workspace (Split view or full content) */}
-        <div className="flex-1 flex overflow-hidden min-h-0 bg-slate-50/50 dark:bg-slate-950">
+        <main className="flex-1 flex overflow-hidden min-h-0 bg-slate-50/50 dark:bg-slate-950">
           {selectedIssue ? (
             <>
               {/* Left pane: list on desktop (hidden on mobile when issue is open) */}
@@ -588,7 +594,7 @@ export default function App({
             /* Normal Tab Content */
             renderTabContent()
           )}
-        </div>
+        </main>
 
         {/* Mobile Bottom Navigation (hidden when issue details is open) */}
         {!selectedIssue && (
@@ -625,7 +631,8 @@ export default function App({
               activeProjectFilterId={projectFilterId}
               onSelectProjectFilter={id => {
                 setProjectFilterId(id)
-                setCurrentTab('inbox')
+                // Picking a project shows its issues; clearing the filter keeps the current view.
+                if (id) setCurrentTab('inbox')
                 setMobileDrawerOpen(false)
               }}
               onNewIssue={() => {

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Cloud, Server, FolderSync, FileLock2, RefreshCw, AlertCircle, AlertTriangle, ArrowLeft, Check } from 'lucide-react'
 import type { CloudSync, PendingConnection } from '../../../hooks/useCloudSync'
 import type { ProviderId } from '../../../sync/types'
+import { isDesktopEdition } from '../../../lib/teamServer'
 import {
   PROVIDER_LABEL,
   connect,
@@ -18,9 +19,14 @@ import { triggerDownload } from '../../../services/backupService'
 
 const MIN_PASSPHRASE = 10
 
-/** On a team server the strict CSP blocks connections to other hosts. */
+/**
+ * On a shared team server the strict CSP blocks connections to other hosts.
+ * The installed desktop app allows them (server/src/app.ts).
+ */
 const onTeamServer = () =>
-  typeof document !== 'undefined' && document.querySelector('meta[name="bugstow-server"]')?.getAttribute('content') === 'team'
+  typeof document !== 'undefined' &&
+  document.querySelector('meta[name="bugstow-server"]')?.getAttribute('content') === 'team' &&
+  !isDesktopEdition()
 
 interface Option {
   id: ProviderId
@@ -31,19 +37,21 @@ interface Option {
 
 function options(): Option[] {
   const team = onTeamServer()
-  const blockedHere = team ? 'Not available when BugsTow is opened from a team server. Use the public site or a synced folder.' : undefined
+  const blockedHere = team
+    ? 'Not available on a team server: its security policy only lets this page talk to the server itself. Use a synced folder or a sync file.'
+    : undefined
   return [
     {
       id: 'gdrive',
       icon: Cloud,
       what: 'Syncs automatically on phones and computers. Stored in a hidden BugsTow folder in your Drive that only BugsTow can see. Google asks you to sign in again about once an hour; after that it is one tap.',
-      unavailable: blockedHere ?? (GOOGLE_CLIENT_ID ? undefined : 'Not set up on this site yet (the site owner needs to add a Google client ID).'),
+      unavailable: blockedHere ?? (GOOGLE_CLIENT_ID ? undefined : 'Not available in this copy of BugsTow: it was built without a Google client ID (see docs/CLOUD_SYNC.md).'),
     },
     {
       id: 'dropbox',
       icon: Cloud,
       what: 'Syncs automatically on phones and computers. Stored in Dropbox › Apps › BugsTow; BugsTow can’t see the rest of your Dropbox. Stays connected.',
-      unavailable: blockedHere ?? (DROPBOX_CLIENT_ID ? undefined : 'Not set up on this site yet (the site owner needs to add a Dropbox app key).'),
+      unavailable: blockedHere ?? (DROPBOX_CLIENT_ID ? undefined : 'Not available in this copy of BugsTow: it was built without a Dropbox app key (see docs/CLOUD_SYNC.md).'),
     },
     {
       id: 'webdav',

@@ -1,4 +1,5 @@
 import { APP_VERSION } from '../../version'
+import { shortcut } from '../../lib/platform'
 import React, { useEffect } from 'react'
 import { X, Check, AlertCircle, Shield, Keyboard } from 'lucide-react'
 
@@ -136,11 +137,11 @@ export function KeyboardShortcutsModal({ onClose }: { onClose: () => void }) {
   }, [onClose])
 
   const shortcuts = [
-    { key: '⌘ K / Ctrl+K', desc: 'Capture New Issue' },
-    { key: '⌘ B / Ctrl+B', desc: 'Toggle Sidebar Expand/Collapse' },
-    { key: 'Ctrl+V / ⌘ V', desc: 'Paste screenshot from clipboard anywhere' },
-    { key: '/', desc: 'Focus global search input' },
-    { key: 'Esc', desc: 'Close dialogs, drawer, lightbox or details panel' },
+    { key: shortcut('K'), desc: 'Capture a new issue' },
+    { key: shortcut('B'), desc: 'Show or hide the sidebar' },
+    { key: shortcut('V'), desc: 'Paste a screenshot from the clipboard' },
+    { key: '/', desc: 'Search issues' },
+    { key: 'Esc', desc: 'Close a dialog, drawer or details panel' },
     { key: '?', desc: 'Show keyboard shortcuts' },
   ]
 

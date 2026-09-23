@@ -20,10 +20,10 @@ version: what "offline" means and how to check it yourself.
 | Authentication (better-auth) | Nothing. Local SQLite; its optional telemetry is forced off. |
 | Updates | Nothing. There is no update check. |
 
-Browsers enforce this as well on the Team server: it sends a
+Browsers enforce this as well on a Team server: it sends a
 Content-Security-Policy with `connect-src 'self'`, so pages it serves cannot
-open connections to other hosts. (The public site allows HTTPS connections so
-Personal sync can reach the cloud you choose; see
+open connections to other hosts. (The installed desktop app allows HTTPS
+connections too, so Personal sync can reach the cloud you choose; see
 [`CLOUD_SYNC.md`](CLOUD_SYNC.md).) The full audit is in
 [`RELEASE_OFFLINE.md` §11](RELEASE_OFFLINE.md#11-network-connections-audited).
 

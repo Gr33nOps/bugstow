@@ -144,8 +144,9 @@ export function ListView({
           </div>
 
           {/* Project selector dropdown */}
-          <div className="relative">
+          <div className="relative min-w-0 max-w-[16rem]">
             <select
+              aria-label="Filter by project"
               value={projectFilter}
               onChange={e => {
                 setProjectFilter(e.target.value)
@@ -153,7 +154,7 @@ export function ListView({
                   onClearProjectFilter()
                 }
               }}
-              className="appearance-none pl-3.5 pr-8 py-1.5 text-sm font-medium bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#5B50F6] transition-colors cursor-pointer"
+              className="w-full truncate appearance-none pl-3.5 pr-8 py-1.5 text-sm font-medium bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#5B50F6] transition-colors cursor-pointer"
             >
               <option value="all">All Projects</option>
               <option value="unassigned">Unassigned</option>
@@ -217,8 +218,8 @@ export function ListView({
         </div>
       </div>
 
-      {/* Issues list scroll area */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Issues list scroll area (a size container: rows adapt to its width) */}
+      <div className="flex-1 overflow-y-auto @container">
         {filteredIssues.length === 0 ? (
           <div className="p-16 text-center text-slate-400 dark:text-slate-500 text-sm">
             No issues match your current filters.{' '}

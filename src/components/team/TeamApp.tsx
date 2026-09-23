@@ -28,6 +28,7 @@ import { useTeamData } from '../../hooks/useTeamData'
 import { signOut, authClient } from '../../lib/authClient'
 import { getMe, resetUserPassword, IssueConflictError, listBackups, runBackupNow, type BackupStatus } from '../../services/teamApi'
 import { connectionKind } from '../../lib/connection'
+import { isDesktopEdition } from '../../lib/teamServer'
 import { generateIssuePrompt } from '../../services/promptService'
 import { validateBackupStructure, decryptBackup } from '../../services/backupService'
 import { migrateBackupToTeam } from '../../services/teamMigration'
@@ -191,13 +192,13 @@ function Workspace({ onUseLocal, userLabel, offline = false, me }: TeamAppProps 
           <button
             type="button"
             onClick={() => setShowTeamMenu(v => !v)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold text-sm"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold text-sm max-w-[45vw] sm:max-w-xs"
           >
-            <span className="w-6 h-6 rounded-lg bg-[#5B50F6] text-white flex items-center justify-center text-xs">
+            <span className="w-6 h-6 shrink-0 rounded-lg bg-[#5B50F6] text-white flex items-center justify-center text-xs">
               {activeTeam ? activeTeam.name.slice(0, 1).toUpperCase() : '?'}
             </span>
-            {activeTeam?.name || 'Select team'}
-            <ChevronDown size={15} className="text-slate-400" />
+            <span className="truncate">{activeTeam?.name || (isDesktopEdition() ? 'Select workspace' : 'Select team')}</span>
+            <ChevronDown size={15} className="shrink-0 text-slate-400" />
           </button>
           {showTeamMenu && (
             <div
@@ -213,9 +214,9 @@ function Workspace({ onUseLocal, userLabel, offline = false, me }: TeamAppProps 
                     setSelectedId(null)
                     setShowTeamMenu(false)
                   }}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
-                  <span>{t.name}</span>
+                  <span className="truncate">{t.name}</span>
                   {t.id === activeTeamId && <Check size={14} className="text-[#5B50F6]" />}
                 </button>
               ))}
@@ -317,14 +318,23 @@ function Workspace({ onUseLocal, userLabel, offline = false, me }: TeamAppProps 
           {loading ? (
             <div className="p-8 text-center text-sm text-slate-400">Loading…</div>
           ) : filtered.length === 0 ? (
-            <div className="p-8 text-center text-sm text-slate-400">No issues here yet.</div>
+            <div className="p-8 flex flex-col items-center gap-3 text-center text-sm text-slate-500 dark:text-slate-400">
+              No issues here yet.
+              <button
+                type="button"
+                onClick={() => setShowNew(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-xl bg-[#5B50F6] hover:bg-[#4E44E6] text-white"
+              >
+                <Plus size={15} /> New Issue
+              </button>
+            </div>
           ) : (
             filtered.map(issue => (
               <button
                 key={issue.id}
                 type="button"
                 onClick={() => setSelectedId(issue.id)}
-                className={`text-left px-4 py-3 border-b border-slate-100 dark:border-slate-800/70 hover:bg-slate-50 dark:hover:bg-slate-800/40 ${
+                className={`w-full text-left px-4 py-3 border-b border-slate-100 dark:border-slate-800/70 hover:bg-slate-50 dark:hover:bg-slate-800/40 ${
                   selectedId === issue.id ? 'bg-indigo-50/60 dark:bg-indigo-950/30' : ''
                 }`}
               >
@@ -338,8 +348,8 @@ function Workspace({ onUseLocal, userLabel, offline = false, me }: TeamAppProps 
                   )}
                 </div>
                 <p className="text-sm font-medium text-slate-800 dark:text-slate-100 line-clamp-2">{issue.title}</p>
-                <div className="flex items-center gap-2 mt-1.5 text-[11px] text-slate-400">
-                  {issue.project_name && <span>{issue.project_name}</span>}
+                <div className="flex items-center gap-2 mt-1.5 text-[11px] text-slate-400 min-w-0">
+                  {issue.project_name && <span className="truncate">{issue.project_name}</span>}
                   {issue.screenshot_count > 0 && <span>· {issue.screenshot_count} img</span>}
                   <span className="flex-1" />
                   {issue.assignee_id && (
@@ -594,6 +604,7 @@ function CreateFirstTeam({
   onUseLocal: () => void
   error: string | null
 }) {
+  const desktop = isDesktopEdition()
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -608,7 +619,7 @@ function CreateFirstTeam({
           try {
             await onCreate(name.trim())
           } catch (e2) {
-            setErr(e2 instanceof Error ? e2.message : 'Could not create team.')
+            setErr(e2 instanceof Error ? e2.message : desktop ? 'Could not create the workspace.' : 'Could not create team.')
           } finally {
             setBusy(false)
           }
@@ -619,10 +630,12 @@ function CreateFirstTeam({
           <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-[#5B50F6]">
             <Users size={18} />
           </div>
-          <h1 className="text-lg font-bold">Create your first team</h1>
+          <h1 className="text-lg font-bold">{desktop ? 'Name your workspace' : 'Create your first team'}</h1>
         </div>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          A team is a shared workspace. Invite people and assign issues once it exists.
+          {desktop
+            ? 'Your projects and issues live in a workspace. One is enough for most people; you can add more later.'
+            : 'A team is a shared workspace. Invite people and assign issues once it exists.'}
         </p>
         {(err || error) && (
           <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-700 dark:text-red-300">
@@ -633,7 +646,8 @@ function CreateFirstTeam({
           autoFocus
           value={name}
           onChange={e => setName(e.target.value)}
-          placeholder="e.g. Acme Web"
+          aria-label={desktop ? 'Workspace name' : 'Team name'}
+          placeholder={desktop ? 'e.g. My projects' : 'e.g. Acme Web'}
           className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-[#5B50F6]"
         />
         <button
@@ -641,10 +655,10 @@ function CreateFirstTeam({
           disabled={busy}
           className="w-full py-2.5 text-sm font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] rounded-xl disabled:opacity-50"
         >
-          {busy ? 'Creating…' : 'Create team'}
+          {busy ? 'Creating…' : desktop ? 'Create workspace' : 'Create team'}
         </button>
-        <button type="button" onClick={onUseLocal} className="text-xs text-slate-400 hover:text-slate-600">
-          Use local mode instead
+        <button type="button" onClick={onUseLocal} className="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+          {desktop ? 'Keep issues in this browser instead' : 'Use Personal mode instead'}
         </button>
       </form>
     </div>

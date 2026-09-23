@@ -32,6 +32,7 @@ import { formatBytes } from '../../../services/storageService'
 import { useStorageEstimate } from '../../../hooks/useStorageEstimate'
 import type { CloudSync } from '../../../hooks/useCloudSync'
 import { CloudSyncPanel } from './CloudSyncPanel'
+import { isDesktopEdition } from '../../../lib/teamServer'
 
 interface SettingsViewProps {
   theme: Theme
@@ -67,6 +68,7 @@ export function SettingsView({
   }, [focusSync])
 
   const { estimate, requestPersistence } = useStorageEstimate()
+  const desktop = isDesktopEdition()
 
   const [showExportModal, setShowExportModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
@@ -101,7 +103,7 @@ export function SettingsView({
       <div className="px-8 pt-8 pb-6 border-b border-slate-200/60 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xs">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Settings</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Manage local storage, theme preferences, and encrypted offline backups.
+          Appearance, sync, backups and the data kept in this browser.
         </p>
       </div>
 
@@ -172,8 +174,14 @@ export function SettingsView({
                 <Users size={18} />
               </div>
               <div className="flex-1">
-                <span className="text-[15px] font-semibold text-slate-900 dark:text-white block">Switch to Team mode</span>
-                <span className="text-xs text-slate-400">Sign in to share issues, assign teammates, and import from GitHub</span>
+                <span className="text-[15px] font-semibold text-slate-900 dark:text-white block">
+                  {desktop ? 'Save issues in a folder on this PC' : 'Switch to Team mode'}
+                </span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  {desktop
+                    ? 'Issues here stay in this browser. To move them, export a backup and import it after signing in.'
+                    : 'Sign in to share issues, assign teammates, and import from GitHub'}
+                </span>
               </div>
               <span className="text-slate-400 text-lg font-bold">&rsaquo;</span>
             </button>
@@ -186,7 +194,7 @@ export function SettingsView({
             Data & Backup
           </h3>
           <p className="text-sm text-slate-500 dark:text-slate-400 mb-3.5">
-            Keep your data safe. Everything stays on your local device.
+            Download a backup file to keep somewhere safe, or restore one.
           </p>
 
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs divide-y divide-slate-100 dark:divide-slate-800">
@@ -201,7 +209,7 @@ export function SettingsView({
               </div>
               <div className="flex-1">
                 <span className="text-[15px] font-semibold text-slate-900 dark:text-white block">Export Backup</span>
-                <span className="text-xs text-slate-400">Save your projects, issues, and screenshots into JSON</span>
+                <span className="text-xs text-slate-400">Download projects, issues and screenshots as one file, encrypted if you like</span>
               </div>
               <span className="text-slate-400 text-lg font-bold">&rsaquo;</span>
             </button>
@@ -217,7 +225,7 @@ export function SettingsView({
               </div>
               <div className="flex-1">
                 <span className="text-[15px] font-semibold text-slate-900 dark:text-white block">Import Backup</span>
-                <span className="text-xs text-slate-400">Restore from an exported JSON or encrypted backup</span>
+                <span className="text-xs text-slate-400">Restore from a backup file made here or on another device</span>
               </div>
               <span className="text-slate-400 text-lg font-bold">&rsaquo;</span>
             </button>
@@ -252,7 +260,7 @@ export function SettingsView({
                 <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100 dark:border-slate-700">
                   <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
                     <CheckCircle2 size={14} className={estimate.persisted ? 'text-emerald-500' : 'text-slate-400'} />
-                    Browser Persistence:
+                    Protected from browser cleanup:
                   </span>
                   {estimate.persisted ? (
                     <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Enabled</span>
@@ -263,14 +271,14 @@ export function SettingsView({
                       disabled={isPersisting}
                       className="text-xs font-semibold text-[#5B50F6] dark:text-indigo-400 hover:underline disabled:opacity-50"
                     >
-                      {isPersisting ? 'Requesting...' : 'Request Persistence'}
+                      {isPersisting ? 'Asking…' : 'Ask the browser'}
                     </button>
                   )}
                 </div>
               </div>
 
               <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-snug">
-                Persistent storage reduces eviction risk during low disk events. Remember to export regular backups.
+                When disk space runs low, a browser may delete site data it isn't asked to keep. Backups are still the safest copy.
               </p>
             </div>
           </div>
@@ -292,7 +300,7 @@ export function SettingsView({
               <span className="flex-1 text-[15px] font-semibold text-slate-800 dark:text-slate-200">
                 Keyboard Shortcuts
               </span>
-              <span className="text-xs text-slate-400 font-mono bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">⌘ K / Esc</span>
+              <span className="text-xs text-slate-400 font-mono bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">?</span>
             </button>
 
             {/* About */}
@@ -303,7 +311,7 @@ export function SettingsView({
             >
               <Info size={18} className="text-slate-400" />
               <span className="flex-1 text-[15px] font-semibold text-slate-800 dark:text-slate-200">
-                About Bugstow
+                About BugsTow
               </span>
               <span className="text-slate-400 text-lg font-bold">&rsaquo;</span>
             </button>
