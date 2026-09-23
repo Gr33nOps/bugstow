@@ -3,8 +3,8 @@ import { Users, AlertCircle } from 'lucide-react'
 import { authClient } from '../../lib/authClient'
 
 /**
- * Email/password sign-in and sign-up against the Neon-hosted Better Auth
- * server. On success, the session updates and the workspace renders.
+ * Email/password sign-in and sign-up against the self-hosted team server's
+ * local auth (better-auth + SQLite). On success, the session updates and the workspace renders.
  */
 export function CloudAuthGate({
   onUseLocal,

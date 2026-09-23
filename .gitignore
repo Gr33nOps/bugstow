@@ -5,8 +5,6 @@ node_modules/
 dist/
 build/
 
-# Cloudflare & Wrangler
-.wrangler/
 .dev.vars*
 
 # Environment & local settings
