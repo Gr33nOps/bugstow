@@ -1,11 +1,20 @@
 import { Router } from 'express'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
-import { db, getUserByEmail, userCount } from './db.ts'
+import {
+  db,
+  getUserByEmail,
+  getUserById,
+  userCount,
+  inviteCutoff,
+  isServerAdmin,
+  mustChangePassword,
+} from './db.ts'
 import { config } from './config.ts'
 import { requireAuth, teamRole, asyncRoute } from './middleware.ts'
 import { saveScreenshot, resolveScreenshot, deleteScreenshotFile } from './storage.ts'
 import { runBackup, listBackups } from './backup.ts'
+import { resetUserPassword } from './passwords.ts'
 
 const TYPES = ['bug', 'uiux', 'idea']
 const STATUSES = ['open', 'fixed']
@@ -59,18 +68,68 @@ api.get('/health', (_req, res) => {
 // Everything below requires a session.
 api.use(requireAuth)
 
-// ── Backups (any signed-in member; the data is local and shared) ──────────────
+// ── Current user ──────────────────────────────────────────────────────────────
+api.get('/me', (req, res) => {
+  const u = req.user!
+  res.json({
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    isServerAdmin: isServerAdmin(u.id),
+    mustChangePassword: mustChangePassword(u.id),
+  })
+})
+
+// After an admin reset, the user must pick a new password (via
+// /api/auth/change-password, which clears the flag) before using the app.
+api.use((req, res, next) => {
+  if (mustChangePassword(req.user!.id)) {
+    res.status(403).json({ error: 'Please choose a new password first.', code: 'PASSWORD_CHANGE_REQUIRED' })
+    return
+  }
+  next()
+})
+
+// ── Server administration (the first account on the server) ──────────────────
+function requireServerAdmin(req: import('express').Request, res: import('express').Response): boolean {
+  if (isServerAdmin(req.user!.id)) return true
+  res.status(403).json({ error: 'Only the server administrator can do this.' })
+  return false
+}
+
 api.get(
   '/admin/backups',
-  asyncRoute(async (_req, res) => {
+  asyncRoute(async (req, res) => {
+    if (!requireServerAdmin(req, res)) return
     res.json({ backups: listBackups() })
   })
 )
 api.post(
   '/admin/backup',
-  asyncRoute(async (_req, res) => {
+  asyncRoute(async (req, res) => {
+    if (!requireServerAdmin(req, res)) return
     const { manifest } = await runBackup()
     res.status(201).json({ ok: true, manifest })
+  })
+)
+
+// Issue a one-time temporary password. The user is signed out everywhere and
+// must choose a new password on next sign-in. (No email: works offline.)
+api.post(
+  '/admin/users/reset-password',
+  asyncRoute(async (req, res) => {
+    if (!requireServerAdmin(req, res)) return
+    const userId = String(req.body?.userId || '')
+    if (!userId || !getUserById(userId)) {
+      res.status(404).json({ error: 'User not found.' })
+      return
+    }
+    if (userId === req.user!.id) {
+      res.status(400).json({ error: 'Use "Change password" to change your own password.' })
+      return
+    }
+    const temporaryPassword = await resetUserPassword(userId)
+    res.json({ ok: true, temporaryPassword })
   })
 )
 
@@ -138,9 +197,9 @@ api.get(
     const invites = db
       .prepare(
         `select id, email, role, created_at from team_invites
-         where team_id = ? and accepted_at is null order by created_at desc`
+         where team_id = ? and accepted_at is null and created_at > ? order by created_at desc`
       )
-      .all(teamId)
+      .all(teamId, inviteCutoff())
     res.json({ members, invites })
   })
 )
@@ -290,6 +349,15 @@ function teamIdForIssue(id: string): string | null {
     | undefined
   return row?.team_id ?? null
 }
+/** A project/assignee referenced by an issue must belong to the issue's team. */
+function projectInTeam(projectId: unknown, teamId: string): boolean {
+  if (!projectId) return true
+  return typeof projectId === 'string' && teamIdForProject(projectId) === teamId
+}
+function assigneeInTeam(assigneeId: unknown, teamId: string): boolean {
+  if (!assigneeId) return true
+  return typeof assigneeId === 'string' && teamRole(assigneeId, teamId) !== null
+}
 function selectIssue(id: string) {
   const row = db.prepare(`${ISSUE_SELECT} where i.id = ?`).get(id) as IssueRow | undefined
   return row ? mapIssue(row) : null
@@ -321,6 +389,10 @@ api.post(
     const title = String(req.body?.title || '').trim()
     if (!title) {
       res.status(400).json({ error: 'Title is required.' })
+      return
+    }
+    if (!projectInTeam(req.body?.projectId, teamId) || !assigneeInTeam(req.body?.assigneeId, teamId)) {
+      res.status(400).json({ error: 'Project or assignee is not part of this team.' })
       return
     }
     const type = TYPES.includes(req.body?.type) ? req.body.type : 'bug'
@@ -355,6 +427,10 @@ api.patch(
       return
     }
     const b = req.body || {}
+    if (!projectInTeam(b.projectId, teamId) || !assigneeInTeam(b.assigneeId, teamId)) {
+      res.status(400).json({ error: 'Project or assignee is not part of this team.' })
+      return
+    }
     const sets: string[] = []
     const vals: unknown[] = []
     if (typeof b.title === 'string') {
@@ -533,6 +609,10 @@ api.post(
     if (token) headers.Authorization = `Bearer ${token}`
     const state = req.body?.includeClosed === false ? 'open' : 'all'
     const projectId = req.body?.projectId || null
+    if (!projectInTeam(projectId, teamId)) {
+      res.status(400).json({ error: 'Project is not part of this team.' })
+      return
+    }
 
     const insert = db.prepare(
       `insert or ignore into issues (id, team_id, project_id, title, description, type, status, created_by, github_url, github_number, created_at, updated_at)

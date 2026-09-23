@@ -1,5 +1,5 @@
 import type { IssueType } from '../types'
-import type { Team, TeamMember, TeamInvite, CloudProject, CloudIssue } from '../types/cloud'
+import type { Team, TeamMember, TeamInvite, CloudProject, CloudIssue, CurrentUser } from '../types/cloud'
 
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`/api/${path}`, {
@@ -22,6 +22,20 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
+}
+
+// ── Current user & server admin ─────────────────────────────────────────────
+export async function getMe(): Promise<CurrentUser> {
+  return api<CurrentUser>('me')
+}
+/** Server admin only. Returns a one-time temporary password for the user. */
+export async function resetUserPassword(userId: string): Promise<string> {
+  return (
+    await api<{ temporaryPassword: string }>('admin/users/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    })
+  ).temporaryPassword
 }
 
 // ── Teams ──────────────────────────────────────────────────────────────────

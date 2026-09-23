@@ -54,3 +54,13 @@ export interface CloudIssue {
   screenshot_count: number
   screenshot_ids: string[]
 }
+
+export interface CurrentUser {
+  id: string
+  email: string | null
+  name: string | null
+  /** The first account on this server; can reset passwords and run backups. */
+  isServerAdmin: boolean
+  /** Set after an admin password reset until the user picks a new password. */
+  mustChangePassword: boolean
+}

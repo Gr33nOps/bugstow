@@ -21,6 +21,7 @@ No user/team data touches the maintainer's infrastructure.
   - `server/src/index.ts` - App entry (migrations, auth handler, API, serves the built frontend)
   - `server/src/auth.ts` - better-auth (SQLite, email/password, sign-up gating)
   - `server/src/api.ts` - REST API (teams, members, projects, issues, screenshots, github-import)
+  - `server/src/passwords.ts` - Admin password reset (temporary password, forced change); CLI `npm run reset-password -- <email>`
   - `server/src/db.ts`, `storage.ts`, `middleware.ts`, `config.ts`
 - `Dockerfile`, `docker-compose.yml` - Team edition packaging (persistent `/data` volume)
 - `docs/SELF_HOSTING.md` - Team install/backup/upgrade/security guide
