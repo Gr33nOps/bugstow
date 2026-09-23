@@ -1,4 +1,4 @@
-import { HardDrive, Users, Server } from 'lucide-react'
+import { HardDrive, Users, Server, Cloud, ArrowRight } from 'lucide-react'
 import type { AppMode } from '../../hooks/useAppMode'
 
 /**
@@ -8,16 +8,46 @@ import type { AppMode } from '../../hooks/useAppMode'
  *   sign-in.
  * - On the public static site, it leads to self-hosting instructions instead,
  *   since there is no backend to sign into here.
+ * - "Use your own cloud storage" is Personal mode that opens Settings → Sync,
+ *   so people can bring existing issues onto a new device (e.g. a phone).
  */
 export function ModePicker({
   teamAvailable,
   onChoose,
   onSelfHost,
+  onUseOwnCloud,
 }: {
   teamAvailable: boolean
   onChoose: (mode: AppMode) => void
   onSelfHost: () => void
+  onUseOwnCloud: () => void
 }) {
+  // Shown second on phones (next to the other "Just me" option, above the fold)
+  // and as a full-width last row on wider screens. Only one copy is ever
+  // displayed, so tab order always matches what is on screen.
+  const ownCloud = (placement: string) => (
+    <button
+      type="button"
+      onClick={onUseOwnCloud}
+      className={`group text-left px-6 py-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-[#5B50F6] transition-colors flex-col sm:flex-row sm:items-center gap-4 ${placement}`}
+    >
+      <Cloud size={24} className="shrink-0 text-[#5B50F6] dark:text-indigo-300" aria-hidden="true" />
+      <span className="flex-1">
+        <span className="block text-base font-bold text-slate-900 dark:text-white">
+          Just me · Synced with my own cloud
+        </span>
+        <span className="block text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+          Use the same issues on your phone and computers. Connect your own Google Drive, Dropbox, WebDAV server,
+          or a folder that Mega, Terabox or OneDrive syncs. Everything is encrypted with your passphrase before it
+          leaves your device, and this website never receives it.
+        </span>
+      </span>
+      <span className="shrink-0 flex items-center gap-1.5 text-sm font-semibold text-[#5B50F6] dark:text-indigo-300">
+        Choose my cloud <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
+      </span>
+    </button>
+  )
+
   return (
     <div className="min-h-full flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-slate-950">
       <div className="w-full max-w-2xl">
@@ -43,6 +73,8 @@ export function ModePicker({
               working offline. Export an encrypted backup anytime.
             </p>
           </button>
+
+          {ownCloud('flex sm:hidden')}
 
           {teamAvailable ? (
             <button
@@ -75,6 +107,8 @@ export function ModePicker({
               </p>
             </button>
           )}
+
+          {ownCloud('hidden sm:flex sm:col-span-2')}
         </div>
       </div>
     </div>

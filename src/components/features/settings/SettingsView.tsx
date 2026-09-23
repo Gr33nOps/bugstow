@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import {
   Download,
   Upload,
@@ -44,6 +44,8 @@ interface SettingsViewProps {
   onSwitchToTeam?: () => void
   cloudSync?: CloudSync
   onDataChanged?: () => void
+  /** Scroll the Sync section into view on open (chosen from the welcome screen). */
+  focusSync?: boolean
 }
 
 export function SettingsView({
@@ -57,7 +59,13 @@ export function SettingsView({
   onSwitchToTeam,
   cloudSync,
   onDataChanged,
+  focusSync = false,
 }: SettingsViewProps) {
+  const syncRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (focusSync) syncRef.current?.scrollIntoView({ block: 'start' })
+  }, [focusSync])
+
   const { estimate, requestPersistence } = useStorageEstimate()
 
   const [showExportModal, setShowExportModal] = useState(false)
@@ -143,7 +151,11 @@ export function SettingsView({
           </div>
         </div>
 
-        {cloudSync && <CloudSyncPanel sync={cloudSync} onToast={onToast} onDataChanged={onDataChanged ?? (() => {})} />}
+        {cloudSync && (
+          <div ref={syncRef} className="scroll-mt-6">
+            <CloudSyncPanel sync={cloudSync} onToast={onToast} onDataChanged={onDataChanged ?? (() => {})} />
+          </div>
+        )}
 
         {/* Team mode */}
         {onSwitchToTeam && (
