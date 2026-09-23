@@ -67,10 +67,22 @@ async function main() {
   // Serve the built frontend (same origin as the API) when present.
   if (config.publicDir && fs.existsSync(path.join(config.publicDir, 'index.html'))) {
     const dist = config.publicDir
+    // Mark the HTML as served by a team server. The frontend only probes
+    // /api/health when this marker is present, so the static public site never
+    // makes an API request. Also served for /index.html because the PWA
+    // precaches that URL.
+    const indexHtml = fs
+      .readFileSync(path.join(dist, 'index.html'), 'utf8')
+      .replace('<head>', '<head>\n    <meta name="bugstow-server" content="team" />')
+    const sendIndex = (_req: express.Request, res: express.Response) => {
+      res.type('html').setHeader('Cache-Control', 'no-cache')
+      res.send(indexHtml)
+    }
+    app.get(['/', '/index.html'], sendIndex)
     app.use(express.static(dist, { index: false }))
     app.use((req, res, next) => {
       if (req.method !== 'GET' || req.path.startsWith('/api')) return next()
-      res.sendFile(path.join(dist, 'index.html'))
+      sendIndex(req, res)
     })
   }
 
