@@ -1,98 +1,42 @@
-import express from 'express'
-import helmet from 'helmet'
-import rateLimit from 'express-rate-limit'
 import http from 'node:http'
 import https from 'node:https'
-import path from 'node:path'
-import fs from 'node:fs'
-import { toNodeHandler } from 'better-auth/node'
-import { getMigrations } from 'better-auth/db/migration'
-import { auth, authOptions } from './auth.ts'
-import { migrateAppSchema, userCount } from './db.ts'
-import { api } from './api.ts'
 import { config } from './config.ts'
 import { startBackupScheduler } from './backup.ts'
-import { ensureCert } from './tls.ts'
+import { ensureCert, type CertInfo } from './tls.ts'
+import { ensureSetupToken } from './setup.ts'
+import { getMigrations } from 'better-auth/db/migration'
+import { authOptions } from './auth-options.ts'
+import { migrateAppSchema, userCount } from './db.ts'
+
+/** How clients reach this server, for honest startup warnings. */
+function connectionMode(): 'localhost' | 'lan-http' | 'lan-https' {
+  let host = 'localhost'
+  try {
+    host = new URL(config.baseURL).hostname
+  } catch {
+    // fall through
+  }
+  const local = host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1'
+  if (local) return 'localhost'
+  return config.baseURL.startsWith('https://') ? 'lan-https' : 'lan-http'
+}
 
 async function main() {
-  // 1. Run migrations: better-auth tables first, then application tables.
+  // Migrate before the auth instance exists: better-auth checks the schema as
+  // soon as it is created and would report tables that are about to be made.
   const { runMigrations } = await getMigrations(authOptions)
   await runMigrations()
   migrateAppSchema()
+  const { createApp } = await import('./app.ts')
+  const app = await createApp()
 
-  const app = express()
-  app.disable('x-powered-by')
-  app.set('trust proxy', config.trustProxy) // BUGSTOW_TRUST_PROXY; off unless behind a reverse proxy
-
-  // Strict Content-Security-Policy. `connect-src 'self'` is the hard guarantee
-  // that the browser cannot make requests to any external host — the app is
-  // sealed to its own origin. This holds even if a future dependency tried to
-  // phone home.
-  app.use(
-    helmet({
-      contentSecurityPolicy: {
-        useDefaults: false,
-        directives: {
-          defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'"], // inline theme script + module
-          styleSrc: ["'self'", "'unsafe-inline'"], // Tailwind inline styles
-          imgSrc: ["'self'", 'data:', 'blob:'], // screenshots via object/data URLs
-          connectSrc: ["'self'"], // no external network from the browser
-          fontSrc: ["'self'", 'data:'],
-          objectSrc: ["'none'"],
-          baseUri: ["'self'"],
-          frameAncestors: ["'self'"],
-          manifestSrc: ["'self'"],
-          workerSrc: ["'self'", 'blob:'], // service worker
-          formAction: ["'self'"],
-        },
-      },
-      crossOriginResourcePolicy: { policy: 'same-origin' },
-    })
-  )
-
-  // Throttle auth endpoints to blunt credential stuffing.
-  app.use(
-    '/api/auth',
-    rateLimit({ windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false })
-  )
-
-  // better-auth handler must be mounted BEFORE express.json().
-  app.all('/api/auth/*', toNodeHandler(auth))
-
-  app.use(express.json({ limit: Math.ceil(config.maxUploadBytes * 1.4) + 1024 }))
-
-  app.use('/api', api)
-
-  // Serve the built frontend (same origin as the API) when present.
-  if (config.publicDir && fs.existsSync(path.join(config.publicDir, 'index.html'))) {
-    const dist = config.publicDir
-    // Mark the HTML as served by a team server. The frontend only probes
-    // /api/health when this marker is present, so the static public site never
-    // makes an API request. Also served for /index.html because the PWA
-    // precaches that URL.
-    const indexHtml = fs
-      .readFileSync(path.join(dist, 'index.html'), 'utf8')
-      .replace('<head>', '<head>\n    <meta name="bugstow-server" content="team" />')
-    const sendIndex = (_req: express.Request, res: express.Response) => {
-      res.type('html').setHeader('Cache-Control', 'no-cache')
-      res.send(indexHtml)
-    }
-    app.get(['/', '/index.html'], sendIndex)
-    app.use(express.static(dist, { index: false }))
-    app.use((req, res, next) => {
-      if (req.method !== 'GET' || req.path.startsWith('/api')) return next()
-      sendIndex(req, res)
-    })
-  }
-
-  app.use((_req, res) => res.status(404).json({ error: 'Not found.' }))
-
-  const server = config.tls
-    ? https.createServer(ensureCert(), app)
-    : http.createServer(app)
+  let cert: CertInfo | null = null
+  if (config.tls) cert = ensureCert()
+  const server = cert ? https.createServer({ cert: cert.cert, key: cert.key }, app) : http.createServer(app)
 
   startBackupScheduler()
+  const setupToken = ensureSetupToken()
+  const mode = connectionMode()
 
   server.listen(config.port, () => {
     const scheme = config.tls ? 'https' : 'http'
@@ -100,13 +44,40 @@ async function main() {
     console.log(`  Base URL: ${config.baseURL}`)
     console.log(`  Data dir: ${config.dataDir}`)
     console.log(`  Offline mode: ${config.offline ? 'ON (GitHub import disabled)' : 'off'}`)
-    console.log(`  TLS: ${config.tls ? 'on (self-signed LAN cert)' : 'off'}`)
+    if (cert) {
+      console.log(`  HTTPS: on (${cert.generated ? 'self-signed certificate generated by BugsTow' : 'your certificate'})`)
+      if (cert.hosts.length) console.log(`  Certificate covers: ${cert.hosts.join(', ')}`)
+      console.log(`  Certificate SHA-256 fingerprint: ${cert.fingerprint256}`)
+      console.log('  Teammates can download it from /api/tls/certificate to trust it (docs/RELEASE_OFFLINE.md §7).')
+    } else {
+      console.log('  HTTPS: off')
+    }
+    if (mode === 'lan-http') {
+      console.log('\n  WARNING: teammates connect over plain HTTP. Passwords, session cookies and')
+      console.log('  issue data travel unencrypted across your network, where anyone on it can read them.')
+      console.log('  Set BUGSTOW_TLS=true and an https:// BUGSTOW_BASE_URL (docs/SELF_HOSTING.md §4).')
+    } else if (mode === 'localhost') {
+      console.log('  Address: localhost only (testing on this computer). For teammates, use the LAN setup with HTTPS.')
+    }
+    if (config.tls && !config.baseURL.startsWith('https://')) {
+      console.log('\n  WARNING: BUGSTOW_TLS=true but BUGSTOW_BASE_URL starts with http://. Sign-in will fail; use https://.')
+    }
     console.log(`  Auto-backups: ${config.backupEnabled ? `every ${config.backupIntervalHours}h, keep ${config.backupRetention}` : 'off'}`)
     console.log(
-      userCount() === 0
-        ? '  Setup: no accounts yet — the first person to register becomes the administrator.\n'
-        : '  Setup: complete. Teammates can sign in.\n'
+      config.backupExternalDir
+        ? `  External backup copy: ${config.backupExternalDir} (keep ${config.backupExternalRetention})`
+        : '  External backup copy: not configured (backups share a disk with the data; see docs/RELEASE_OFFLINE.md §8)'
     )
+    if (setupToken && userCount() === 0) {
+      console.log('\n  ┌─────────────────────────────────────────────────────────────')
+      console.log('  │ First-time setup: no administrator exists yet.')
+      console.log(`  │ Setup token: ${setupToken}`)
+      console.log('  │ Open the server in a browser, choose "My team" and enter this')
+      console.log('  │ token to create the administrator. It works once, then expires.')
+      console.log('  └─────────────────────────────────────────────────────────────\n')
+    } else {
+      console.log('  Setup: complete. Teammates can sign in.\n')
+    }
   })
 }
 

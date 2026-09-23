@@ -9,9 +9,11 @@
 // projects, issues, screenshots, assignment, editing, deletion, permissions,
 // and backup. Restart-persistence is a separate manual step (see --verify).
 //
-//   node scripts/acceptance-test.mjs [--url http://localhost:8080]
+//   node scripts/acceptance-test.mjs --url http://localhost:8080 --setup-token <token>
 //
-// Run against a FRESH server (no accounts yet). Exit code 0 = all passed.
+// Run against a FRESH server (no accounts yet). The setup token is printed in
+// the server log (or: docker exec bugstow npm run -s setup-token). It can also
+// be given as BUGSTOW_SETUP_TOKEN. Exit code 0 = all passed.
 //
 // TLS note: for a self-signed HTTPS server, run with
 //   NODE_TLS_REJECT_UNAUTHORIZED=0 node scripts/acceptance-test.mjs --url https://localhost:8080
@@ -20,6 +22,12 @@ import { randomBytes } from 'node:crypto'
 
 const urlFlag = process.argv.indexOf('--url')
 const BASE = (urlFlag !== -1 && process.argv[urlFlag + 1]) || process.env.BUGSTOW_URL || 'http://localhost:8080'
+const tokenFlag = process.argv.indexOf('--setup-token')
+const SETUP_TOKEN = (tokenFlag !== -1 && process.argv[tokenFlag + 1]) || process.env.BUGSTOW_SETUP_TOKEN || ''
+if (!SETUP_TOKEN) {
+  console.error('Missing setup token. Pass --setup-token <token> (see the server log) or set BUGSTOW_SETUP_TOKEN.')
+  process.exit(2)
+}
 
 const PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMCAQGYR54AAAAASUVORK5CYII='
@@ -93,11 +101,19 @@ async function main() {
 
   // ── Account creation & authentication ────────────────────────────────────
   const adminEmail = `admin+${Date.now()}@lan.local`
+  const intruder = await client()('/api/auth/sign-up/email', {
+    method: 'POST',
+    body: { email: `intruder+${Date.now()}@lan.local`, password: newPassword(), name: 'Intruder' },
+  })
+  check(intruder.status === 403, 'nobody can claim the fresh server without the setup token')
   const su = await A('/api/auth/sign-up/email', {
     method: 'POST',
     body: { email: adminEmail, password: ADMIN_PW, name: 'Admin A' },
+    headers: { 'x-bugstow-setup-token': SETUP_TOKEN },
   })
-  check(su.status === 200, 'admin account created (first account = admin)')
+  check(su.status === 200, 'admin account created with the setup token (first account = admin)')
+  const after = await A('/api/health')
+  check(after.data?.setupComplete === true, 'setup is complete; the token no longer works')
   const me = await A('/api/teams')
   check(me.status === 200, 'admin session authenticates')
 
@@ -163,13 +179,24 @@ async function main() {
     bobSees.data?.issues?.find(i => i.id === issueId)?.assignee_id === bobId,
     'teammate sees the assignment'
   )
-  const edit = await B(`/api/issues?id=${issueId}`, { method: 'PATCH', body: { status: 'fixed' } })
+  const stale = assign.data?.issue?.updated_at
+  const edit = await B(`/api/issues?id=${issueId}`, { method: 'PATCH', body: { status: 'fixed', expectedUpdatedAt: stale } })
   check(edit.data?.issue?.status === 'fixed', 'teammate edits the issue (mark fixed)')
   const adminSees = await A(`/api/issues?teamId=${teamId}`)
   check(
     adminSees.data?.issues?.find(i => i.id === issueId)?.status === 'fixed',
     'admin sees the teammate’s edit'
   )
+  const clash = await A(`/api/issues?id=${issueId}`, {
+    method: 'PATCH',
+    body: { title: 'Admin edit from an old screen', expectedUpdatedAt: stale },
+  })
+  check(
+    clash.status === 409 && clash.data?.code === 'CONFLICT' && clash.data?.issue?.status === 'fixed',
+    'a stale edit is refused (409) instead of overwriting the teammate’s change'
+  )
+  const csrf = await A('/api/teams', { method: 'POST', body: { name: 'x' }, headers: { Origin: 'http://evil.example' } })
+  check(csrf.status === 403, 'writes from another website are refused')
 
   // ── Permissions / isolation ─────────────────────────────────────────────
   const outsider = client()

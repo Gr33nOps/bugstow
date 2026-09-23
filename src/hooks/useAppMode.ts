@@ -1,21 +1,30 @@
 import { useState, useCallback } from 'react'
 
-export type AppMode = 'local' | 'cloud'
+export type AppMode = 'local' | 'team'
 
 const STORAGE_KEY = 'bugstow_app_mode'
 
-function readMode(): AppMode | null {
+/**
+ * Reads the saved mode. Versions before 2.1 saved team mode as 'cloud'; that
+ * value is still accepted and rewritten as 'team', so existing users keep their
+ * choice after upgrading.
+ */
+export function readMode(): AppMode | null {
   try {
     const v = localStorage.getItem(STORAGE_KEY)
-    return v === 'local' || v === 'cloud' ? v : null
+    if (v === 'cloud') {
+      localStorage.setItem(STORAGE_KEY, 'team')
+      return 'team'
+    }
+    return v === 'local' || v === 'team' ? v : null
   } catch {
     return null
   }
 }
 
 /**
- * Tracks whether the user chose Local (in-browser) or Cloud (team) mode.
- * `null` means they have not chosen yet, so the first-run picker is shown.
+ * Tracks whether the user chose Local (in-browser) or Team (self-hosted server)
+ * mode. `null` means they have not chosen yet, so the first-run picker is shown.
  */
 export function useAppMode() {
   const [mode, setModeState] = useState<AppMode | null>(() => readMode())

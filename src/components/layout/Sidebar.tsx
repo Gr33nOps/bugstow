@@ -337,13 +337,13 @@ export function Sidebar({
         <div className="px-3.5 py-3 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shadow-2xs">
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
               <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">Local Vault</span>
             </div>
-            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">100% Private</span>
+            <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">This browser</span>
           </div>
           <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-snug">
-            {storageEstimateText || 'All data stays on this device.'}
+            {storageEstimateText || 'Your data is stored in this browser.'}
           </p>
         </div>
       </div>

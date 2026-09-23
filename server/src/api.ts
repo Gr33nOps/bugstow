@@ -13,7 +13,8 @@ import {
 import { config } from './config.ts'
 import { requireAuth, teamRole, asyncRoute } from './middleware.ts'
 import { saveScreenshot, resolveScreenshot, deleteScreenshotFile } from './storage.ts'
-import { runBackup, listBackups } from './backup.ts'
+import { runBackup, listBackups, listExternalBackups, getExternalBackupStatus } from './backup.ts'
+import { getCurrentCert } from './tls.ts'
 import { resetUserPassword } from './passwords.ts'
 
 const TYPES = ['bug', 'uiux', 'idea']
@@ -65,6 +66,19 @@ api.get('/health', (_req, res) => {
   })
 })
 
+// The server's public HTTPS certificate, so teammates can install and trust it
+// (docs/RELEASE_OFFLINE.md §7). Public by nature; contains no private key.
+api.get('/tls/certificate', (_req, res) => {
+  const cert = getCurrentCert()
+  if (!cert) {
+    res.status(404).json({ error: 'This server is not using HTTPS.' })
+    return
+  }
+  res.setHeader('Content-Type', 'application/x-x509-ca-cert')
+  res.setHeader('Content-Disposition', 'attachment; filename="bugstow-server.crt"')
+  res.send(cert.cert)
+})
+
 // Everything below requires a session.
 api.use(requireAuth)
 
@@ -101,15 +115,21 @@ api.get(
   '/admin/backups',
   asyncRoute(async (req, res) => {
     if (!requireServerAdmin(req, res)) return
-    res.json({ backups: listBackups() })
+    res.json({
+      backups: listBackups(),
+      automatic: config.backupEnabled,
+      intervalHours: config.backupIntervalHours,
+      retention: config.backupRetention,
+      external: { ...getExternalBackupStatus(), backups: listExternalBackups() },
+    })
   })
 )
 api.post(
   '/admin/backup',
   asyncRoute(async (req, res) => {
     if (!requireServerAdmin(req, res)) return
-    const { manifest } = await runBackup()
-    res.status(201).json({ ok: true, manifest })
+    const { manifest, external } = await runBackup()
+    res.status(201).json({ ok: true, manifest, external })
   })
 )
 
@@ -267,6 +287,15 @@ api.delete(
       return
     }
     const targetRole = teamRole(targetUserId, teamId)
+    if (!targetRole) {
+      res.status(404).json({ error: 'Not a member of this team.' })
+      return
+    }
+    // An admin must not be able to remove an owner.
+    if (targetRole === 'owner' && targetUserId !== req.user!.id && role !== 'owner') {
+      res.status(403).json({ error: 'Only an owner can remove another owner.' })
+      return
+    }
     const owners = db
       .prepare("select count(*) as n from team_members where team_id = ? and role = 'owner'")
       .get(teamId) as { n: number }
@@ -427,6 +456,17 @@ api.patch(
       return
     }
     const b = req.body || {}
+    const current = db.prepare('select updated_at from issues where id = ?').get(id) as { updated_at: string }
+    // Optimistic concurrency: the client says which version it edited. If
+    // someone saved in between, refuse instead of silently overwriting.
+    if (b.expectedUpdatedAt !== undefined && b.expectedUpdatedAt !== current.updated_at) {
+      res.status(409).json({
+        error: 'This issue was changed by another teammate. Reload it before saving.',
+        code: 'CONFLICT',
+        issue: selectIssue(id),
+      })
+      return
+    }
     if (!projectInTeam(b.projectId, teamId) || !assigneeInTeam(b.assigneeId, teamId)) {
       res.status(400).json({ error: 'Project or assignee is not part of this team.' })
       return
@@ -457,9 +497,27 @@ api.patch(
       sets.push('assignee_id = ?')
       vals.push(b.assigneeId || null)
     }
+    if (typeof b.title === 'string' && !b.title.trim()) {
+      res.status(400).json({ error: 'Title is required.' })
+      return
+    }
+    // Every save gets a strictly newer version stamp, even within one millisecond.
+    const stamp = new Date(Math.max(Date.now(), Date.parse(current.updated_at) + 1)).toISOString()
     sets.push('updated_at = ?')
-    vals.push(now())
-    db.prepare(`update issues set ${sets.join(', ')} where id = ?`).run(...vals, id)
+    vals.push(stamp)
+    // The version check is repeated inside the UPDATE so two saves racing past
+    // the check above cannot both win.
+    const result = db
+      .prepare(`update issues set ${sets.join(', ')} where id = ? and updated_at = ?`)
+      .run(...vals, id, current.updated_at)
+    if (result.changes === 0) {
+      res.status(409).json({
+        error: 'This issue was changed by another teammate. Reload it before saving.',
+        code: 'CONFLICT',
+        issue: selectIssue(id),
+      })
+      return
+    }
     res.json({ issue: selectIssue(id) })
   })
 )
@@ -537,7 +595,15 @@ api.post(
     const id = randomUUID()
     db.prepare(
       'insert into screenshots (id, issue_id, team_id, mime_type, filename, storage_path, created_at) values (?, ?, ?, ?, ?, ?, ?)'
-    ).run(id, issueId, teamId, stored.mimeType, req.body?.filename || null, stored.storagePath, now())
+    ).run(
+      id,
+      issueId,
+      teamId,
+      stored.mimeType,
+      String(req.body?.filename || '').slice(0, 200) || null,
+      stored.storagePath,
+      now()
+    )
     res.status(201).json({ id })
   })
 )
@@ -596,7 +662,7 @@ api.post(
       .trim()
       .replace(/^https?:\/\/github\.com\//, '')
       .replace(/\.git$/, '')
-    if (!/^[^/]+\/[^/]+$/.test(repo)) {
+    if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) || repo.includes('..')) {
       res.status(400).json({ error: 'Repo must be in the form "owner/name".' })
       return
     }

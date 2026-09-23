@@ -57,3 +57,49 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+  acceptance:
+    name: Two-client acceptance test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+
+      - name: Build frontend
+        run: npm ci && npm run build
+
+      - name: Install server
+        working-directory: server
+        run: npm ci
+
+      - name: Start a fresh team server
+        working-directory: server
+        run: |
+          TOKEN=$(openssl rand -hex 16)
+          echo "::add-mask::$TOKEN"
+          echo "BUGSTOW_SETUP_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          BUGSTOW_SETUP_TOKEN=$TOKEN \
+          BUGSTOW_AUTH_SECRET=$(openssl rand -hex 32) \
+          BUGSTOW_DATA_DIR="$RUNNER_TEMP/bugstow-data" \
+          BUGSTOW_PUBLIC_DIR="$GITHUB_WORKSPACE/dist" \
+          BUGSTOW_BASE_URL=http://localhost:8080 \
+          BUGSTOW_BACKUP_ENABLED=false \
+          nohup npx tsx src/index.ts > "$RUNNER_TEMP/server.log" 2>&1 &
+          for i in $(seq 1 30); do curl -fs http://localhost:8080/api/health && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/server.log"; exit 1
+
+      - name: Run acceptance test
+        run: node scripts/acceptance-test.mjs --url http://localhost:8080
+
+      - name: Server log (on failure)
+        if: failure()
+        run: cat "$RUNNER_TEMP/server.log"

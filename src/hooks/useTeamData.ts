@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { IssueType } from '../types'
-import type { Team, TeamMember, TeamInvite, CloudProject, CloudIssue } from '../types/cloud'
+import type { Team, TeamMember, TeamInvite, TeamProject, TeamIssue } from '../types/team'
 import * as api from '../services/teamApi'
 
 const ACTIVE_TEAM_KEY = 'bugstow_active_team'
 
-export function useCloudData(signedIn: boolean) {
+export function useTeamData(signedIn: boolean) {
   const [teams, setTeams] = useState<Team[]>([])
   const [activeTeamId, setActiveTeamIdState] = useState<string | null>(() => {
     try {
@@ -14,8 +14,8 @@ export function useCloudData(signedIn: boolean) {
       return null
     }
   })
-  const [projects, setProjects] = useState<CloudProject[]>([])
-  const [issues, setIssues] = useState<CloudIssue[]>([])
+  const [projects, setProjects] = useState<TeamProject[]>([])
+  const [issues, setIssues] = useState<TeamIssue[]>([])
   const [members, setMembers] = useState<TeamMember[]>([])
   const [invites, setInvites] = useState<TeamInvite[]>([])
   const [loading, setLoading] = useState(true)
@@ -23,6 +23,8 @@ export function useCloudData(signedIn: boolean) {
   const [screenshotUrls, setScreenshotUrls] = useState<Record<string, string>>({})
   const urlsRef = useRef<Record<string, string>>({})
   urlsRef.current = screenshotUrls
+  const issuesRef = useRef<TeamIssue[]>([])
+  issuesRef.current = issues
 
   const setActiveTeamId = useCallback((id: string | null) => {
     try {
@@ -134,7 +136,7 @@ export function useCloudData(signedIn: boolean) {
       screenshot?: { base64: string; mimeType: string; filename?: string }
     ) => {
       if (!activeTeamId) throw new Error('No team selected.')
-      const issue = await api.createCloudIssue(activeTeamId, data)
+      const issue = await api.createIssue(activeTeamId, data)
       if (screenshot) {
         const sid = await api.uploadScreenshot(issue.id, screenshot.base64, screenshot.mimeType, screenshot.filename)
         issue.screenshot_count = 1
@@ -158,22 +160,29 @@ export function useCloudData(signedIn: boolean) {
         assigneeId: string | null
       }>
     ) => {
-      const updated = await api.updateCloudIssue(id, updates)
+      // Send the version on screen so a teammate's newer save is never overwritten.
+      const expected = issuesRef.current.find(i => i.id === id)?.updated_at
+      const updated = await api.updateIssue(id, updates, expected)
       setIssues(prev => prev.map(i => (i.id === id ? { ...i, ...updated } : i)))
       return updated
     },
     []
   )
 
+  /** Replace one issue with the server's latest version (after a conflict). */
+  const replaceIssue = useCallback((latest: TeamIssue) => {
+    setIssues(prev => prev.map(i => (i.id === latest.id ? latest : i)))
+  }, [])
+
   const deleteIssue = useCallback(async (id: string) => {
-    await api.deleteCloudIssue(id)
+    await api.deleteIssue(id)
     setIssues(prev => prev.filter(i => i.id !== id))
   }, [])
 
   const createProject = useCallback(
     async (name: string, color: string, description?: string) => {
       if (!activeTeamId) throw new Error('No team selected.')
-      const project = await api.createCloudProject(activeTeamId, name, color, description)
+      const project = await api.createProject(activeTeamId, name, color, description)
       setProjects(prev => [...prev, project])
       return project
     },
@@ -181,7 +190,7 @@ export function useCloudData(signedIn: boolean) {
   )
 
   const deleteProject = useCallback(async (id: string) => {
-    await api.deleteCloudProject(id)
+    await api.deleteProject(id)
     setProjects(prev => prev.filter(p => p.id !== id))
     setIssues(prev => prev.map(i => (i.project_id === id ? { ...i, project_id: null, project_name: null } : i)))
   }, [])
@@ -240,6 +249,7 @@ export function useCloudData(signedIn: boolean) {
     createTeam,
     createIssue,
     updateIssue,
+    replaceIssue,
     deleteIssue,
     createProject,
     deleteProject,

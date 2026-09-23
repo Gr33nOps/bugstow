@@ -2,9 +2,9 @@ import { getDB } from '../storage/db'
 import type { BackupData, EncryptedBackupPayload, ExportPayload, Project, Issue, Screenshot, ApplicationSettings } from '../types'
 export type { BackupData, EncryptedBackupPayload, ExportPayload }
 import { IndexedDbSettingsRepository } from '../repositories/indexedDbRepositories'
+import { APP_VERSION } from '../version'
 
 const PBKDF2_ITERATIONS = 100_000
-const APP_VERSION = '2.0.1'
 
 // ── Binary & Base64 Helpers ──────────────────────────────────────────────
 

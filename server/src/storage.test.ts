@@ -42,3 +42,36 @@ test('resolveScreenshot blocks path traversal', () => {
 test('resolveScreenshot returns null for missing files', () => {
   assert.equal(resolveScreenshot('does-not-exist.png'), null)
 })
+
+test('saveScreenshot rejects content that is not the declared image type', () => {
+  const html = Buffer.from('<html><script>alert(1)</script></html>').toString('base64')
+  assert.throws(() => saveScreenshot(html, 'image/png'), /does not match/)
+  // A real PNG declared as JPEG is rejected too.
+  assert.throws(() => saveScreenshot(PNG, 'image/jpeg'), /does not match/)
+})
+
+test('saveScreenshot rejects malformed base64 and empty uploads', () => {
+  assert.throws(() => saveScreenshot('not*base64!!', 'image/png'), /base64/)
+  assert.throws(() => saveScreenshot(PNG.slice(0, -3), 'image/png'), /base64/)
+  assert.throws(() => saveScreenshot('', 'image/png'), /Empty/)
+})
+
+test('saveScreenshot stores the exact bytes, including base64 with every character and line breaks', () => {
+  // A PNG signature followed by all 256 byte values: its base64 uses the whole
+  // alphabet (lower-case letters, +, /), which a too-greedy cleanup would break.
+  const bytes = Buffer.concat([Buffer.from(PNG, 'base64'), Buffer.from(Array.from({ length: 256 }, (_, i) => i))])
+  const b64 = bytes.toString('base64')
+  assert.match(b64, /s/)
+  const wrapped = b64.replace(/(.{76})/g, '$1\r\n') // MIME-style line breaks
+  const stored = saveScreenshot(wrapped, 'image/png')
+  const onDisk = fs.readFileSync(resolveScreenshot(stored.storagePath)!)
+  assert.ok(onDisk.equals(bytes), 'stored file is byte-identical to the upload')
+})
+
+test('matchesImageSignature recognises each allowed format', async () => {
+  const { matchesImageSignature } = await import('./storage.ts')
+  assert.ok(matchesImageSignature(Buffer.from([0xff, 0xd8, 0xff, 0xe0]), 'image/jpeg'))
+  assert.ok(matchesImageSignature(Buffer.from('GIF89a'), 'image/gif'))
+  assert.ok(matchesImageSignature(Buffer.from('RIFF\0\0\0\0WEBPVP8 '), 'image/webp'))
+  assert.equal(matchesImageSignature(Buffer.from('RIFF\0\0\0\0AVI '), 'image/webp'), false)
+})

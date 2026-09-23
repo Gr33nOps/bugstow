@@ -1,5 +1,5 @@
 import type { BackupData } from '../types'
-import { createCloudProject, createCloudIssue, uploadScreenshot } from './teamApi'
+import { createProject, createIssue, uploadScreenshot } from './teamApi'
 
 export interface MigrationResult {
   projects: number
@@ -30,7 +30,7 @@ export async function migrateBackupToTeam(
 
   for (const p of backup.projects) {
     onProgress?.(`Creating project “${p.name}”…`)
-    const created = await createCloudProject(teamId, p.name, p.color, p.description || undefined)
+    const created = await createProject(teamId, p.name, p.color, p.description || undefined)
     projectMap.set(p.id, created.id)
   }
 
@@ -41,7 +41,7 @@ export async function migrateBackupToTeam(
   for (const issue of backup.issues) {
     onProgress?.(`Importing issue “${issue.title}”…`)
     const projectId = issue.projectId ? projectMap.get(issue.projectId) ?? null : null
-    const created = await createCloudIssue(teamId, {
+    const created = await createIssue(teamId, {
       title: issue.title,
       description: issue.description,
       type: issue.type,

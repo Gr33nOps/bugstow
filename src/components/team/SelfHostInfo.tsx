@@ -21,9 +21,10 @@ export function SelfHostInfo({ onBack }: { onBack: () => void }) {
 
         <h1 className="text-2xl font-bold tracking-tight">Self-host Bugstow for your team</h1>
         <p className="text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">
-          Team mode runs on a computer or server that <span className="font-semibold">you</span> own. Your
-          teammates connect to it over your network and share projects, issues, and screenshots. The data
-          lives on your machine in SQLite and a screenshots folder, not on this website.
+          Team mode runs on a computer or server that <span className="font-semibold">your team</span> controls.
+          Teammates connect to it over your network and share projects, issues and screenshots. Shared data is
+          stored on that machine (a SQLite database and a screenshots folder), not on this website. No cloud
+          service is required.
         </p>
 
         <div className="mt-8 space-y-3">
@@ -32,18 +33,20 @@ export function SelfHostInfo({ onBack }: { onBack: () => void }) {
             <pre className="mt-2 bg-slate-900 text-slate-100 rounded-xl p-3 text-xs overflow-x-auto">
               {`git clone ${REPO_URL}.git
 cd bugstow
-cp server/.env.example .env   # then set BUGSTOW_AUTH_SECRET
+cp server/.env.example .env   # set BUGSTOW_AUTH_SECRET, BASE_URL, TLS
 docker compose up -d --build`}
             </pre>
-            It listens on <code className="text-[#5B50F6]">http://localhost:8080</code> by default.
+            For teammates on your network, turn on HTTPS (<code>BUGSTOW_TLS=true</code>) so passwords and issues
+            are encrypted in transit. Plain HTTP is only suitable for trying it on one computer.
           </Step>
           <Step icon={Server} title="2 · Create the admin">
-            Open the server URL and register. The first account becomes the administrator; after that,
-            registration is closed unless you invite people by email.
+            The server prints a one-time setup token in its log. Open the server's address, choose
+            "My team", and enter the token to create the administrator. After that, only invited people can
+            register.
           </Step>
           <Step icon={HardDrive} title="3 · Invite your team">
-            Share the server's URL on your network (e.g. <code>http://192.168.1.20:8080</code>). Teammates
-            open it and sign in.
+            Share the server's address on your network (e.g. <code>https://192.168.1.20:8080</code>). Each
+            teammate trusts its certificate once, then signs up with the invited email.
           </Step>
           <Step icon={ShieldCheck} title="Access it safely">
             Keep it on your local network, or expose it through HTTPS or a VPN for remote access. Full setup,

@@ -1,136 +1,133 @@
 # bugstow.
 
 > **Spot it. Stow it. Fix it.**
-> A privacy-first issue tracker. Use it privately in your browser, or self-host it for your team.
+> An issue tracker for bugs, UI problems and ideas you notice while building.
+> Use it on your own in the browser, or run it on your own server for your team.
 
-Bugstow replaces the messy workflow of screenshotting bugs into your own DMs or
-notes. It captures bugs, UI issues, ideas, and feedback while you build — and it
-never stores your data on infrastructure you don't control.
+BugsTow replaces screenshotting bugs into your DMs or notes: capture an issue,
+paste a screenshot, and turn it into a ready-to-paste prompt for your coding
+assistant later.
 
-There are two ways to use it:
+BugsTow does not store your project data on infrastructure operated by the
+BugsTow maintainer. No cloud service is required for normal operation.
 
-- **Personal mode** — open the website and everything stays in *your* browser. No
-  account, no server, works offline.
-- **Team mode** — a teammate self-hosts Bugstow on their own machine; the team
-  connects to it and shares projects and issues. The data lives on *their*
-  machine.
-
-No user or team data is stored on the maintainer's infrastructure.
-
-**Both editions run fully offline** — no external APIs, fonts, CDNs, analytics, or
-online update checks. Download once, install, and operate entirely on your own
-computer or private LAN. See **[`docs/OFFLINE.md`](docs/OFFLINE.md)**.
+- **Personal mode:** your projects, issues and screenshots stay in your
+  browser. BugsTow does not require an account or backend for Personal mode.
+- **Team mode:** your team runs its own BugsTow server. Shared project data is
+  stored on infrastructure your team controls.
+- **Offline:** BugsTow can operate entirely offline after installation.
+  Optional internet-dependent features such as GitHub import remain disabled in
+  offline mode. See [`docs/OFFLINE.md`](docs/OFFLINE.md).
 
 ---
 
-## Personal mode (browser-only)
+## Personal mode (in your browser)
 
-Open the public site and start immediately:
+Open https://bugstow.vercel.app, or serve the built app yourself:
 
-- **No account, no setup, no backend.** Everything is stored locally in your
-  browser (IndexedDB): projects, issues, screenshots, and settings.
-- **Works offline** after first load — the app shell is cached by a service
-  worker. Your data is always local, so there is nothing to sync.
-- **Screenshot capture:** clipboard paste (`Cmd/Ctrl+V`), drag-and-drop, or file
-  upload (PNG/JPEG/WebP).
-- **Copy as Prompt:** turn an issue into a structured, LLM-ready prompt.
-- **Encrypted backups:** export an AES-256-GCM–encrypted backup (PBKDF2, 100k
-  iterations) and restore it later. This is how you move between browsers or
-  devices, or seed a team.
-- **Storage controls:** see how much space you're using and request persistent
-  storage where the browser supports it.
+- **No account, no backend.** Projects, issues, screenshots and settings are
+  stored in your browser's IndexedDB.
+- **Works offline** after the first visit (installable app).
+- **Screenshots:** paste (`Cmd/Ctrl+V`), drag and drop, or pick a file
+  (PNG/JPEG/WebP).
+- **Copy as Prompt:** turn an issue into a structured prompt for an AI assistant.
+- **Backups:** export a file you can restore later, optionally encrypted with a
+  passphrase (AES-256-GCM, PBKDF2 with 100,000 iterations). Also how you move
+  data to another browser or into a team.
 
-> **Where your data lives:** browser storage is convenient but not permanent.
-> Clearing site data, switching browsers, or losing the device can lose your
-> issues. Export a backup regularly. Browser storage is *not* automatically
-> encrypted at rest — only the export files are encrypted (with your passphrase).
-
-Nothing you capture in personal mode is sent to any server.
+> **Good to know:** browser storage is not permanent. Clearing site data,
+> switching browsers or losing the device loses it, so export backups. Browser
+> storage is **not encrypted on disk**; only exported files you choose to encrypt
+> are.
+>
+> The public website is a static host (currently Vercel). Like any website, it
+> receives normal request information when the page loads (such as your IP
+> address and browser type, kept in its access logs). It never receives your
+> projects, issues or screenshots: Personal mode has no API.
 
 ---
 
 ## Team mode (self-hosted)
 
-Run Bugstow on a computer or server you own so your team can collaborate:
+Run BugsTow on a computer or server your team controls:
 
-- Node.js + Express, **SQLite** database, screenshots on the **local filesystem**.
-- Accounts, teams, roles (owner/admin/member), project & issue sharing, issue
-  assignment, invite-by-email, and GitHub issue import.
-- Shipped as **Docker Compose** with a persistent volume. No cloud provider
-  required.
+- Node.js + Express, a **SQLite** database and screenshots on the **local
+  disk**, packaged with **Docker Compose**.
+- Accounts, teams, roles (owner/admin/member), invites, assignment, and optional
+  GitHub issue import (off in offline mode).
+- **First-run protection:** creating the first administrator needs a one-time
+  setup token printed in the server log.
+- **HTTPS on your LAN** with a certificate generated locally (recommended
+  whenever other computers connect).
+- **Automatic backups**, optionally copied to a second drive, USB disk or NAS.
+- Two people editing the same issue can't silently overwrite each other: the
+  later save is refused with a "reload first" message.
 
-The team server is the source of truth; teammates cannot reach shared data while
-it is offline.
+The team server is the source of truth; teammates can't reach shared data while
+it is off. Team data is readable by whoever controls the server (it is not
+end-to-end encrypted, and not encrypted at rest by BugsTow).
 
-**→ Full guide: [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md)**
+**→ Guide: [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md)** ·
+**No internet? [`docs/RELEASE_OFFLINE.md`](docs/RELEASE_OFFLINE.md)**
 
 Quick start:
 
 ```bash
 git clone https://github.com/Gr33nOps/bugstow.git
 cd bugstow
-cp server/.env.example .env      # set BUGSTOW_AUTH_SECRET
-docker compose up -d --build     # http://localhost:8080
+cp server/.env.example .env      # set BUGSTOW_AUTH_SECRET; for your LAN also BASE_URL + TLS
+docker compose up -d --build
+docker compose logs bugstow      # copy the one-time setup token
 ```
 
-The first person to register on a fresh server becomes the administrator.
+Open the server, choose **My team** and create the administrator with the token.
 
 ---
 
-## Moving from personal to team
+## Moving from Personal to Team
 
 You keep your local data; the team gets a copy:
 
 1. Personal mode → **Settings → Export Backup**.
 2. Team mode → **user menu → Import personal data** → pick the file → confirm.
 
-The import is additive and never deletes your local browser data.
+The import only adds data. It never deletes anything in your browser.
 
 ---
 
 ## Deploying the public website (static)
 
-The public site is a **static build with no backend** — host it anywhere that
-serves static files (Vercel, Netlify, Cloudflare Pages, GitHub Pages, S3, nginx…).
+The public site is a static build with no backend. Host it anywhere that serves
+static files.
 
 ```bash
-npm install
+npm ci
 npm run build      # outputs ./dist
 ```
 
-Serve `./dist`. A config for Vercel is included ([`vercel.json`](vercel.json)) with
-an SPA rewrite. The static site has **no database and no API**; it detects at
-runtime whether it is being served by a team server (via `/api/health`) and, if
-not, offers personal mode plus self-hosting instructions.
-
-> One frontend build works in both places: the same `dist` is served by the
-> public static host (personal mode) and by the self-hosted team server (team
-> mode). Team mode is enabled only when a team server is present.
+[`vercel.json`](vercel.json) adds an SPA rewrite and security headers (a
+Content-Security-Policy that only allows connections to the site itself). The
+same `dist` works on a team server: it only looks for a team server when the
+page was served by one, so the public site makes no API requests.
 
 ---
 
-## Data ownership & privacy
+## Security
 
-- **You own personal data** — it lives in your browser only. Export encrypted
-  backups to keep control of it.
-- **Teams own team data** — it lives in the SQLite database and screenshots
-  folder on the host they run. Team data is readable by the team server (it is
-  not end-to-end encrypted).
-- **No telemetry, analytics, or third-party services** receive your content in
-  either mode.
-- Migrations are additive and non-destructive; existing data is preserved across
-  upgrades.
+BugsTow has had an internal security review and has automated tests for its
+access rules, but no independent audit. To report a vulnerability, see
+[`SECURITY.md`](SECURITY.md). Please don't post details in a public issue.
 
 ---
 
 ## Tech stack
 
-- **Frontend:** React 19, TypeScript 5.7, Vite 8, Tailwind CSS v4, `vite-plugin-pwa`
+- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS v4, `vite-plugin-pwa`
 - **Personal storage:** IndexedDB (`idb`)
-- **Crypto:** Web Crypto (PBKDF2-HMAC-SHA256, AES-256-GCM)
+- **Crypto (exports):** Web Crypto (PBKDF2-HMAC-SHA256, AES-256-GCM)
 - **Team server:** Node.js, Express, SQLite (`better-sqlite3`), better-auth
 - **Deployment:** static host (public site) + Docker Compose (team server)
-- **Testing:** Vitest (frontend), `node:test` (server)
+- **Tests:** Vitest (frontend), `node:test` (server), two-client acceptance test
 
 ---
 
@@ -138,21 +135,18 @@ not, offers personal mode plus self-hosting instructions.
 
 ```
 bugstow/
-├── src/                       # React app (personal + team frontend)
-│   ├── App.tsx                # Personal (local-first) app
-│   ├── RootApp.tsx            # Chooses personal vs team at runtime
-│   ├── components/cloud/      # Team UI: ModePicker, auth, workspace, self-host info
-│   ├── hooks/                 # useBugstowData (IndexedDB), useCloudData (team API)
-│   ├── lib/                   # authClient (better-auth), teamServer detection
-│   ├── services/              # backup, prompt, storage, teamApi, teamMigration
-│   └── ...
+├── src/                       # React app (Personal + Team frontend)
+│   ├── App.tsx                # Personal app
+│   ├── RootApp.tsx            # Chooses Personal vs Team at runtime
+│   ├── components/team/       # Team UI (loaded only from a team server)
+│   ├── hooks/                 # useBugstowData (IndexedDB), useTeamData (team API)
+│   ├── lib/                   # authClient, teamServer detection, connection
+│   └── services/              # backup, prompt, storage, teamApi, teamMigration
 ├── server/                    # Self-hosted team server
-│   ├── src/                   # Express app, better-auth, SQLite, API routes
-│   ├── src/storage.test.ts    # Server tests (node:test)
-│   └── .env.example
-├── docs/SELF_HOSTING.md       # Team install / backup / upgrade / security guide
-├── Dockerfile                 # Multi-stage: build frontend + run server
-├── docker-compose.yml         # Team edition, persistent volume
+│   └── src/                   # Express app, auth, SQLite, backups, TLS, tests
+├── scripts/                   # acceptance test, offline bundle builder, static server
+├── docs/                      # SELF_HOSTING, OFFLINE, RELEASE_OFFLINE, RELEASE_CHECKLIST
+├── Dockerfile, docker-compose.yml, docker-compose.offline.yml
 └── vercel.json                # Static public-site config
 ```
 
@@ -161,21 +155,20 @@ bugstow/
 ## Development
 
 ```bash
-npm install
-npm run dev        # personal app at http://localhost:8443
+npm ci
+npm run dev        # http://localhost:8443
 
 # Team server (separate terminal):
-cd server && npm install
+cd server && npm ci
 BUGSTOW_AUTH_SECRET=dev-secret-0123456789 npm run dev   # http://localhost:8080
 ```
 
-In dev, the Vite server proxies `/api` to `http://localhost:8080` (override with
-`BUGSTOW_SERVER`), so the team UI can be exercised against the local server.
+In development, Vite proxies `/api` to `http://localhost:8080` (override with
+`BUGSTOW_SERVER`).
 
 ```bash
-npm run build      # production frontend build
-npm test           # frontend tests
-cd server && npm test && npm run typecheck
+npm run typecheck && npm test && npm run build
+cd server && npm run typecheck && npm test
 ```
 
 ---

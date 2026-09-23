@@ -12,13 +12,14 @@ const { getMigrations } = await import('better-auth/db/migration')
 const { auth, authOptions } = await import('./auth.ts')
 const db = await import('./db.ts')
 const { generateTempPassword, resetUserPassword, findUserIdByEmail } = await import('./passwords.ts')
+const { ensureSetupToken, SETUP_TOKEN_HEADER } = await import('./setup.ts')
 
 const { runMigrations } = await getMigrations(authOptions)
 await runMigrations()
 db.migrateAppSchema()
 
-const signUp = (email: string, password: string) =>
-  auth.api.signUpEmail({ body: { email, password, name: email.split('@')[0] } })
+const signUp = (email: string, password: string, headers?: Headers) =>
+  auth.api.signUpEmail({ body: { email, password, name: email.split('@')[0] }, headers })
 const signIn = (email: string, password: string) =>
   auth.api.signInEmail({ body: { email, password } })
 
@@ -28,9 +29,26 @@ test('temporary passwords are long, grouped, and unique', () => {
   assert.notEqual(a, generateTempPassword())
 })
 
-test('the first account becomes the server administrator', async () => {
-  const admin = await signUp('admin@lan.local', 'admin-pass-1234')
+test('the first account needs the setup token', async () => {
+  ensureSetupToken()
+  await assert.rejects(signUp('intruder@lan.local', 'intruder-pass-1'), /setup token/)
+  await assert.rejects(
+    signUp('intruder@lan.local', 'intruder-pass-1', new Headers({ [SETUP_TOKEN_HEADER]: 'WRONG-TOKEN' })),
+    /setup token/
+  )
+  assert.equal(db.userCount(), 0)
+})
+
+test('the first account becomes the server administrator and the token expires', async () => {
+  const token = ensureSetupToken()!
+  const admin = await signUp('admin@lan.local', 'admin-pass-1234', new Headers({ [SETUP_TOKEN_HEADER]: token }))
   assert.equal(db.isServerAdmin(admin.user.id), true)
+  assert.equal(ensureSetupToken(), null, 'no token once an admin exists')
+  // The old token cannot create another account.
+  await assert.rejects(
+    signUp('second@lan.local', 'second-pass-12', new Headers({ [SETUP_TOKEN_HEADER]: token })),
+    /Sign-up is closed/
+  )
 })
 
 test('invites expire after INVITE_TTL_DAYS', () => {
