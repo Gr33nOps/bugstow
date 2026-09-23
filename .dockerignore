@@ -4,7 +4,6 @@ dist
 build
 .git
 .github
-.wrangler
 **/data
 server/data
 server/testdata
