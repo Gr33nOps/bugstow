@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # ── Stage 1: build the frontend (static dist) ────────────────────────────────
 FROM node:22-slim AS webbuild
 WORKDIR /app
