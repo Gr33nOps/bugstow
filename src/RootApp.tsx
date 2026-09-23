@@ -26,6 +26,8 @@ export default function RootApp() {
   const { mode, setMode } = useAppMode()
   const [team, setTeam] = useState<TeamServerInfo | null>(null)
   const [showSelfHost, setShowSelfHost] = useState(false)
+  // Chosen "use my own cloud" on the welcome screen: open Settings → Sync once.
+  const [startInSync, setStartInSync] = useState(false)
 
   useEffect(() => {
     detectTeamServer().then(setTeam)
@@ -48,6 +50,10 @@ export default function RootApp() {
           teamAvailable={team.available}
           onChoose={setMode}
           onSelfHost={() => setShowSelfHost(true)}
+          onUseOwnCloud={() => {
+            setStartInSync(true)
+            setMode('local')
+          }}
         />
       </div>
     )
@@ -76,5 +82,5 @@ export default function RootApp() {
   }
 
   // Local mode
-  return <App onSwitchToTeam={team.available ? () => setMode('team') : () => setShowSelfHost(true)} />
+  return <App startInSync={startInSync} onSwitchToTeam={team.available ? () => setMode('team') : () => setShowSelfHost(true)} />
 }

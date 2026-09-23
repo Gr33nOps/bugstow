@@ -29,7 +29,10 @@ import { ProjectsView, ProjectModal } from './components/features/projects/Proje
 import { SettingsView } from './components/features/settings/SettingsView'
 import { Shield, X, Download } from 'lucide-react'
 
-export default function App({ onSwitchToTeam }: { onSwitchToTeam?: () => void } = {}) {
+export default function App({
+  onSwitchToTeam,
+  startInSync = false,
+}: { onSwitchToTeam?: () => void; startInSync?: boolean } = {}) {
   const {
     issues,
     projects,
@@ -57,7 +60,7 @@ export default function App({ onSwitchToTeam }: { onSwitchToTeam?: () => void } 
   const { theme, setTheme, toggleTheme } = useTheme()
 
   // Navigation & View States
-  const [currentTab, setCurrentTab] = useState<Tab>('inbox')
+  const [currentTab, setCurrentTab] = useState<Tab>(startInSync ? 'settings' : 'inbox')
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
   const [projectFilterId, setProjectFilterId] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -444,6 +447,7 @@ export default function App({ onSwitchToTeam }: { onSwitchToTeam?: () => void } 
             onSwitchToTeam={onSwitchToTeam}
             cloudSync={cloudSync}
             onDataChanged={refreshData}
+            focusSync={startInSync}
           />
         )
 
