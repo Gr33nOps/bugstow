@@ -39,12 +39,35 @@ export async function createApp(): Promise<express.Express> {
           // Mark the HTML as served by a team server. The frontend only probes
           // /api/health when this marker is present, so the static public site
           // never makes an API request.
-          .replace('<head>', '<head>\n    <meta name="bugstow-server" content="team" />')
+          .replace(
+            '<head>',
+            '<head>\n    <meta name="bugstow-server" content="team" />' +
+              (config.desktop ? '\n    <meta name="bugstow-edition" content="desktop" />' : '')
+          )
       : null
 
   const app = express()
   app.disable('x-powered-by')
   app.set('trust proxy', config.trustProxy) // BUGSTOW_TRUST_PROXY; off unless behind a reverse proxy
+
+  // Desktop app: answer only to this computer's own names. A website that points
+  // its domain at 127.0.0.1 (DNS rebinding) is refused before anything runs.
+  if (config.desktop) {
+    const allowedHosts = new Set(['localhost', '127.0.0.1', '[::1]'])
+    try {
+      allowedHosts.add(new URL(config.baseURL).hostname)
+    } catch {
+      // an invalid baseURL fails elsewhere
+    }
+    app.use((req, res, next) => {
+      const host = (req.headers.host || '').replace(/:\d+$/, '').toLowerCase()
+      if (!allowedHosts.has(host)) {
+        res.status(421).type('text').send('BugsTow only answers on this computer. Open http://localhost instead.')
+        return
+      }
+      next()
+    })
+  }
 
   // Strict Content-Security-Policy. `connect-src 'self'` is the hard guarantee
   // that the browser cannot make requests to any external host — the app is

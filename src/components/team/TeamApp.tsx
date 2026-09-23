@@ -28,6 +28,7 @@ import { useTeamData } from '../../hooks/useTeamData'
 import { signOut, authClient } from '../../lib/authClient'
 import { getMe, resetUserPassword, IssueConflictError, listBackups, runBackupNow, type BackupStatus } from '../../services/teamApi'
 import { connectionKind } from '../../lib/connection'
+import { isDesktopEdition } from '../../lib/teamServer'
 import { generateIssuePrompt } from '../../services/promptService'
 import { validateBackupStructure, decryptBackup } from '../../services/backupService'
 import { migrateBackupToTeam } from '../../services/teamMigration'
@@ -594,6 +595,7 @@ function CreateFirstTeam({
   onUseLocal: () => void
   error: string | null
 }) {
+  const desktop = isDesktopEdition()
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -608,7 +610,7 @@ function CreateFirstTeam({
           try {
             await onCreate(name.trim())
           } catch (e2) {
-            setErr(e2 instanceof Error ? e2.message : 'Could not create team.')
+            setErr(e2 instanceof Error ? e2.message : desktop ? 'Could not create the workspace.' : 'Could not create team.')
           } finally {
             setBusy(false)
           }
@@ -619,10 +621,12 @@ function CreateFirstTeam({
           <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-[#5B50F6]">
             <Users size={18} />
           </div>
-          <h1 className="text-lg font-bold">Create your first team</h1>
+          <h1 className="text-lg font-bold">{desktop ? 'Name your workspace' : 'Create your first team'}</h1>
         </div>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          A team is a shared workspace. Invite people and assign issues once it exists.
+          {desktop
+            ? 'Your projects and issues live in a workspace. One is enough for most people; you can add more later.'
+            : 'A team is a shared workspace. Invite people and assign issues once it exists.'}
         </p>
         {(err || error) && (
           <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-700 dark:text-red-300">
@@ -633,7 +637,8 @@ function CreateFirstTeam({
           autoFocus
           value={name}
           onChange={e => setName(e.target.value)}
-          placeholder="e.g. Acme Web"
+          aria-label={desktop ? 'Workspace name' : 'Team name'}
+          placeholder={desktop ? 'e.g. My projects' : 'e.g. Acme Web'}
           className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-[#5B50F6]"
         />
         <button
@@ -641,10 +646,10 @@ function CreateFirstTeam({
           disabled={busy}
           className="w-full py-2.5 text-sm font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] rounded-xl disabled:opacity-50"
         >
-          {busy ? 'Creating…' : 'Create team'}
+          {busy ? 'Creating…' : desktop ? 'Create workspace' : 'Create team'}
         </button>
-        <button type="button" onClick={onUseLocal} className="text-xs text-slate-400 hover:text-slate-600">
-          Use local mode instead
+        <button type="button" onClick={onUseLocal} className="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+          {desktop ? 'Keep issues in this browser instead' : 'Use Personal mode instead'}
         </button>
       </form>
     </div>

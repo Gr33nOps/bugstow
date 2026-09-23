@@ -13,11 +13,25 @@ export interface TeamServerInfo {
   openSignup: boolean
   /** Server is in strict offline mode (GitHub import disabled). */
   offline: boolean
+  /** 'desktop' = the installed one-person app (`bugstow` launcher). */
+  edition: 'team' | 'desktop'
 }
 
 let cached: TeamServerInfo | null = null
 
-const NONE: TeamServerInfo = { available: false, setupComplete: false, openSignup: false, offline: false }
+const NONE: TeamServerInfo = {
+  available: false,
+  setupComplete: false,
+  openSignup: false,
+  offline: false,
+  edition: 'team',
+}
+
+/** True in the installed desktop app (its server marks the page). */
+export function isDesktopEdition(): boolean {
+  if (typeof document === 'undefined') return false
+  return document.querySelector('meta[name="bugstow-edition"]')?.getAttribute('content') === 'desktop'
+}
 
 /**
  * True when this page was served by a Bugstow team server. The team server
@@ -48,6 +62,7 @@ export async function detectTeamServer(): Promise<TeamServerInfo> {
         setupComplete?: boolean
         openSignup?: boolean
         offline?: boolean
+        edition?: string
       }
       if (data && data.app === 'bugstow-team') {
         cached = {
@@ -55,6 +70,7 @@ export async function detectTeamServer(): Promise<TeamServerInfo> {
           setupComplete: Boolean(data.setupComplete),
           openSignup: Boolean(data.openSignup),
           offline: Boolean(data.offline),
+          edition: data.edition === 'desktop' ? 'desktop' : 'team',
         }
         return cached
       }

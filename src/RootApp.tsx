@@ -48,6 +48,7 @@ export default function RootApp() {
       <div className="h-full">
         <ModePicker
           teamAvailable={team.available}
+          desktop={team.edition === 'desktop'}
           onChoose={setMode}
           onSelfHost={() => setShowSelfHost(true)}
           onUseOwnCloud={() => {

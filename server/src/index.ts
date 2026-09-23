@@ -38,9 +38,11 @@ async function main() {
   const setupToken = ensureSetupToken()
   const mode = connectionMode()
 
-  server.listen(config.port, () => {
+  const onListening = () => {
     const scheme = config.tls ? 'https' : 'http'
-    console.log(`\n  Bugstow team server running on ${scheme}://localhost:${config.port}`)
+    const what = config.desktop ? 'desktop app' : 'team server'
+    console.log(`\n  Bugstow ${what} running on ${scheme}://localhost:${config.port}`)
+    if (config.host) console.log(`  Listening on: ${config.host}`)
     console.log(`  Base URL: ${config.baseURL}`)
     console.log(`  Data dir: ${config.dataDir}`)
     console.log(`  Offline mode: ${config.offline ? 'ON (GitHub import disabled)' : 'off'}`)
@@ -56,7 +58,7 @@ async function main() {
       console.log('\n  WARNING: teammates connect over plain HTTP. Passwords, session cookies and')
       console.log('  issue data travel unencrypted across your network, where anyone on it can read them.')
       console.log('  Set BUGSTOW_TLS=true and an https:// BUGSTOW_BASE_URL (docs/SELF_HOSTING.md §4).')
-    } else if (mode === 'localhost') {
+    } else if (mode === 'localhost' && !config.desktop) {
       console.log('  Address: localhost only (testing on this computer). For teammates, use the LAN setup with HTTPS.')
     }
     if (config.tls && !config.baseURL.startsWith('https://')) {
@@ -89,9 +91,11 @@ async function main() {
       console.log('  │ token to create the administrator. It works once, then expires.')
       console.log('  └─────────────────────────────────────────────────────────────\n')
     } else {
-      console.log('  Setup: complete. Teammates can sign in.\n')
+      console.log(`  Setup: complete. ${config.desktop ? 'Sign in' : 'Teammates can sign in'}.\n`)
     }
-  })
+  }
+  if (config.host) server.listen(config.port, config.host, onListening)
+  else server.listen(config.port, onListening)
 }
 
 main().catch(err => {

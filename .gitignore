@@ -47,3 +47,6 @@ certs/
 backups/
 bugstow-backup-*.tgz
 *.tgz
+
+# Desktop app packages (scripts/build-app-package.mjs)
+release/

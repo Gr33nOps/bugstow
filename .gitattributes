@@ -147,3 +147,6 @@
 # The public site CSP pins a hash of the inline script in index.html
 # (vercel.json). Keep its line endings identical on every OS.
 index.html text eol=lf
+*.sh text eol=lf
+# App icon used by the installers: a plain file, not LFS, so CI and raw downloads get the real image.
+desktop/bugstow.png -filter -diff -merge -text
