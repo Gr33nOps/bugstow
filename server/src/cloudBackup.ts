@@ -299,7 +299,7 @@ async function rotateWebDav(): Promise<void> {
   const names = [...xml.matchAll(/<(?:[a-zA-Z0-9]+:)?href>([^<]+)<\/(?:[a-zA-Z0-9]+:)?href>/g)]
     .map(m => decodeURIComponent(m[1]).split('/').filter(Boolean).pop() || '')
     .filter(n => n.startsWith('bugstow-backup-') && n.endsWith(ARCHIVE_EXT))
-    .sort()
+    .sort((a, b) => a.localeCompare(b))
   const excess = names.length - Math.max(1, config.backupCloudRetention)
   for (let i = 0; i < excess; i++) {
     await fetch(webdavBase() + encodeURIComponent(names[i]), { method: 'DELETE', headers: webdavAuth() })
@@ -324,7 +324,7 @@ function sendToFolder(archive: string, name: string): void {
   const all = fs
     .readdirSync(root)
     .filter(n => n.startsWith('bugstow-backup-') && n.endsWith(ARCHIVE_EXT))
-    .sort()
+    .sort((a, b) => a.localeCompare(b))
   for (let i = 0; i < all.length - Math.max(1, config.backupCloudRetention); i++) fs.rmSync(path.join(root, all[i]), { force: true })
 }
 

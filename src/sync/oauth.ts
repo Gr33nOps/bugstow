@@ -18,12 +18,12 @@ export const redirectUri = () => `${window.location.origin}${CALLBACK_PATH}`
 
 function randomString(bytes = 32): string {
   const b = crypto.getRandomValues(new Uint8Array(bytes))
-  return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replaceAll('=', '')
 }
 
 async function pkceChallenge(verifier: string): Promise<string> {
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)))
-  return btoa(String.fromCharCode(...digest)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  return btoa(String.fromCharCode(...digest)).replace(/\+/g, '-').replace(/\//g, '_').replaceAll('=', '')
 }
 
 interface Pending {
