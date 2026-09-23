@@ -28,7 +28,7 @@ import { ProjectsView, ProjectModal } from './components/features/projects/Proje
 import { SettingsView } from './components/features/settings/SettingsView'
 import { Shield, X, Download } from 'lucide-react'
 
-export default function App({ onSwitchToCloud }: { onSwitchToCloud?: () => void } = {}) {
+export default function App({ onSwitchToTeam }: { onSwitchToTeam?: () => void } = {}) {
   const {
     issues,
     projects,
@@ -430,7 +430,7 @@ export default function App({ onSwitchToCloud }: { onSwitchToCloud?: () => void 
             onToast={showToast}
             onOpenKeyboardShortcuts={() => setShowKeyboardShortcuts(true)}
             onOpenAbout={() => setShowAbout(true)}
-            onSwitchToCloud={onSwitchToCloud}
+            onSwitchToTeam={onSwitchToTeam}
           />
         )
 

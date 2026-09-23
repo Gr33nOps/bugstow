@@ -24,7 +24,7 @@ export interface TeamInvite {
   created_at: string
 }
 
-export interface CloudProject {
+export interface TeamProject {
   id: string
   team_id: string
   name: string
@@ -34,7 +34,7 @@ export interface CloudProject {
   updated_at: string
 }
 
-export interface CloudIssue {
+export interface TeamIssue {
   id: string
   team_id: string
   project_id: string | null

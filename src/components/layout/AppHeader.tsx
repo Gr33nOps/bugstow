@@ -199,9 +199,9 @@ export function AppHeader({
         {/* Local-first status badge */}
         <div
           className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/60"
-          title={storageUsedFormatted ? `${storageUsedFormatted} stored locally in browser` : '100% private local vault'}
+          title={storageUsedFormatted ? `${storageUsedFormatted} stored in this browser` : 'Your data is stored in this browser'}
         >
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="w-2 h-2 rounded-full bg-emerald-500" />
           <span>Local Vault</span>
         </div>
 

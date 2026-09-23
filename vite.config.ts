@@ -16,6 +16,9 @@ export default defineConfig({
       includeAssets: ['favicon.svg'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
+        // Team mode code is only needed on a team server (which must be
+        // reachable anyway), so Personal visitors never download it.
+        globIgnores: ['**/TeamRoot-*.js'],
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api/],
         runtimeCaching: [

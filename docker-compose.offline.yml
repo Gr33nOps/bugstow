@@ -8,6 +8,8 @@
 services:
   bugstow:
     image: bugstow:latest
+    # Never download anything: the image must come from `docker load`.
+    pull_policy: never
     container_name: bugstow
     restart: unless-stopped
     ports:
@@ -16,8 +18,13 @@ services:
       - .env
     volumes:
       - bugstow-data:/data
+      # Optional second backup copy on separate hardware (USB disk, other drive,
+      # NAS mount). Uncomment, point the left side at that folder, and set
+      # BUGSTOW_BACKUP_EXTERNAL_DIR=/backup-external in .env. See docs/RELEASE_OFFLINE.md §8.
+      # - /mnt/usb-backup/bugstow:/backup-external
     healthcheck:
-      test: ['CMD', 'node', '-e', "fetch('http://localhost:8080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      # Works over HTTP and HTTPS (BUGSTOW_TLS=true).
+      test: ['CMD', 'node', 'healthcheck.mjs']
       interval: 30s
       timeout: 5s
       retries: 5

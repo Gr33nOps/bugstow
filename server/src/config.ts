@@ -12,6 +12,12 @@ const SCREENSHOTS_DIR = path.join(DATA_DIR, 'screenshots')
 const BACKUPS_DIR = path.join(DATA_DIR, 'backups')
 const CERTS_DIR = path.join(DATA_DIR, 'certs')
 
+// better-auth ships an anonymous telemetry module. It is off by default but can
+// be switched on by an environment variable; BugsTow never sends telemetry, so
+// that switch is removed before better-auth loads.
+delete process.env.BETTER_AUTH_TELEMETRY
+delete process.env.BETTER_AUTH_TELEMETRY_ENDPOINT
+
 fs.mkdirSync(DATA_DIR, { recursive: true })
 fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true })
 fs.mkdirSync(BACKUPS_DIR, { recursive: true })
@@ -68,6 +74,33 @@ export const config = {
   backupEnabled: boolEnv('BUGSTOW_BACKUP_ENABLED', true),
   backupIntervalHours: parseFloat(process.env.BUGSTOW_BACKUP_INTERVAL_HOURS || '24'),
   backupRetention: parseInt(process.env.BUGSTOW_BACKUP_RETENTION || '7', 10),
+  /**
+   * Optional second backup location on separate hardware (another drive, a USB
+   * disk, a mounted NAS folder). Each backup is copied there as well. The
+   * folder must already exist and contain a `.bugstow-backup-target` marker
+   * file, so an unmounted drive is detected instead of silently filling the
+   * main disk. Empty = disabled.
+   */
+  backupExternalDir: (process.env.BUGSTOW_BACKUP_EXTERNAL_DIR || '').trim(),
+  backupExternalRetention: parseInt(
+    process.env.BUGSTOW_BACKUP_EXTERNAL_RETENTION || process.env.BUGSTOW_BACKUP_RETENTION || '7',
+    10
+  ),
+  /**
+   * Extra host names / IPs for the generated HTTPS certificate (comma-separated).
+   * The hostname of BUGSTOW_BASE_URL is always included. Needed in Docker, where
+   * the container cannot see the host's LAN IP.
+   */
+  tlsHosts: (process.env.BUGSTOW_TLS_HOSTS || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean),
+  /**
+   * Optional fixed setup token for creating the first administrator (>= 20
+   * characters). Normally leave unset: a random one is generated and printed in
+   * the server log.
+   */
+  setupTokenOverride: (process.env.BUGSTOW_SETUP_TOKEN || '').trim(),
   authSecret: requireSecretInProd(process.env.BUGSTOW_AUTH_SECRET),
   /** Public base URL of this server, used by better-auth for cookies/links. */
   baseURL: process.env.BUGSTOW_BASE_URL || `http://localhost:${process.env.PORT || '8080'}`,

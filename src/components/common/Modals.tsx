@@ -1,3 +1,4 @@
+import { APP_VERSION } from '../../version'
 import React, { useEffect } from 'react'
 import { X, Check, AlertCircle, Shield, Keyboard } from 'lucide-react'
 
@@ -206,10 +207,12 @@ export function AboutModal({ onClose }: { onClose: () => void }) {
 
         <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">bugstow.</h3>
         <p className="text-sm font-semibold text-[#5B50F6] mt-0.5">Spot it. Stow it. Fix it.</p>
-        <p className="text-xs text-slate-400 mt-1 mb-4 font-mono">Version 1.1.0 • 100% Local-First</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-4 font-mono">Version {APP_VERSION} · Personal mode</p>
 
         <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/80 rounded-xl p-3.5 text-xs text-slate-600 dark:text-slate-300 text-left leading-relaxed mb-6">
-          Bugstow stores 100% of your issues, screenshots, and projects locally in your browser's IndexedDB. No telemetry, no accounts, and no data uploaded to any server.
+          In Personal mode your projects, issues and screenshots stay in this browser (IndexedDB). BugsTow does not
+          need an account or a backend for Personal mode and includes no analytics or telemetry. Browser storage is
+          not encrypted on disk; exported backups can be.
         </div>
 
         <button

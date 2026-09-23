@@ -23,7 +23,12 @@ function flag(name, dflt) {
 }
 const here = path.dirname(fileURLToPath(import.meta.url))
 const positional = args.find(a => !a.startsWith('--') && args[args.indexOf(a) - 1]?.startsWith('--') !== true)
-const root = path.resolve(positional || process.env.BUGSTOW_DIST || path.join(here, '..', 'dist'))
+// Default: `dist` next to this script (offline bundle: personal/dist), else the
+// repo's build output (scripts/../dist).
+const defaultRoot = [path.join(here, 'dist'), path.join(here, '..', 'dist')].find(d =>
+  fs.existsSync(path.join(d, 'index.html'))
+) || path.join(here, 'dist')
+const root = path.resolve(positional || process.env.BUGSTOW_DIST || defaultRoot)
 const port = parseInt(flag('--port', process.env.PORT || '8000'), 10)
 const host = flag('--host', '0.0.0.0')
 

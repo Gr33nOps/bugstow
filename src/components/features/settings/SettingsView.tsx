@@ -39,7 +39,7 @@ interface SettingsViewProps {
   onToast: (msg: string, type?: 'success' | 'error' | 'info') => void
   onOpenKeyboardShortcuts: () => void
   onOpenAbout: () => void
-  onSwitchToCloud?: () => void
+  onSwitchToTeam?: () => void
 }
 
 export function SettingsView({
@@ -50,7 +50,7 @@ export function SettingsView({
   onToast,
   onOpenKeyboardShortcuts,
   onOpenAbout,
-  onSwitchToCloud,
+  onSwitchToTeam,
 }: SettingsViewProps) {
   const { estimate, requestPersistence } = useStorageEstimate()
 
@@ -138,14 +138,14 @@ export function SettingsView({
         </div>
 
         {/* Team / Cloud mode */}
-        {onSwitchToCloud && (
+        {onSwitchToTeam && (
           <div>
             <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
               Workspace
             </h3>
             <button
               type="button"
-              onClick={onSwitchToCloud}
+              onClick={onSwitchToTeam}
               className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs p-4 flex items-center gap-3.5 text-left hover:border-[#5B50F6] transition-colors"
             >
               <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-[#5B50F6] dark:text-indigo-300">
@@ -207,9 +207,11 @@ export function SettingsView({
               <div className="flex items-start gap-3">
                 <Shield size={20} className="text-[#5B50F6] shrink-0 mt-0.5" />
                 <div className="flex-1 text-xs">
-                  <p className="font-bold text-slate-900 dark:text-white text-sm">Your data is stored 100% locally</p>
+                  <p className="font-bold text-slate-900 dark:text-white text-sm">Your data stays in this browser</p>
                   <p className="text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
-                    Zero telemetry. Zero external servers. You are in complete control of your issues and images.
+                    Projects, issues and screenshots are saved in this browser's storage (IndexedDB) and are not
+                    uploaded by BugsTow. There are no analytics or telemetry. Browser storage is not encrypted on
+                    disk, so use an encrypted backup for copies you keep elsewhere.
                   </p>
                 </div>
               </div>

@@ -39,15 +39,15 @@ export function ModePicker({
             </div>
             <h2 className="text-base font-bold text-slate-900 dark:text-white">Just me · Local</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
-              Private and offline. Everything stays in this browser, no account needed. Works without any
-              server. Export an encrypted backup anytime.
+              Your projects, issues and screenshots stay in this browser. No account or server needed, and it keeps
+              working offline. Export an encrypted backup anytime.
             </p>
           </button>
 
           {teamAvailable ? (
             <button
               type="button"
-              onClick={() => onChoose('cloud')}
+              onClick={() => onChoose('team')}
               className="text-left p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-[#5B50F6] hover:shadow-md transition-all"
             >
               <div className="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-[#5B50F6] dark:text-indigo-300 mb-4">
@@ -55,8 +55,8 @@ export function ModePicker({
               </div>
               <h2 className="text-base font-bold text-slate-900 dark:text-white">My team</h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
-                Sign in to this team server to share projects and issues, assign teammates, and import from
-                GitHub. Data lives on the server your team hosts.
+                Sign in to share projects and issues with your team and assign work. Shared data is stored on this
+                server, which your team runs.
               </p>
             </button>
           ) : (
@@ -70,8 +70,8 @@ export function ModePicker({
               </div>
               <h2 className="text-base font-bold text-slate-900 dark:text-white">Self-host for your team</h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
-                Run Bugstow on your own computer or server so teammates can share issues. Data stays on your
-                machine, not on this website. See how to install it.
+                Run BugsTow on a computer your team controls so teammates can share issues. Shared data is stored
+                there, not on this website. See how to install it.
               </p>
             </button>
           )}

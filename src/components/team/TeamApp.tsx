@@ -20,15 +20,19 @@ import {
   Upload,
   WifiOff,
   KeyRound,
+  RefreshCw,
+  AlertTriangle,
+  Archive,
 } from 'lucide-react'
-import { useCloudData } from '../../hooks/useCloudData'
+import { useTeamData } from '../../hooks/useTeamData'
 import { signOut, authClient } from '../../lib/authClient'
-import { getMe, resetUserPassword } from '../../services/teamApi'
+import { getMe, resetUserPassword, IssueConflictError, listBackups, runBackupNow, type BackupStatus } from '../../services/teamApi'
+import { connectionKind } from '../../lib/connection'
 import { generateIssuePrompt } from '../../services/promptService'
 import { validateBackupStructure, decryptBackup } from '../../services/backupService'
 import { migrateBackupToTeam } from '../../services/teamMigration'
 import type { IssueType, BackupData, EncryptedBackupPayload } from '../../types'
-import type { CloudIssue, TeamMember, CurrentUser } from '../../types/cloud'
+import type { TeamIssue, TeamMember, CurrentUser } from '../../types/team'
 
 const TYPE_META: Record<IssueType, { label: string; icon: React.ElementType; cls: string }> = {
   bug: { label: 'Bug', icon: Bug, cls: 'text-rose-600 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300' },
@@ -55,7 +59,7 @@ function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }>
   })
 }
 
-interface CloudAppProps {
+interface TeamAppProps {
   onUseLocal: () => void
   userLabel: string
   offline?: boolean
@@ -66,7 +70,7 @@ interface CloudAppProps {
  * refuses every other request until a new password is chosen, so that screen
  * must come before the workspace.
  */
-export function CloudApp(props: CloudAppProps) {
+export function TeamApp(props: TeamAppProps) {
   const [me, setMe] = useState<CurrentUser | null>(null)
   const [meError, setMeError] = useState<string | null>(null)
 
@@ -131,8 +135,8 @@ function CenteredPanel({ children }: { children: React.ReactNode }) {
   )
 }
 
-function Workspace({ onUseLocal, userLabel, offline = false, me }: CloudAppProps & { me: CurrentUser }) {
-  const data = useCloudData(true)
+function Workspace({ onUseLocal, userLabel, offline = false, me }: TeamAppProps & { me: CurrentUser }) {
+  const data = useTeamData(true)
   const {
     teams,
     activeTeam,
@@ -154,6 +158,7 @@ function Workspace({ onUseLocal, userLabel, offline = false, me }: CloudAppProps
   const [showMigrate, setShowMigrate] = useState(false)
   const [showTeamMenu, setShowTeamMenu] = useState(false)
   const [showChangePassword, setShowChangePassword] = useState(false)
+  const [showBackups, setShowBackups] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
   const notify = (msg: string) => {
@@ -260,11 +265,20 @@ function Workspace({ onUseLocal, userLabel, offline = false, me }: CloudAppProps
           <Plus size={16} /> <span className="hidden sm:inline">New Issue</span>
         </button>
 
+        {connectionKind() === 'lan-http' && (
+          <span
+            title="This server uses plain HTTP. Passwords and issues cross the network unencrypted. Ask the administrator to turn on HTTPS."
+            className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold text-amber-800 bg-amber-100 dark:text-amber-200 dark:bg-amber-950/60"
+          >
+            <AlertTriangle size={12} /> Not encrypted
+          </span>
+        )}
         <UserMenu
           label={userLabel}
           onUseLocal={onUseLocal}
           onImportPersonal={() => setShowMigrate(true)}
           onChangePassword={() => setShowChangePassword(true)}
+          onBackups={me.isServerAdmin ? () => setShowBackups(true) : undefined}
         />
       </header>
 
@@ -348,6 +362,7 @@ function Workspace({ onUseLocal, userLabel, offline = false, me }: CloudAppProps
               projects={projects}
               loadScreenshotUrl={data.loadScreenshotUrl}
               onUpdate={data.updateIssue}
+              onReload={data.replaceIssue}
               onDelete={async id => {
                 await data.deleteIssue(id)
                 setSelectedId(null)
@@ -410,6 +425,8 @@ function Workspace({ onUseLocal, userLabel, offline = false, me }: CloudAppProps
         />
       )}
 
+      {showBackups && <BackupsModal onClose={() => setShowBackups(false)} />}
+
       {showChangePassword && (
         <ModalShell onClose={() => setShowChangePassword(false)}>
           <div className="flex flex-col gap-4">
@@ -455,11 +472,14 @@ function UserMenu({
   onUseLocal,
   onImportPersonal,
   onChangePassword,
+  onBackups,
 }: {
   label: string
   onUseLocal: () => void
   onImportPersonal: () => void
   onChangePassword: () => void
+  /** Only for the server administrator. */
+  onBackups?: () => void
 }) {
   const [open, setOpen] = useState(false)
   return (
@@ -498,6 +518,18 @@ function UserMenu({
           >
             <KeyRound size={15} /> Change password
           </button>
+          {onBackups && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                onBackups()
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              <Archive size={15} /> Backups
+            </button>
+          )}
           <button
             type="button"
             onClick={onUseLocal}
@@ -626,22 +658,25 @@ function IssueDetail({
   projects,
   loadScreenshotUrl,
   onUpdate,
+  onReload,
   onDelete,
   onClose,
   onToast,
 }: {
-  issue: CloudIssue
+  issue: TeamIssue
   members: TeamMember[]
   projects: { id: string; name: string }[]
   loadScreenshotUrl: (id: string) => Promise<string | undefined>
   onUpdate: (
     id: string,
     updates: Partial<{ title: string; description: string; type: IssueType; status: 'open' | 'fixed'; projectId: string | null; assigneeId: string | null }>
-  ) => Promise<CloudIssue>
+  ) => Promise<TeamIssue>
+  onReload: (latest: TeamIssue) => void
   onDelete: (id: string) => Promise<void>
   onClose: () => void
   onToast: (m: string) => void
 }) {
+  const [conflict, setConflict] = useState<TeamIssue | null>(null)
   const [title, setTitle] = useState(issue.title)
   const [description, setDescription] = useState(issue.description)
   const [shots, setShots] = useState<string[]>([])
@@ -662,9 +697,14 @@ function IssueDetail({
   }, [issue.screenshot_ids, loadScreenshotUrl])
 
   const saveField = async (updates: Parameters<typeof onUpdate>[1]) => {
+    if (conflict) return // must reload first
     try {
       await onUpdate(issue.id, updates)
     } catch (e) {
+      if (e instanceof IssueConflictError) {
+        setConflict(e.latest)
+        return
+      }
       onToast(e instanceof Error ? e.message : 'Update failed')
     }
   }
@@ -727,6 +767,30 @@ function IssueDetail({
       </div>
 
       <div className="p-5 flex flex-col gap-4 max-w-2xl">
+        {conflict && (
+          <div
+            role="alert"
+            className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl text-sm text-amber-900 dark:text-amber-100 flex flex-col gap-2"
+          >
+            <p className="flex items-start gap-2">
+              <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+              <span>
+                <strong className="font-semibold">This issue was changed by another teammate.</strong> Reload it
+                before saving. Your last change was not saved; copy any text you want to keep first.
+              </span>
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                onReload(conflict)
+                setConflict(null)
+              }}
+              className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-900 text-white hover:bg-amber-950 dark:bg-amber-200 dark:text-amber-950 dark:hover:bg-amber-100"
+            >
+              <RefreshCw size={13} /> Reload issue
+            </button>
+          </div>
+        )}
         <input
           value={title}
           onChange={e => setTitle(e.target.value)}
@@ -849,7 +913,7 @@ function NewIssueModal({
   onCreate: (
     data: { title: string; description: string; type: IssueType; projectId: string | null; assigneeId: string | null },
     screenshot?: { base64: string; mimeType: string; filename?: string }
-  ) => Promise<CloudIssue>
+  ) => Promise<TeamIssue>
   onClose: () => void
   onDone: () => void
 }) {
@@ -1352,6 +1416,126 @@ function ResetPasswordDialog({ member, onClose }: { member: TeamMember; onClose:
       </div>
     </ModalShell>
   )
+}
+
+/** Server admin: backup status (local + external copy) and "Back up now". */
+function BackupsModal({ onClose }: { onClose: () => void }) {
+  const [status, setStatus] = useState<BackupStatus | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [done, setDone] = useState<string | null>(null)
+
+  const load = () =>
+    listBackups()
+      .then(setStatus)
+      .catch(e => setErr(e instanceof Error ? e.message : 'Could not load backups.'))
+  useEffect(() => {
+    load()
+  }, [])
+
+  const backupNow = async () => {
+    setBusy(true)
+    setErr(null)
+    setDone(null)
+    try {
+      const res = await runBackupNow()
+      setDone(
+        res.external.configured && res.external.lastError
+          ? 'Local backup saved. The external copy failed (see below).'
+          : res.external.configured
+            ? 'Backup saved locally and to the external location.'
+            : 'Backup saved locally.'
+      )
+      await load()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Backup failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const latest = status?.backups[status.backups.length - 1]
+  const ext = status?.external
+
+  return (
+    <ModalShell onClose={onClose}>
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold flex items-center gap-2">
+            <Archive size={18} /> Backups
+          </h3>
+          <button type="button" aria-label="Close" onClick={onClose} className="text-slate-400">
+            <X size={16} />
+          </button>
+        </div>
+
+        {err && (
+          <div role="alert" className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
+            <AlertCircle size={14} className="shrink-0" /> {err}
+          </div>
+        )}
+        {done && <p className="text-sm text-emerald-700 dark:text-emerald-400">{done}</p>}
+
+        {!status && !err ? (
+          <p className="text-sm text-slate-500">Loading…</p>
+        ) : status ? (
+          <dl className="text-sm grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+            <dt className="text-slate-500">On this disk</dt>
+            <dd>
+              {status.backups.length} kept{latest ? `, newest ${formatBackupName(latest)}` : ''}
+              <span className="block text-xs text-slate-500">
+                {status.automatic
+                  ? `Automatic every ${status.intervalHours} h, keeping ${status.retention}.`
+                  : 'Automatic backups are off.'}{' '}
+                Same disk as the live data.
+              </span>
+            </dd>
+            <dt className="text-slate-500">External copy</dt>
+            <dd>
+              {!ext?.configured ? (
+                <span className="text-amber-700 dark:text-amber-400">
+                  Not set up. If this disk fails, the backups are lost with it. Set BUGSTOW_BACKUP_EXTERNAL_DIR
+                  (docs/RELEASE_OFFLINE.md §8).
+                </span>
+              ) : ext.lastError ? (
+                <span className="text-red-700 dark:text-red-400">
+                  Last attempt failed: {ext.lastError}
+                </span>
+              ) : (
+                <>
+                  {ext.backups.length} kept in <code className="font-mono text-xs break-all">{ext.dir}</code>
+                  {ext.lastSuccessAt && (
+                    <span className="block text-xs text-slate-500">
+                      Last copied {new Date(ext.lastSuccessAt).toLocaleString()}.
+                    </span>
+                  )}
+                </>
+              )}
+            </dd>
+          </dl>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={backupNow}
+          disabled={busy}
+          className="w-full py-2.5 text-sm font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] rounded-xl disabled:opacity-50"
+        >
+          {busy ? 'Backing up…' : 'Back up now'}
+        </button>
+        <p className="text-xs text-slate-500">
+          Restoring is done on the server computer; see docs/RELEASE_OFFLINE.md §8.
+        </p>
+      </div>
+    </ModalShell>
+  )
+}
+
+/** "2026-09-23T10-30-00-000Z" → local date/time. */
+function formatBackupName(name: string): string {
+  const iso = name.replace(/T(\d\d)-(\d\d)-(\d\d)-(\d{3})Z$/, 'T$1:$2:$3.$4Z')
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? name : d.toLocaleString()
 }
 
 function ImportModal({

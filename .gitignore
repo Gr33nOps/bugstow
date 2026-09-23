@@ -37,3 +37,13 @@ server/intdata/
 # Offline bundle output + server test data dirs
 offline-bundle/
 server/*data/
+
+# Never commit private keys, certificates or user backups made next to the repo
+*.key
+*.pem
+*.p12
+*.pfx
+certs/
+backups/
+bugstow-backup-*.tgz
+*.tgz
