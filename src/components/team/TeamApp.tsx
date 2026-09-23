@@ -1439,11 +1439,16 @@ function BackupsModal({ onClose }: { onClose: () => void }) {
     setDone(null)
     try {
       const res = await runBackupNow()
+      const failed = [
+        res.external.configured && res.external.lastError && 'external copy',
+        res.cloud.configured && res.cloud.lastError && 'cloud copy',
+      ].filter(Boolean)
+      const extra = [res.external.configured && 'the external location', res.cloud.configured && 'your cloud'].filter(Boolean)
       setDone(
-        res.external.configured && res.external.lastError
-          ? 'Local backup saved. The external copy failed (see below).'
-          : res.external.configured
-            ? 'Backup saved locally and to the external location.'
+        failed.length
+          ? `Local backup saved. The ${failed.join(' and ')} failed (see below).`
+          : extra.length
+            ? `Backup saved locally and to ${extra.join(' and ')}.`
             : 'Backup saved locally.'
       )
       await load()
@@ -1456,6 +1461,7 @@ function BackupsModal({ onClose }: { onClose: () => void }) {
 
   const latest = status?.backups[status.backups.length - 1]
   const ext = status?.external
+  const cloud = status?.cloud
 
   return (
     <ModalShell onClose={onClose}>
@@ -1509,6 +1515,24 @@ function BackupsModal({ onClose }: { onClose: () => void }) {
                       Last copied {new Date(ext.lastSuccessAt).toLocaleString()}.
                     </span>
                   )}
+                </>
+              )}
+            </dd>
+            <dt className="text-slate-500">Your cloud</dt>
+            <dd>
+              {!cloud?.configured ? (
+                <span className="text-slate-500">
+                  Not set up. Encrypted copies can go to a Google Drive, Dropbox, OneDrive, Mega or Terabox synced
+                  folder, or to WebDAV (docs/CLOUD_SYNC.md).
+                </span>
+              ) : cloud.lastError ? (
+                <span className="text-red-700 dark:text-red-400">Last attempt failed: {cloud.lastError}</span>
+              ) : (
+                <>
+                  Encrypted copies to {cloud.targets.join(' and ')}
+                  <span className="block text-xs text-slate-500">
+                    {cloud.lastSuccessAt ? `Last sent ${new Date(cloud.lastSuccessAt).toLocaleString()}.` : 'Nothing sent yet.'}
+                  </span>
                 </>
               )}
             </dd>

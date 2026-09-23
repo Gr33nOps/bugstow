@@ -23,6 +23,25 @@ a second browser or computer for the teammate, and the public site
 | P7 | Turn off Wi-Fi/unplug network, close and reopen the installed app | App opens; issues and screenshots still there; new capture works | |
 | P8 | Browser devtools → Network while using P2–P5 | Only the site's own files; no `/api/…`, no other hosts | |
 
+## Personal cloud sync (docs/CLOUD_SYNC.md)
+
+Use a laptop **and** a phone. Google Drive and Dropbox need `VITE_GOOGLE_CLIENT_ID` / `VITE_DROPBOX_CLIENT_ID` set on the site.
+
+| # | Check | Expected | PASS/FAIL |
+|---|---|---|---|
+| S1 | Settings → Sync on the laptop | Five options, each explaining what will happen; unavailable ones say why | |
+| S2 | Connect Google Drive, create a passphrase | Returns to Settings; "Google Drive · synced just now" | |
+| S3 | On the phone: connect the same Google account, enter the same passphrase | The laptop's issues and screenshots appear | |
+| S4 | Wrong passphrase on the phone first | "The passphrase does not match…"; nothing changes | |
+| S5 | Edit an issue on the phone; wait ~10 s; open the laptop | The edit shows up | |
+| S6 | Delete an issue on the laptop; open the phone | Gone on the phone too | |
+| S7 | Wait over an hour (Google) and open the app | "Sign in again" message with a Reconnect link; reconnect works | |
+| S8 | Repeat S2–S6 with Dropbox | Same results; no hourly reconnect | |
+| S9 | Synced folder (desktop Chrome) pointed at a Mega/OneDrive/Dropbox folder | Files appear in that folder; the cloud app uploads them | |
+| S10 | Sync file: export on laptop, upload to any cloud, import on phone with the passphrase | Issues appear on the phone; "Download merged file" offered | |
+| S11 | Open the cloud (Drive app data / Dropbox Apps/BugsTow / WebDAV folder) | Only `bugstow-index.json` and `shots/*.bin`, unreadable | |
+| S12 | Turn off sync on one device | Data stays on that device and in the cloud | |
+
 ## Team mode
 
 | # | Check | Expected | PASS/FAIL |

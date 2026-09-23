@@ -18,6 +18,9 @@ No user/team data touches the maintainer's infrastructure.
 - `src/services/` - `backupService` (encrypted export/import), `promptService`, `storageService`, `teamApi`, `teamMigration` (personal→team)
 - `src/components/team/` - `ModePicker`, `SelfHostInfo` (eager); `TeamRoot` → `TeamAuthGate`, `TeamApp` (lazy-loaded chunk, never fetched by the public Personal site)
 - `src/lib/connection.ts` - localhost / LAN HTTP / LAN HTTPS classification for honest warnings
+- `src/sync/` - Personal cloud sync (bring your own cloud, end-to-end encrypted): `crypto` (PBKDF2 + AES-GCM), `merge` (3-way, edit beats delete), `engine` (one sync round), `store` (separate `bugstow_sync` IndexedDB), `controller`, `oauth` (Google implicit / Dropbox PKCE redirects), `providers/` (googleDrive, dropbox, webdav, folder, memory = sync file)
+- `src/hooks/useCloudSync.ts`, `src/components/features/settings/CloudSyncPanel.tsx` - automatic sync + Settings → Sync UI
+- `server/src/cloudBackup.ts` - Encrypted backup archives to a cloud-synced folder and/or WebDAV; `npm run decrypt-backup`
 - `server/` - Self-hosted team server (Express, better-auth, SQLite, filesystem screenshots)
   - `server/src/app.ts` - Builds the Express app (migrations, CSP, CSRF origin check, rate limits, auth, API, frontend)
   - `server/src/index.ts` - Starts HTTP/HTTPS, backups, prints setup token + connection warnings
@@ -32,6 +35,7 @@ No user/team data touches the maintainer's infrastructure.
 - `docs/SELF_HOSTING.md` - Team install/backup/upgrade/security guide
 - `docs/RELEASE_OFFLINE.md` - Offline bundle, HTTPS trust, backups/restore, two-computer test (§13b)
 - `docs/RELEASE_CHECKLIST.md` - Manual browser checks before a release
+- `docs/CLOUD_SYNC.md` - Personal sync + Team cloud backups, provider setup (Google/Dropbox app registration, WebDAV CORS)
 
 ## Development
 
@@ -46,6 +50,7 @@ No user/team data touches the maintainer's infrastructure.
 ## Constraints
 
 - Do not reintroduce cloud dependencies (Neon, Cloudflare R2, Vercel functions).
+- The only cloud use allowed is the user's **own** storage, opt-in, and end-to-end encrypted before upload (Personal sync, Team cloud backups). Never plaintext, never maintainer infrastructure.
 - Personal data stays in the browser; team data stays on the self-hosted server.
 - Migrations must remain additive/non-destructive.
 - Keep privacy wording within what is proven (see README and SECURITY.md); no "100% private", "zero traffic" or "audited" claims.

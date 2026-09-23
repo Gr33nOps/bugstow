@@ -202,10 +202,24 @@ export interface BackupStatus {
     lastErrorAt: string | null
     backups: string[]
   }
+  /** Encrypted copies in your own cloud (synced folder and/or WebDAV). */
+  cloud: {
+    configured: boolean
+    targets: string[]
+    encrypted: boolean
+    lastSuccessAt: string | null
+    lastArchive: string | null
+    lastError: string | null
+    lastErrorAt: string | null
+  }
 }
 export async function listBackups(): Promise<BackupStatus> {
   return api<BackupStatus>('admin/backups')
 }
-export async function runBackupNow(): Promise<{ ok: true; external: Omit<BackupStatus['external'], 'backups'> }> {
+export async function runBackupNow(): Promise<{
+  ok: true
+  external: Omit<BackupStatus['external'], 'backups'>
+  cloud: BackupStatus['cloud']
+}> {
   return api('admin/backup', { method: 'POST' })
 }

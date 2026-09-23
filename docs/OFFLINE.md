@@ -14,15 +14,17 @@ version: what "offline" means and how to check it yourself.
 
 | Component | Connects to |
 |---|---|
-| Personal app (browser) | Only the site it was loaded from, for its own files. No API, analytics, fonts or CDNs. Data stays in IndexedDB. |
+| Personal app (browser) | Only the site it was loaded from, for its own files. No API, analytics, fonts or CDNs. Data stays in IndexedDB. If you turn on sync: also the cloud you connected (encrypted files only). |
 | Team app (browser) | Only its own team server. |
-| Team server | Nothing, except `api.github.com` when GitHub import is enabled (`BUGSTOW_OFFLINE=false`) and someone runs an import. |
+| Team server | Nothing, except `api.github.com` when GitHub import is enabled (`BUGSTOW_OFFLINE=false`) and someone runs an import, and your WebDAV server if you configure encrypted cloud backups to it. |
 | Authentication (better-auth) | Nothing. Local SQLite; its optional telemetry is forced off. |
 | Updates | Nothing. There is no update check. |
 
-Browsers enforce this as well: the Team server and the public site both send a
-Content-Security-Policy with `connect-src 'self'`, so the page cannot open
-connections to other hosts. The full audit is in
+Browsers enforce this as well on the Team server: it sends a
+Content-Security-Policy with `connect-src 'self'`, so pages it serves cannot
+open connections to other hosts. (The public site allows HTTPS connections so
+Personal sync can reach the cloud you choose; see
+[`CLOUD_SYNC.md`](CLOUD_SYNC.md).) The full audit is in
 [`RELEASE_OFFLINE.md` §11](RELEASE_OFFLINE.md#11-network-connections-audited).
 
 ## Where data is stored

@@ -73,6 +73,10 @@ curl http://localhost:8080/api/health
 | `BUGSTOW_BACKUP_RETENTION` | No | How many backups to keep (default `7`). |
 | `BUGSTOW_BACKUP_EXTERNAL_DIR` | **Recommended** | A second backup folder on separate hardware (USB disk, other drive, NAS mount). See [RELEASE_OFFLINE.md §8](RELEASE_OFFLINE.md#8-backups-and-restore). |
 | `BUGSTOW_BACKUP_EXTERNAL_RETENTION` | No | How many external backups to keep (default: same as `BUGSTOW_BACKUP_RETENTION`). |
+| `BUGSTOW_BACKUP_ENCRYPTION_PASSPHRASE` | For cloud backups | Encrypts backup archives sent to your cloud. Nothing is uploaded without it. See [CLOUD_SYNC.md](CLOUD_SYNC.md#team-backups-to-your-cloud). |
+| `BUGSTOW_BACKUP_CLOUD_DIR` | No | A folder a cloud desktop app syncs (Google Drive, Dropbox, OneDrive, Mega, Terabox…). Encrypted archives go there. |
+| `BUGSTOW_BACKUP_WEBDAV_URL` / `_USER` / `_PASSWORD` | No | Upload encrypted archives to a WebDAV folder (Nextcloud, ownCloud, pCloud, Koofr, Synology…). |
+| `BUGSTOW_BACKUP_CLOUD_RETENTION` | No | How many cloud archives to keep (default: same as `BUGSTOW_BACKUP_RETENTION`). |
 | `BUGSTOW_SETUP_TOKEN` | No | Fixed first-admin setup token (20+ characters) for scripted installs. Normally leave unset: a random one is printed in the log. |
 | `BUGSTOW_TRUST_PROXY` | No | Set to `1` only when a reverse proxy (Caddy/nginx) sits in front. Leave unset for direct/LAN access. |
 

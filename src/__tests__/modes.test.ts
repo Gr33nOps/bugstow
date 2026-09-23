@@ -64,7 +64,7 @@ describe('version', () => {
 })
 
 describe('public site Content-Security-Policy (vercel.json)', () => {
-  it('allows exactly the inline theme script in index.html and no external connections', async () => {
+  it('allows exactly the inline theme script, and connections only to the site and HTTPS hosts', async () => {
     const fs = await import('node:fs')
     const { createHash } = await import('node:crypto')
     const html = fs.readFileSync('index.html', 'utf8')
@@ -75,6 +75,8 @@ describe('public site Content-Security-Policy (vercel.json)', () => {
     const csp: string = vercel.headers[0].headers.find((h: { key: string }) => h.key === 'Content-Security-Policy').value
     const scriptSrc = csp.split(';').find(d => d.trim().startsWith('script-src'))!.trim().split(/\s+/).slice(1)
     expect(scriptSrc.sort()).toEqual(["'self'", ...inline].sort())
-    expect(csp).toContain("connect-src 'self';")
+    // Only the site itself and HTTPS hosts (the cloud / WebDAV server the user connects for sync).
+    const connect = csp.split(';').find(d => d.trim().startsWith('connect-src'))!.trim().split(/\s+/).slice(1)
+    expect(connect.sort()).toEqual(["'self'", 'https:'].sort())
   })
 })

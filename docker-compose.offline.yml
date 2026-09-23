@@ -22,6 +22,9 @@ services:
       # NAS mount). Uncomment, point the left side at that folder, and set
       # BUGSTOW_BACKUP_EXTERNAL_DIR=/backup-external in .env. See docs/RELEASE_OFFLINE.md §8.
       # - /mnt/usb-backup/bugstow:/backup-external
+      # Optional: a folder your cloud desktop app syncs, for encrypted cloud backups
+      # (set BUGSTOW_BACKUP_CLOUD_DIR=/backup-cloud and the passphrase; docs/CLOUD_SYNC.md).
+      # - "/home/you/Dropbox/BugsTow backups:/backup-cloud"
     healthcheck:
       # Works over HTTP and HTTPS (BUGSTOW_TLS=true).
       test: ['CMD', 'node', 'healthcheck.mjs']

@@ -15,9 +15,14 @@ BugsTow maintainer. No cloud service is required for normal operation.
   browser. BugsTow does not require an account or backend for Personal mode.
 - **Team mode:** your team runs its own BugsTow server. Shared project data is
   stored on infrastructure your team controls.
+- **Your own cloud (optional):** sync Personal mode between your phone and
+  computers, or send Team backups, through cloud storage you choose (Google
+  Drive, Dropbox, WebDAV, or any cloud via a synced folder or file).
+  Everything is encrypted with your passphrase before it leaves your device.
+  See [`docs/CLOUD_SYNC.md`](docs/CLOUD_SYNC.md).
 - **Offline:** BugsTow can operate entirely offline after installation.
-  Optional internet-dependent features such as GitHub import remain disabled in
-  offline mode. See [`docs/OFFLINE.md`](docs/OFFLINE.md).
+  Optional internet-dependent features such as GitHub import and cloud sync
+  are off unless you turn them on. See [`docs/OFFLINE.md`](docs/OFFLINE.md).
 
 ---
 
@@ -34,6 +39,10 @@ Open https://bugstow.vercel.app, or serve the built app yourself:
 - **Backups:** export a file you can restore later, optionally encrypted with a
   passphrase (AES-256-GCM, PBKDF2 with 100,000 iterations). Also how you move
   data to another browser or into a team.
+- **Sync across devices (optional):** Settings → Sync connects your own Google
+  Drive, Dropbox, WebDAV server, a folder your cloud app syncs (Mega, Terabox,
+  OneDrive…), or a portable sync file. End-to-end encrypted with your
+  passphrase; your cloud only stores unreadable files.
 
 > **Good to know:** browser storage is not permanent. Clearing site data,
 > switching browsers or losing the device loses it, so export backups. Browser
@@ -43,7 +52,9 @@ Open https://bugstow.vercel.app, or serve the built app yourself:
 > The public website is a static host (currently Vercel). Like any website, it
 > receives normal request information when the page loads (such as your IP
 > address and browser type, kept in its access logs). It never receives your
-> projects, issues or screenshots: Personal mode has no API.
+> projects, issues or screenshots: Personal mode has no API. If you turn on
+> sync, your browser talks directly to the cloud you chose, sending only
+> encrypted files.
 
 ---
 
@@ -106,9 +117,15 @@ npm run build      # outputs ./dist
 ```
 
 [`vercel.json`](vercel.json) adds an SPA rewrite and security headers (a
-Content-Security-Policy that only allows connections to the site itself). The
-same `dist` works on a team server: it only looks for a team server when the
-page was served by one, so the public site makes no API requests.
+Content-Security-Policy that only allows scripts from the site itself, and
+connections to the site or to HTTPS hosts, which cloud sync needs). The same
+`dist` works on a team server: it only looks for a team server when the page
+was served by one, so the public site makes no API requests.
+
+To offer Google Drive and Dropbox sync, set `VITE_GOOGLE_CLIENT_ID` and
+`VITE_DROPBOX_CLIENT_ID` at build time (setup steps in
+[`docs/CLOUD_SYNC.md`](docs/CLOUD_SYNC.md)). Without them those two options
+show "not set up"; the others work regardless.
 
 ---
 
