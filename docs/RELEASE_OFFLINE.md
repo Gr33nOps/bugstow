@@ -356,6 +356,9 @@ machines:
 | Restart persistence of the Team database + sessions | **Verified automatically** (stop/restart on same data) |
 | Offline GitHub-import gate, CSP blocking external fetch, HTTPS self-signed LAN cert generation, auto/manual backups on disk | **Verified automatically / manually** during release prep |
 | Server-side "no external calls" (code audit) | **Verified** (audit in section 11 + `docs/OFFLINE.md`) |
+| Docker image build, `docker-compose.offline.yml` install, container health check, and the 25/25 acceptance test **inside the real container** | **Verified automatically** |
+| Container restart persistence (`docker compose restart`: users, teams, sessions intact) | **Verified automatically** |
+| Offline bundle build (`npm run bundle:offline`) + `sha256sum -c` of all 19 files | **Verified automatically** |
 | Two **physical** computers with internet **hardware-disabled** over a real LAN | **Requires real-device verification** — cannot be done in the build sandbox; follow 13b |
 | Personal PWA offline after a full browser restart on a no-internet machine | **Requires real-device verification** — the SW registers on real browsers (and on the HTTPS deploy) but could not be exercised in the sandbox test browser on localhost; IndexedDB persistence is verified by the automated tests |
-| Docker/host reboot persistence (vs. process restart) | **Requires real-device verification** — uses the same persistent volume as the verified process restart |
+| Full **host machine reboot** (vs. container restart) | **Requires real-device verification** — uses the same persistent volume as the verified container restart |
