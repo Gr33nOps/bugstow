@@ -9,7 +9,8 @@
     "start": "tsx src/index.ts",
     "reset-password": "tsx src/reset-password.ts",
     "setup-token": "tsx src/setup-token.ts",
-    "test": "node --import tsx --test src/storage.test.ts src/backup.test.ts src/passwords.test.ts src/tls.test.ts src/http.test.ts",
+    "decrypt-backup": "tsx src/decrypt-backup.ts",
+    "test": "node --import tsx --test src/storage.test.ts src/backup.test.ts src/passwords.test.ts src/tls.test.ts src/http.test.ts src/cloudBackup.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

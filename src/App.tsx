@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import type { Tab, Issue, Project, IssueType } from './types'
 import { useBugstowData } from './hooks/useBugstowData'
+import { useCloudSync } from './hooks/useCloudSync'
 import { useStorageEstimate } from './hooks/useStorageEstimate'
 import { useTheme } from './hooks/useTheme'
 import { formatBytes } from './services/storageService'
@@ -49,6 +50,7 @@ export default function App({ onSwitchToTeam }: { onSwitchToTeam?: () => void } 
     clearAllData,
     restoreBackup,
     dismissBackupReminder,
+    refreshData,
   } = useBugstowData()
 
   const { estimate } = useStorageEstimate()
@@ -86,6 +88,15 @@ export default function App({ onSwitchToTeam }: { onSwitchToTeam?: () => void } 
       setToasts(prev => prev.filter(t => t.id !== id))
     }, 3500)
   }, [])
+
+  // Personal cloud sync (only active once the user connects a cloud).
+  const cloudSync = useCloudSync({ onDataChanged: refreshData, onToast: showToast })
+  useEffect(() => {
+    if (cloudSync.needsAttention) {
+      setCurrentTab('settings')
+      cloudSync.clearAttention()
+    }
+  }, [cloudSync])
 
   const handleToggleSidebar = () => {
     setSidebarCollapsed(prev => {
@@ -431,6 +442,8 @@ export default function App({ onSwitchToTeam }: { onSwitchToTeam?: () => void } 
             onOpenKeyboardShortcuts={() => setShowKeyboardShortcuts(true)}
             onOpenAbout={() => setShowAbout(true)}
             onSwitchToTeam={onSwitchToTeam}
+            cloudSync={cloudSync}
+            onDataChanged={refreshData}
           />
         )
 

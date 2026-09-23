@@ -68,6 +68,19 @@ async function main() {
         ? `  External backup copy: ${config.backupExternalDir} (keep ${config.backupExternalRetention})`
         : '  External backup copy: not configured (backups share a disk with the data; see docs/RELEASE_OFFLINE.md §8)'
     )
+    const cloudTargets = [config.backupCloudDir && `folder ${config.backupCloudDir}`, config.backupWebdavUrl && 'WebDAV']
+      .filter(Boolean)
+      .join(' + ')
+    if (cloudTargets) {
+      console.log(
+        config.backupEncryptionPassphrase
+          ? `  Cloud backup: encrypted archives to ${cloudTargets}`
+          : `  Cloud backup: ${cloudTargets} configured but BUGSTOW_BACKUP_ENCRYPTION_PASSPHRASE is missing, so nothing will be uploaded`
+      )
+      if (config.backupWebdavUrl.startsWith('http://')) {
+        console.log('  Note: the WebDAV address uses http://. Archives are encrypted, but the WebDAV password is sent unencrypted.')
+      }
+    }
     if (setupToken && userCount() === 0) {
       console.log('\n  ┌─────────────────────────────────────────────────────────────')
       console.log('  │ First-time setup: no administrator exists yet.')

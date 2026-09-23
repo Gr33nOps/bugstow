@@ -14,6 +14,7 @@ import { config } from './config.ts'
 import { requireAuth, teamRole, asyncRoute } from './middleware.ts'
 import { saveScreenshot, resolveScreenshot, deleteScreenshotFile } from './storage.ts'
 import { runBackup, listBackups, listExternalBackups, getExternalBackupStatus } from './backup.ts'
+import { getCloudBackupStatus } from './cloudBackup.ts'
 import { getCurrentCert } from './tls.ts'
 import { resetUserPassword } from './passwords.ts'
 
@@ -121,6 +122,7 @@ api.get(
       intervalHours: config.backupIntervalHours,
       retention: config.backupRetention,
       external: { ...getExternalBackupStatus(), backups: listExternalBackups() },
+      cloud: getCloudBackupStatus(),
     })
   })
 )
@@ -128,8 +130,8 @@ api.post(
   '/admin/backup',
   asyncRoute(async (req, res) => {
     if (!requireServerAdmin(req, res)) return
-    const { manifest, external } = await runBackup()
-    res.status(201).json({ ok: true, manifest, external })
+    const { manifest, external, cloud } = await runBackup()
+    res.status(201).json({ ok: true, manifest, external, cloud })
   })
 )
 

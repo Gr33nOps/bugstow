@@ -30,6 +30,8 @@ import {
 } from '../../../services/backupService'
 import { formatBytes } from '../../../services/storageService'
 import { useStorageEstimate } from '../../../hooks/useStorageEstimate'
+import type { CloudSync } from '../../../hooks/useCloudSync'
+import { CloudSyncPanel } from './CloudSyncPanel'
 
 interface SettingsViewProps {
   theme: Theme
@@ -40,6 +42,8 @@ interface SettingsViewProps {
   onOpenKeyboardShortcuts: () => void
   onOpenAbout: () => void
   onSwitchToTeam?: () => void
+  cloudSync?: CloudSync
+  onDataChanged?: () => void
 }
 
 export function SettingsView({
@@ -51,6 +55,8 @@ export function SettingsView({
   onOpenKeyboardShortcuts,
   onOpenAbout,
   onSwitchToTeam,
+  cloudSync,
+  onDataChanged,
 }: SettingsViewProps) {
   const { estimate, requestPersistence } = useStorageEstimate()
 
@@ -137,7 +143,9 @@ export function SettingsView({
           </div>
         </div>
 
-        {/* Team / Cloud mode */}
+        {cloudSync && <CloudSyncPanel sync={cloudSync} onToast={onToast} onDataChanged={onDataChanged ?? (() => {})} />}
+
+        {/* Team mode */}
         {onSwitchToTeam && (
           <div>
             <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
@@ -300,6 +308,7 @@ export function SettingsView({
               <p className="text-[15px] font-bold text-red-900 dark:text-red-200">Wipe Local Database</p>
               <p className="text-xs text-red-600/80 dark:text-red-400/80 mt-0.5">
                 Permanently deletes all projects, issues, and screenshots stored in this browser.
+                {cloudSync?.connection && ' Cloud sync is turned off on this device; the copy in your cloud is kept.'}
               </p>
             </div>
             <button

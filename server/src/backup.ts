@@ -3,6 +3,7 @@ import path from 'node:path'
 import Database from 'better-sqlite3'
 import { db } from './db.ts'
 import { config } from './config.ts'
+import { sendCloudBackup, getCloudBackupStatus, type CloudBackupStatus } from './cloudBackup.ts'
 
 /**
  * Automatic backups. Each backup is a self-contained folder
@@ -18,6 +19,9 @@ import { config } from './config.ts'
  *    half-written backup never looks complete. If the external location is
  *    unavailable the failure is logged and reported to the admin, and the
  *    server keeps running.
+ *
+ * 3. If a cloud target is configured, an encrypted archive of the backup is
+ *    sent to your own cloud (see cloudBackup.ts).
  *
  * Backups never write to the live database or screenshots folder. Restore is a
  * documented manual procedure (docs/RELEASE_OFFLINE.md §8).
@@ -95,7 +99,12 @@ export function verifyBackup(dir: string): BackupManifest {
   return manifest
 }
 
-export async function runBackup(): Promise<{ dir: string; manifest: BackupManifest; external: ExternalBackupStatus }> {
+export async function runBackup(): Promise<{
+  dir: string
+  manifest: BackupManifest
+  external: ExternalBackupStatus
+  cloud: CloudBackupStatus
+}> {
   const name = tsName()
   const dir = path.join(config.backupsDir, name)
   const shotsDir = path.join(dir, 'screenshots')
@@ -160,7 +169,9 @@ export async function runBackup(): Promise<{ dir: string; manifest: BackupManife
     }
   }
 
-  return { dir, manifest, external: getExternalBackupStatus() }
+  const cloud = await sendCloudBackup(dir, name)
+
+  return { dir, manifest, external: getExternalBackupStatus(), cloud: cloud ?? getCloudBackupStatus() }
 }
 
 /** Copy a finished local backup to the external location, atomically. */

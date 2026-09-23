@@ -75,6 +75,7 @@ copy('docker-compose.offline.yml', path.join(teamDir, 'docker-compose.offline.ym
 copy('server/.env.example', path.join(teamDir, '.env.example'))
 copy('docs/OFFLINE.md', path.join(teamDir, 'OFFLINE.md'))
 copy('docs/SELF_HOSTING.md', path.join(teamDir, 'SELF_HOSTING.md'))
+copy('docs/CLOUD_SYNC.md', path.join(teamDir, 'CLOUD_SYNC.md'))
 copy('scripts/acceptance-test.mjs', path.join(teamDir, 'acceptance-test.mjs'))
 
 // 4. Assemble the personal package.

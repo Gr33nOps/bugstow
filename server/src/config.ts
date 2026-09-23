@@ -87,6 +87,21 @@ export const config = {
     10
   ),
   /**
+   * Encrypted backups to your own cloud (see cloudBackup.ts). Nothing is
+   * uploaded unless BUGSTOW_BACKUP_ENCRYPTION_PASSPHRASE is set.
+   */
+  backupEncryptionPassphrase: process.env.BUGSTOW_BACKUP_ENCRYPTION_PASSPHRASE || '',
+  /** A folder synced by a cloud desktop app (Google Drive, Dropbox, OneDrive, Mega, Terabox...). */
+  backupCloudDir: (process.env.BUGSTOW_BACKUP_CLOUD_DIR || '').trim(),
+  /** A WebDAV folder (Nextcloud, ownCloud, pCloud, Koofr, Synology...). */
+  backupWebdavUrl: (process.env.BUGSTOW_BACKUP_WEBDAV_URL || '').trim(),
+  backupWebdavUser: process.env.BUGSTOW_BACKUP_WEBDAV_USER || '',
+  backupWebdavPassword: process.env.BUGSTOW_BACKUP_WEBDAV_PASSWORD || '',
+  backupCloudRetention: parseInt(
+    process.env.BUGSTOW_BACKUP_CLOUD_RETENTION || process.env.BUGSTOW_BACKUP_RETENTION || '7',
+    10
+  ),
+  /**
    * Extra host names / IPs for the generated HTTPS certificate (comma-separated).
    * The hostname of BUGSTOW_BASE_URL is always included. Needed in Docker, where
    * the container cannot see the host's LAN IP.

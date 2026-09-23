@@ -367,18 +367,24 @@ found these intentional connections:
 | From | Connects to | When |
 |---|---|---|
 | Personal app | the site it was loaded from, for its own files | loading the app (then cached for offline use) |
-| Personal app | **no API, no other host** | never. Checked in a browser: only the page, its script, stylesheet and `registerSW.js` are requested |
+| Personal app | **no API, no other host** unless you turn on sync | Checked in a browser: with sync off, only the page, its script, stylesheet and `registerSW.js` are requested |
+| Personal app, sync on | the cloud you connected: Google Drive (`www.googleapis.com`), Dropbox (`api.dropboxapi.com`, `content.dropboxapi.com`) or your WebDAV server. Only encrypted files are sent | only after you connect one in Settings → Sync |
 | Team app | only its own team server | always |
 | Team server | `api.github.com` | only when GitHub import is enabled (`BUGSTOW_OFFLINE=false`) **and** someone runs an import |
+| Team server | your WebDAV server (encrypted backup archives) | only if `BUGSTOW_BACKUP_WEBDAV_URL` is set; a LAN WebDAV server keeps this offline |
 | better-auth | nothing | its optional telemetry is off by default and has no built-in endpoint; BugsTow also removes the environment switch that could enable it |
 | Update checks, fonts, CDNs, analytics | none | never |
 
 Links a person clicks (the GitHub repository, an imported issue's GitHub page)
 open in the browser like any link. They are not requests the app makes.
 
-Browsers enforce this too: both the Team server and the public site send a
-Content-Security-Policy with `connect-src 'self'`, and scripts are limited to
-the app's own files plus one fixed inline theme script (by hash).
+Browsers enforce part of this too. The Team server sends a
+Content-Security-Policy with `connect-src 'self'`: pages it serves cannot
+connect anywhere else. The public site allows `'self' https:`, because
+Personal sync has to reach the cloud or WebDAV server you pick; there, the
+code (not the browser) is what limits connections to the one you connected.
+On both, scripts are limited to the app's own files plus one fixed inline
+theme script (by hash).
 
 **The public website** (the static host serving Personal mode, currently
 Vercel) receives normal web-request information when someone loads the page,
