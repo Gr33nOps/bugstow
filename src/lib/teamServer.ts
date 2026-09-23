@@ -17,8 +17,26 @@ export interface TeamServerInfo {
 
 let cached: TeamServerInfo | null = null
 
+const NONE: TeamServerInfo = { available: false, setupComplete: false, openSignup: false, offline: false }
+
+/**
+ * True when this page was served by a Bugstow team server. The team server
+ * injects `<meta name="bugstow-server" content="team">`; the static public site
+ * never has it, so Personal mode makes no API request at all. In development
+ * (Vite dev server proxying /api) we always probe.
+ */
+function servedByTeamServer(): boolean {
+  if (import.meta.env.DEV) return true
+  if (typeof document === 'undefined') return false
+  return document.querySelector('meta[name="bugstow-server"]')?.getAttribute('content') === 'team'
+}
+
 export async function detectTeamServer(): Promise<TeamServerInfo> {
   if (cached) return cached
+  if (!servedByTeamServer()) {
+    cached = NONE
+    return cached
+  }
   try {
     const res = await fetch('/api/health', {
       headers: { Accept: 'application/json' },
@@ -44,6 +62,6 @@ export async function detectTeamServer(): Promise<TeamServerInfo> {
   } catch {
     // Network error / no backend → public static site.
   }
-  cached = { available: false, setupComplete: false, openSignup: false, offline: false }
+  cached = NONE
   return cached
 }
