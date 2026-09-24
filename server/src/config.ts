@@ -36,6 +36,15 @@ function parseTrustProxy(v: string | undefined): boolean | number {
   return Number.isFinite(n) && n > 0 ? n : false
 }
 
+/** A public app ID from the environment, or '' when unset or malformed. */
+function publicId(value: string | undefined, pattern: RegExp): string {
+  const v = (value || '').trim()
+  if (!v) return ''
+  if (pattern.test(v)) return v
+  console.warn(`  Ignoring a malformed sync app ID: ${v.slice(0, 40)}`)
+  return ''
+}
+
 function requireSecretInProd(value: string | undefined): string {
   if (value && value.length >= 16) return value
   if (process.env.NODE_ENV === 'production') {
@@ -149,6 +158,13 @@ export const config = {
         ? ['localhost', '127.0.0.1'].map(h => `${boolEnv('BUGSTOW_TLS', false) ? 'https' : 'http'}://${h}:${PORT}`)
         : []
     ),
+  /**
+   * OAuth app IDs for Personal sync to Google Drive / Dropbox (public values,
+   * not secrets). When set, they are handed to the page and override the IDs
+   * built into the frontend. Malformed values are ignored.
+   */
+  googleClientId: publicId(process.env.BUGSTOW_GOOGLE_CLIENT_ID, /^[\w-]+\.apps\.googleusercontent\.com$/),
+  dropboxAppKey: publicId(process.env.BUGSTOW_DROPBOX_APP_KEY, /^[a-z0-9]{8,32}$/),
   /** Max screenshot upload size in bytes (default 10 MB). */
   maxUploadBytes: parseInt(process.env.BUGSTOW_MAX_UPLOAD_BYTES || String(10 * 1024 * 1024), 10),
   /**

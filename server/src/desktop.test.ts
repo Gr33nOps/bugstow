@@ -21,6 +21,8 @@ process.env.BUGSTOW_BASE_URL = `http://localhost:${PORT}`
 process.env.BUGSTOW_PUBLIC_DIR = publicDir
 process.env.BUGSTOW_BACKUP_ENABLED = 'false'
 process.env.BUGSTOW_DESKTOP = 'true'
+process.env.BUGSTOW_GOOGLE_CLIENT_ID = '123-abc.apps.googleusercontent.com'
+process.env.BUGSTOW_DROPBOX_APP_KEY = '"><script>alert(1)</script>'
 
 const { createApp } = await import('./app.ts')
 const { config } = await import('./config.ts')
@@ -67,6 +69,12 @@ test('the page may reach https: hosts (Personal sync to your own cloud)', async 
   res.resume()
   const csp = String(res.headers['content-security-policy'])
   assert.match(csp, /connect-src 'self' https:/)
+})
+
+test('sync app IDs from the environment reach the page; malformed ones are ignored', async () => {
+  const page = await get('/', `localhost:${PORT}`)
+  assert.match(page.body, /<meta name="bugstow-google-client-id" content="123-abc\.apps\.googleusercontent\.com" \/>/)
+  assert.doesNotMatch(page.body, /bugstow-dropbox-app-key|<script>alert/)
 })
 
 test('127.0.0.1 is a trusted origin as well as localhost', () => {

@@ -133,15 +133,29 @@ address; the other options still work.)
    users have connected, Dropbox gives you two weeks to get approval before it
    stops new users from connecting (and an unapproved app is capped at 500).
 
-### Build the IDs into the app package
+### Put the IDs into BugsTow
 
-Set them when building the package the installers download:
+- **For everyone (the release):** they live in `.env.production` in the
+  repository (`VITE_GOOGLE_CLIENT_ID`, `VITE_DROPBOX_CLIENT_ID`) and are built
+  into the package the installers download. Change them there and publish a
+  new release.
+- **On one computer, without a new release:** add them to `bugstow.env` in the
+  BugsTow folder (next to `data`), then `bugstow restart`. These override the
+  built-in ones:
 
-```sh
-VITE_GOOGLE_CLIENT_ID=<Google client ID> VITE_DROPBOX_CLIENT_ID=<Dropbox app key>   node scripts/build-app-package.mjs
-```
+  ```env
+  BUGSTOW_GOOGLE_CLIENT_ID=<Google client ID>
+  BUGSTOW_DROPBOX_APP_KEY=<Dropbox app key>
+  ```
 
-Without them, Google Drive and Dropbox show "Not available in this copy of
+  A team server takes the same two settings in its `.env`, but its strict
+  security policy still blocks browser sync (use a synced folder or sync file).
+
+Only the Google **client ID** and the Dropbox **app key** are used. BugsTow
+never needs the Google client secret, the Dropbox app secret or a Dropbox
+access token; don't put those anywhere.
+
+Without IDs, Google Drive and Dropbox show "Not available in this copy of
 BugsTow"; the other three options work regardless.
 
 ---

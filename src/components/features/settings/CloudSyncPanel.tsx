@@ -45,13 +45,13 @@ function options(): Option[] {
       id: 'gdrive',
       icon: Cloud,
       what: 'Syncs automatically on phones and computers. Stored in a hidden BugsTow folder in your Drive that only BugsTow can see. Google asks you to sign in again about once an hour; after that it is one tap.',
-      unavailable: blockedHere ?? (GOOGLE_CLIENT_ID ? undefined : 'Not available in this copy of BugsTow: it was built without a Google client ID (see docs/CLOUD_SYNC.md).'),
+      unavailable: blockedHere ?? (GOOGLE_CLIENT_ID ? undefined : 'Not available in this copy of BugsTow: no Google client ID is set (see docs/CLOUD_SYNC.md).'),
     },
     {
       id: 'dropbox',
       icon: Cloud,
       what: 'Syncs automatically on phones and computers. Stored in Dropbox › Apps › BugsTow; BugsTow can’t see the rest of your Dropbox. Stays connected.',
-      unavailable: blockedHere ?? (DROPBOX_CLIENT_ID ? undefined : 'Not available in this copy of BugsTow: it was built without a Dropbox app key (see docs/CLOUD_SYNC.md).'),
+      unavailable: blockedHere ?? (DROPBOX_CLIENT_ID ? undefined : 'Not available in this copy of BugsTow: no Dropbox app key is set (see docs/CLOUD_SYNC.md).'),
     },
     {
       id: 'webdav',
