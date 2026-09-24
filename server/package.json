@@ -1,6 +1,6 @@
 {
   "name": "bugstow-server",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "private": true,
   "type": "module",
   "description": "Bugstow self-hosted team server (Node + Express + SQLite + better-auth).",

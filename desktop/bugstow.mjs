@@ -26,7 +26,7 @@ import os from 'node:os'
 import path from 'node:path'
 import http from 'node:http'
 import https from 'node:https'
-import { spawn, spawnSync } from 'node:child_process'
+import { spawn, spawnSync, execSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 
@@ -174,6 +174,48 @@ function pidAlive(pid) {
   }
 }
 
+/**
+ * The process actually listening on this port, found independently of what
+ * PID_FILE says. PID_FILE can go stale (an update replaced it, a previous
+ * stop partially failed, ...), and trusting it alone was the bug behind
+ * `bugstow restart` silently doing nothing while claiming success: it saw a
+ * non-matching pid, concluded "not running", and never touched the real
+ * process. This is the ground truth instead; PID_FILE is only a fallback.
+ */
+function findListeningPid(port) {
+  try {
+    if (process.platform === 'win32') {
+      const out = execSync('netstat -ano -p tcp', { encoding: 'utf8', windowsHide: true })
+      for (const line of out.split(/\r?\n/)) {
+        const m = line.match(/^\s*TCP\s+\S*:(\d+)\s+\S+\s+LISTENING\s+(\d+)\s*$/i)
+        if (m && Number(m[1]) === port) return Number(m[2])
+      }
+    } else {
+      const out = execSync(`lsof -nP -iTCP:${port} -sTCP:LISTEN -t`, { encoding: 'utf8' })
+      const pid = parseInt(out.trim().split(/\s+/)[0], 10)
+      if (Number.isFinite(pid)) return pid
+    }
+  } catch {
+    // netstat/lsof missing, or nothing listening; the caller falls back to PID_FILE.
+  }
+  return null
+}
+
+/**
+ * Ends a process. Deliberately not `taskkill.exe` on Windows: as an external
+ * program it can itself be denied by security software in ways plain
+ * process.kill() (in-process, no subprocess) isn't, and Node's process.kill()
+ * already terminates unconditionally on Windows for a detached, console-less
+ * process like this one.
+ */
+function killProcess(pid) {
+  try {
+    process.kill(pid)
+  } catch {
+    // already gone
+  }
+}
+
 function openBrowser(url) {
   if (process.env.BUGSTOW_NO_BROWSER === '1') return
   const opts = { detached: true, stdio: 'ignore' }
@@ -301,7 +343,9 @@ async function start({ open = true } = {}) {
     }
     if (other && isBugstow(other)) {
       // Running, but in the other mode (local vs --lan): restart in the right one.
-      await stop({ quiet: true })
+      if (!(await stop({ quiet: true }))) {
+        fail(`Could not switch modes: something on port ${s.port} would not stop. Close it yourself and try again.`)
+      }
     }
     ensureDir(DATA_DIR)
     ensureDir(STATE_DIR)
@@ -348,25 +392,42 @@ async function start({ open = true } = {}) {
   if (open) openBrowser(target)
 }
 
+/**
+ * Returns true once BugsTow is confirmed stopped (or wasn't running), false if
+ * it's still up and the caller should not assume otherwise — this used to be
+ * silently swallowed: a stale PID_FILE made `stop` conclude "not running" and
+ * skip killing the process that health checks proved was actually there, so
+ * `bugstow restart` looked successful while doing nothing.
+ */
 async function stop({ quiet = false } = {}) {
-  const pid = parseInt(readText(PID_FILE), 10)
-  // Only stop a process that is really BugsTow: after a reboot the saved pid
-  // may belong to some other program.
-  const running = isBugstow(await portAnswers(readSettings().port))
-  if (!running || !pidAlive(pid)) {
+  const s = readSettings()
+  const u = urls(s)
+  // Only stop a process that is really BugsTow: after a reboot the port may
+  // be free, or held by some other program.
+  if (!isBugstow(await portAnswers(s.port))) {
     if (!quiet) say('  BugsTow is not running.')
     fs.rmSync(PID_FILE, { force: true })
-    return
+    return true
   }
-  try {
-    process.kill(pid)
-  } catch {
-    // already gone
+  // The port-owning process is the source of truth; PID_FILE is only a
+  // fallback for the rare case netstat/lsof aren't available.
+  const filePid = parseInt(readText(PID_FILE), 10)
+  const pid = findListeningPid(s.port) ?? (pidAlive(filePid) ? filePid : null)
+  if (!pid) {
+    say(`  BugsTow is running on port ${s.port}, but its process could not be found to stop it.`)
+    say('  Close it yourself (Task Manager on Windows, Activity Monitor on Mac) and try again.')
+    return false
   }
+  killProcess(pid)
   const until = Date.now() + 10000
-  while (pidAlive(pid) && Date.now() < until) await new Promise(r => setTimeout(r, 200))
+  while ((await health(u.probe, 500)) && Date.now() < until) await new Promise(r => setTimeout(r, 300))
   fs.rmSync(PID_FILE, { force: true })
+  if (isBugstow(await health(u.probe))) {
+    say(`  Could not stop BugsTow (process ${pid}). Close it yourself and try again.`)
+    return false
+  }
   if (!quiet) say('  BugsTow stopped. Your data is kept.')
+  return true
 }
 
 async function status() {
@@ -496,10 +557,10 @@ switch (cmd) {
     await start({ open: !flag('--no-open') })
     break
   case 'stop':
-    await stop()
+    if (!(await stop())) process.exitCode = 1
     break
   case 'restart':
-    await stop({ quiet: true })
+    if (!(await stop({ quiet: true }))) fail('BugsTow could not be stopped, so it was not restarted.')
     await start({ open: false })
     break
   case 'status':
@@ -525,7 +586,9 @@ switch (cmd) {
     run()
     break
   case 'uninstall':
-    await stop({ quiet: true })
+    if (!(await stop({ quiet: true }))) {
+      say('  Could not stop BugsTow first; close it yourself if some files are left behind.')
+    }
     uninstall()
     break
   case 'version':
