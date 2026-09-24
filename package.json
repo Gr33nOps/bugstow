@@ -2,7 +2,7 @@
   "name": "bugstow",
   "description": "A privacy-first issue tracker. Personal mode runs entirely in your browser; team mode is self-hosted.",
   "private": true,
-  "version": "2.2.1",
+  "version": "2.2.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
