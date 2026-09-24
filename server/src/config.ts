@@ -83,11 +83,14 @@ export const config = {
   publicDir: process.env.BUGSTOW_PUBLIC_DIR || '',
 
   /**
-   * Strict offline mode. Disables every feature that would reach the public
-   * internet (currently only GitHub import). Default true — this is a
-   * self-hosted, LAN-first app. Set BUGSTOW_OFFLINE=false to allow GitHub import.
+   * Strict offline mode. Disables every feature where this server would reach
+   * the public internet (currently only GitHub import).
+   *  - Team server: on by default (a shared, LAN-first server; its
+   *    administrator decides). BUGSTOW_OFFLINE=false allows GitHub import.
+   *  - Desktop app: off by default. It's one person's own computer, and it only
+   *    goes online at the moment they click Import. BUGSTOW_OFFLINE=true forbids it.
    */
-  offline: boolEnv('BUGSTOW_OFFLINE', true),
+  offline: boolEnv('BUGSTOW_OFFLINE', !DESKTOP),
 
   /** Serve over HTTPS with a locally generated self-signed certificate. */
   tls: boolEnv('BUGSTOW_TLS', false),

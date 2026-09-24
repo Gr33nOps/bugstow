@@ -42,6 +42,7 @@ No user/team data touches the maintainer's infrastructure.
 - `server/src/desktop.test.ts` - Desktop edition: Host-header allowlist (DNS rebinding), edition marker, CSP
 - `Dockerfile`, `docker-compose.yml` - Team edition packaging (persistent `/data` volume)
 - `docs/INSTALL.md` - Installing and using the desktop app
+- `src/services/githubImport.ts` + `src/components/features/github/GithubImportModal.tsx` - GitHub import, one dialog for every mode. Browser storage fetches api.github.com directly; server mode posts to `/api/github-import` (same error codes: NEEDS_TOKEN, BAD_TOKEN, NOT_FOUND, RATE_LIMITED, OFFLINE, NETWORK). Re-import dedupes by GitHub URL and follows open/closed. Desktop edition has `offline` off by default; team servers on.
 - `.env.production` - Public Google client ID / Dropbox app key built into releases (overridable at runtime via BUGSTOW_GOOGLE_CLIENT_ID / BUGSTOW_DROPBOX_APP_KEY, injected as meta tags)
 - `docs/SELF_HOSTING.md` - Team install/backup/upgrade/security guide
 - `docs/RELEASE_OFFLINE.md` - Offline bundle, HTTPS trust, backups/restore, two-computer test (§13b)

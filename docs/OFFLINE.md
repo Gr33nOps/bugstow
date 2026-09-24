@@ -1,8 +1,13 @@
 # Running BugsTow offline
 
-BugsTow can operate entirely offline after installation. Optional
-internet-dependent features such as GitHub import remain disabled in offline
-mode (the default, `BUGSTOW_OFFLINE=true`).
+BugsTow can operate entirely offline after installation. It only reaches the
+internet for GitHub import and cloud sync, and only when you use them:
+
+- **Installed app:** GitHub import works out of the box and contacts GitHub
+  only at the moment you click **Import**. `BUGSTOW_OFFLINE=true` in
+  `bugstow.env` switches it off entirely.
+- **Team server:** GitHub import is off (`BUGSTOW_OFFLINE=true`, the default)
+  until its administrator sets `BUGSTOW_OFFLINE=false`.
 
 Step-by-step installation, HTTPS, backups, upgrades and the full test plan are
 in **[`RELEASE_OFFLINE.md`](RELEASE_OFFLINE.md)**. This page is the short
@@ -14,9 +19,9 @@ version: what "offline" means and how to check it yourself.
 
 | Component | Connects to |
 |---|---|
-| Personal app (browser) | Only the site it was loaded from, for its own files. No API, analytics, fonts or CDNs. Data stays in IndexedDB. If you turn on sync: also the cloud you connected (encrypted files only). |
+| Personal app (browser) | Only the site it was loaded from, for its own files. No API, analytics, fonts or CDNs. Data stays in IndexedDB. If you turn on sync: also the cloud you connected (encrypted files only). When you import from GitHub: `api.github.com`, for that import. |
 | Team app (browser) | Only its own team server. |
-| Team server | Nothing, except `api.github.com` when GitHub import is enabled (`BUGSTOW_OFFLINE=false`) and someone runs an import, and your WebDAV server if you configure encrypted cloud backups to it. |
+| Team server / installed app | Nothing, except `api.github.com` when someone runs a GitHub import (installed app: allowed unless `BUGSTOW_OFFLINE=true`; team server: only with `BUGSTOW_OFFLINE=false`), and your WebDAV server if you configure encrypted cloud backups to it. |
 | Authentication (better-auth) | Nothing. Local SQLite; its optional telemetry is forced off. |
 | Updates | Nothing. There is no update check. |
 
@@ -65,7 +70,7 @@ the Network tab shows only the site's own files.
 
 ## Limitations
 
-- GitHub import needs the internet and is off in offline mode.
+- GitHub import needs the internet (and is off on a team server in offline mode).
 - Building the bundle needs the internet once; installing and running do not.
 - Self-signed HTTPS shows a warning until each device trusts the certificate.
 - The Team server must be running for teammates to reach shared data.

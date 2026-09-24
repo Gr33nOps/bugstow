@@ -12,6 +12,7 @@ export function generateIssuePrompt(issue: Issue, project?: Project | null): str
     }
     prompt += `Issue type: Idea\n`
     prompt += `Feature: ${issue.title}\n`
+    if (issue.githubUrl) prompt += `GitHub issue: ${issue.githubUrl}\n`
 
     if (issue.description && issue.description.trim()) {
       prompt += `\nAdditional context:\n${issue.description.trim()}\n`
@@ -29,6 +30,7 @@ export function generateIssuePrompt(issue: Issue, project?: Project | null): str
   }
   prompt += `Issue type: ${typeLabel}\n`
   prompt += `Problem: ${issue.title}\n`
+  if (issue.githubUrl) prompt += `GitHub issue: ${issue.githubUrl}\n`
 
   if (issue.description && issue.description.trim()) {
     prompt += `\nAdditional context:\n${issue.description.trim()}\n`

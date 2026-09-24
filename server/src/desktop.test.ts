@@ -52,6 +52,8 @@ test('page and health identify the desktop edition', async () => {
   const health = await get('/api/health', `127.0.0.1:${PORT}`)
   assert.equal(health.status, 200)
   assert.equal(JSON.parse(health.body).edition, 'desktop')
+  // One person's own computer: GitHub import works without any setup.
+  assert.equal(JSON.parse(health.body).offline, false)
 })
 
 test('requests for other host names are refused (DNS rebinding)', async () => {

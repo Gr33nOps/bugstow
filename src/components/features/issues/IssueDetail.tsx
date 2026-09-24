@@ -18,7 +18,7 @@ import {
   Plus,
 } from 'lucide-react'
 import type { Issue, Project, IssueType } from '../../../types'
-import { TypeBadge, timeAgo, BRAND_PRIMARY } from '../../common/Icon'
+import { TypeBadge, timeAgo, BRAND_PRIMARY, GithubMark } from '../../common/Icon'
 import {
   copyPromptToClipboard,
   copyScreenshotImageToClipboard,
@@ -546,6 +546,16 @@ export function IssueDetail({
                   </span>
                 ) : (
                   <span className="text-xs text-slate-400 italic">Unassigned</span>
+                )}
+                {issue.githubUrl && (
+                  <a
+                    href={issue.githubUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-[#5B50F6] dark:hover:text-indigo-300"
+                  >
+                    <GithubMark size={12} /> #{issue.githubNumber ?? ''} on GitHub
+                  </a>
                 )}
                 <span className="text-xs text-slate-400 ml-auto">
                   {timeAgo(issue.createdAt)}

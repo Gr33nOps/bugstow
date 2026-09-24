@@ -180,10 +180,12 @@ export async function fetchScreenshotBlob(id: string): Promise<Blob> {
 export async function importGithubIssues(params: {
   teamId: string
   projectId: string | null
+  /** Create a project with this name for the new issues (when projectId is null). */
+  newProjectName?: string
   repo: string
   token: string
   includeClosed: boolean
-}): Promise<{ imported: number; skipped: number }> {
+}): Promise<{ imported: number; updated: number; unchanged: number; projectId: string | null }> {
   return api('github-import', { method: 'POST', body: JSON.stringify(params) })
 }
 

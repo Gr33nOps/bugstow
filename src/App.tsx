@@ -27,6 +27,8 @@ import { NewIssueModal } from './components/features/capture/NewIssueModal'
 import { IssueDetail } from './components/features/issues/IssueDetail'
 import { ProjectsView, ProjectModal } from './components/features/projects/ProjectsView'
 import { SettingsView } from './components/features/settings/SettingsView'
+import { GithubImportModal } from './components/features/github/GithubImportModal'
+import { isDesktopEdition } from './lib/teamServer'
 import { Shield, X, Download } from 'lucide-react'
 
 export default function App({
@@ -50,6 +52,7 @@ export default function App({
     createProject,
     updateProject,
     deleteProject,
+    importGithubIssues,
     clearAllData,
     restoreBackup,
     dismissBackupReminder,
@@ -83,6 +86,7 @@ export default function App({
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogProps | null>(null)
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
+  const [showGithubImport, setShowGithubImport] = useState(false)
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
 
   // Toast Notifications
@@ -175,6 +179,8 @@ export default function App({
 
       // Escape key closes modals / selection
       if (e.key === 'Escape') {
+        // The GitHub import dialog closes itself.
+        if (showGithubImport) return
         if (zoomImageUrl) {
           setZoomImageUrl(null)
           return
@@ -208,7 +214,7 @@ export default function App({
 
     window.addEventListener('keydown', handleGlobalKeyDown)
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [zoomImageUrl, showNewIssueModal, showQuickProjectModal, showKeyboardShortcuts, showAbout, confirmDialog, selectedIssueId])
+  }, [zoomImageUrl, showNewIssueModal, showQuickProjectModal, showKeyboardShortcuts, showAbout, confirmDialog, selectedIssueId, showGithubImport])
 
   // Global clipboard paste listener (when modal is not already open)
   useEffect(() => {
@@ -366,6 +372,7 @@ export default function App({
             selectedIssueId={selectedIssueId}
             onSelectIssue={issue => setSelectedIssueId(issue.id)}
             onNewIssue={() => setShowNewIssueModal(true)}
+            onImportGithub={() => setShowGithubImport(true)}
             onToggleFixed={handleToggleFixed}
             onCopyPrompt={handleCopyPrompt}
             onDeleteIssue={handleDeleteIssueRequest}
@@ -509,6 +516,7 @@ export default function App({
             if (id) setCurrentTab('inbox')
           }}
           onNewIssue={() => setShowNewIssueModal(true)}
+          onImportGithub={() => setShowGithubImport(true)}
           onCreateProject={() => setShowQuickProjectModal(true)}
           collapsed={sidebarCollapsed}
           onToggleCollapse={handleToggleSidebar}
@@ -639,6 +647,10 @@ export default function App({
                 setMobileDrawerOpen(false)
                 setShowNewIssueModal(true)
               }}
+              onImportGithub={() => {
+                setMobileDrawerOpen(false)
+                setShowGithubImport(true)
+              }}
               onCreateProject={() => {
                 setMobileDrawerOpen(false)
                 setShowQuickProjectModal(true)
@@ -662,6 +674,35 @@ export default function App({
       )}
 
       {/* Capture New Issue Modal */}
+      {showGithubImport && (
+        <GithubImportModal
+          projects={projects}
+          onClose={() => setShowGithubImport(false)}
+          onImport={async req => {
+            // A shared team server's security policy keeps this page from
+            // reaching GitHub; its workspace has its own import.
+            const onSharedServer =
+              document.querySelector('meta[name="bugstow-server"]')?.getAttribute('content') === 'team' &&
+              !isDesktopEdition()
+            if (onSharedServer) {
+              throw new Error('Not available in browser storage on a team server. Use Import in the team workspace instead.')
+            }
+            const summary = await importGithubIssues(req.repo, {
+              token: req.token,
+              includeClosed: req.includeClosed,
+              target: req.target,
+            })
+            if (summary.imported || summary.updated) showToast(`Imported from ${req.repo.full}`)
+            return summary
+          }}
+          onShowResult={projectId => {
+            setSelectedIssueId(null)
+            setProjectFilterId(projectId)
+            setCurrentTab('inbox')
+          }}
+        />
+      )}
+
       {showNewIssueModal && (
         <NewIssueModal
           projects={projects}

@@ -101,6 +101,7 @@ export class IndexedDbIssueRepository implements IIssueRepository {
         status: issueData.status || 'open',
         screenshotId: screenshotIds[0] || null,
         screenshotIds,
+        ...(issueData.githubUrl ? { githubUrl: issueData.githubUrl, githubNumber: issueData.githubNumber } : {}),
         createdAt: now,
         updatedAt: now
       }

@@ -68,6 +68,22 @@ describe('Bugstow Local-First Application Test Suite', () => {
   })
 
   // ── Test 2: Screenshot Persistence as Blob ────────────────────────────────
+  it('keeps the GitHub link of an imported issue (re-import matches on it)', async () => {
+    const created = await issueRepo.create({
+      title: 'From GitHub',
+      description: '',
+      projectId: null,
+      type: 'bug',
+      githubUrl: 'https://github.com/acme/web/issues/5',
+      githubNumber: 5,
+    })
+    const [stored] = (await issueRepo.getAll()).filter(i => i.id === created.id)
+    expect(stored.githubUrl).toBe('https://github.com/acme/web/issues/5')
+    expect(stored.githubNumber).toBe(5)
+    const plain = await issueRepo.create({ title: 'Made here', description: '', projectId: null, type: 'bug' })
+    expect('githubUrl' in plain).toBe(false)
+  })
+
   it('Test 2: Persists screenshot as a Blob and links to issue atomically', async () => {
     const imageBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]) // PNG magic bytes
     const blob = new Blob([imageBytes], { type: 'image/png' })
