@@ -20,6 +20,8 @@ export interface Issue {
   status: IssueStatus
   screenshotId: string | null // Legacy single ID for backwards compatibility
   screenshotIds?: string[] // Multiple screenshots support
+  githubUrl?: string // Set when imported from GitHub (also how re-imports find it)
+  githubNumber?: number
   createdAt: string // ISO timestamp
   updatedAt: string // ISO timestamp
 }

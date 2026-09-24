@@ -14,6 +14,7 @@ interface ListViewProps {
   selectedIssueId?: string | null
   onSelectIssue: (issue: Issue) => void
   onNewIssue: () => void
+  onImportGithub?: () => void
   onToggleFixed: (issue: Issue) => void
   onCopyPrompt: (issue: Issue) => void
   onDeleteIssue: (issue: Issue) => void
@@ -37,6 +38,7 @@ export function ListView({
   selectedIssueId,
   onSelectIssue,
   onNewIssue,
+  onImportGithub,
   onToggleFixed,
   onCopyPrompt,
   onDeleteIssue,
@@ -111,6 +113,7 @@ export function ListView({
           subheading={emptySub}
           actionLabel="Capture Issue"
           onAction={showCaptureOnEmpty ? onNewIssue : undefined}
+          onImportGithub={showCaptureOnEmpty ? onImportGithub : undefined}
         />
       </div>
     )

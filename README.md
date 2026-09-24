@@ -51,14 +51,20 @@ On first open, BugsTow asks where to keep your issues:
 
 Everything you can do:
 
+- **Import from GitHub:** click **Import from GitHub** (top of the sidebar, or
+  in an empty inbox), paste a repository link, done. Each GitHub issue becomes a
+  BugsTow issue linked back to GitHub, in a project named after the repository.
+  Public repositories need nothing else; for a private one the dialog walks you
+  through making a read-only key. Import again anytime to pick up new issues and
+  GitHub's open/closed changes, without duplicates.
 - **Screenshots:** paste (`Ctrl/Cmd+V`), drag and drop, or pick a file
   (PNG/JPEG/WebP).
 - **Copy as Prompt:** turn an issue into a structured prompt for an AI assistant.
 - **Backups:** export a file you can restore later, optionally encrypted with a
   passphrase (AES-256-GCM, PBKDF2 with 100,000 iterations).
-- **Offline:** nothing needs the internet after installing. Optional
-  internet features (GitHub import, cloud sync) are off unless you turn them
-  on. See [`docs/OFFLINE.md`](docs/OFFLINE.md).
+- **Offline:** nothing needs the internet after installing. BugsTow only goes
+  online when you use GitHub import or turn on cloud sync. See
+  [`docs/OFFLINE.md`](docs/OFFLINE.md).
 
 > **Good to know:** browser storage is **not encrypted on disk**, and neither
 > is the data folder; only exported files you choose to encrypt are. Anyone who
@@ -73,7 +79,8 @@ Run the same app on a computer or server your team controls:
 - Node.js + Express, a **SQLite** database and screenshots on the **local
   disk**, packaged with **Docker Compose**.
 - Accounts, teams, roles (owner/admin/member), invites, assignment, and optional
-  GitHub issue import (off in offline mode).
+  GitHub issue import (a team server's administrator turns it on with
+  `BUGSTOW_OFFLINE=false`; the installed app has it on).
 - **First-run protection:** creating the first administrator needs a one-time
   setup token printed in the server log.
 - **HTTPS on your LAN** with a certificate generated locally (recommended

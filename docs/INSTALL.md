@@ -52,6 +52,11 @@ isn't running yet) and opens it in your browser. You can also bookmark http://lo
 
 BugsTow doesn't start by itself when you turn the computer on. Open it when you need it.
 
+**Bring in your GitHub issues:** click **Import from GitHub** and paste the repository link.
+There's nothing to set up first. Private repositories need a read-only key; the dialog shows
+how to make one. BugsTow only contacts GitHub at the moment you import. (To forbid it
+entirely, put `BUGSTOW_OFFLINE=true` in `bugstow.env` and run `bugstow restart`.)
+
 ## Where your data is
 
 | System | Data folder |

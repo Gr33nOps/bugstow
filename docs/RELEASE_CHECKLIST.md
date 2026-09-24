@@ -25,6 +25,17 @@ browser or computer for the teammate.
 | D8 | `bugstow start --lan`, open the printed address on a phone on the same Wi-Fi | Certificate warning once; after accepting, sign in and see the issues | |
 | D9 | `bugstow uninstall` | Shortcuts and the command are gone; the data folder is still there | |
 
+## GitHub import
+
+| # | Check | Expected | PASS/FAIL |
+|---|---|---|---|
+| G1 | Installed app, fresh: click **Import from GitHub** (sidebar or empty inbox), paste a public repo link | Issues arrive in a new project named after the repo; each shows "#N on GitHub" | |
+| G2 | Import the same repo again | "Everything … is already here"; no duplicates | |
+| G3 | Close an issue on GitHub, import again with "Also bring in closed issues" | That issue moves to Fixed | |
+| G4 | Paste a private repo | The dialog shows the key steps; "Create a key on GitHub" opens GitHub's key page with the name, 90-day expiry and Issues: Read-only filled in | |
+| G5 | Paste the key and import | Issues arrive; the key isn't shown again after closing the dialog | |
+| G6 | Same in "In a folder on this PC" (server) mode, top-bar **Import from GitHub** | Same results | |
+
 ## Personal mode
 
 | # | Check | Expected | PASS/FAIL |

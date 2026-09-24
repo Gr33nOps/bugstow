@@ -15,7 +15,7 @@ import {
   Command,
 } from 'lucide-react'
 import type { Tab, Project } from '../../types'
-import { BugstowLogoIcon, BRAND_PRIMARY } from '../common/Icon'
+import { BugstowLogoIcon, BRAND_PRIMARY, GithubMark } from '../common/Icon'
 import { shortcut } from '../../lib/platform'
 
 interface SidebarProps {
@@ -27,6 +27,7 @@ interface SidebarProps {
   activeProjectFilterId?: string | null
   onSelectProjectFilter: (projectId: string | null) => void
   onNewIssue: () => void
+  onImportGithub?: () => void
   onCreateProject?: () => void
   collapsed?: boolean
   onToggleCollapse?: () => void
@@ -42,6 +43,7 @@ export function Sidebar({
   activeProjectFilterId,
   onSelectProjectFilter,
   onNewIssue,
+  onImportGithub,
   onCreateProject,
   collapsed = false,
   onToggleCollapse,
@@ -75,6 +77,17 @@ export function Sidebar({
           >
             <Plus size={20} strokeWidth={2.5} />
           </button>
+          {onImportGithub && (
+            <button
+              type="button"
+              onClick={onImportGithub}
+              aria-label="Import from GitHub"
+              title="Import from GitHub"
+              className="w-11 h-11 -mt-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
+            >
+              <GithubMark size={18} />
+            </button>
+          )}
 
           <div className="w-8 h-px bg-slate-200 dark:bg-slate-800" />
 
@@ -180,6 +193,16 @@ export function Sidebar({
             </div>
             <kbd className="px-2 py-0.5 rounded-md bg-white/20 text-xs font-mono text-white/90">{shortcut('K')}</kbd>
           </button>
+          {onImportGithub && (
+            <button
+              type="button"
+              onClick={onImportGithub}
+              className="mt-2 w-full flex items-center gap-2.5 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+            >
+              <GithubMark size={16} />
+              <span>Import from GitHub</span>
+            </button>
+          )}
         </div>
 
         {/* Primary Navigation */}

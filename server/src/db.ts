@@ -73,8 +73,12 @@ export function migrateAppSchema(): void {
     create index if not exists issues_team_idx on issues(team_id);
     create index if not exists issues_project_idx on issues(project_id);
     create index if not exists issues_status_idx on issues(status);
-    create unique index if not exists issues_team_github_idx
-      on issues(team_id, github_number) where github_number is not null;
+    -- One copy of each GitHub issue per team, matched by its full link. (Until
+    -- 2.3 this was the issue number alone, so a second repository's #1, #2...
+    -- were skipped as duplicates. Only the index changes; no rows are touched.)
+    drop index if exists issues_team_github_idx;
+    create unique index if not exists issues_team_github_url_idx
+      on issues(team_id, github_url) where github_url is not null;
 
     create table if not exists screenshots (
       id text primary key,

@@ -10,6 +10,14 @@ import { restoreBackupData, type BackupData } from '../services/backupService'
 import { clearAllData as clearAllDataStores } from '../storage/db'
 import { notifyLocalChange } from '../sync/events'
 import { syncStore } from '../sync/store'
+import {
+  fetchGithubIssues,
+  planImport,
+  projectColorFor,
+  type GithubRepoRef,
+  type ImportSummary,
+  type ImportTarget,
+} from '../services/githubImport'
 
 export function useBugstowData() {
   const [issues, setIssues] = useState<Issue[]>([])
@@ -269,6 +277,39 @@ export function useBugstowData() {
     notifyLocalChange()
   }, [projectRepo])
 
+  // Import issues from a GitHub repository, straight from the browser. The
+  // project is only created once GitHub has answered, so a failed import
+  // leaves nothing behind. Re-importing adds new issues and follows GitHub's
+  // open/closed state for ones imported before; local edits are kept.
+  const importGithubIssues = useCallback(async (
+    repo: GithubRepoRef,
+    opts: { token?: string; includeClosed: boolean; target: ImportTarget }
+  ): Promise<ImportSummary> => {
+    const incoming = await fetchGithubIssues(repo, { token: opts.token, includeClosed: opts.includeClosed })
+    const plan = planImport(await issueRepo.getAll(), incoming)
+    let projectId: string | null = null
+    if (opts.target.kind === 'existing') projectId = opts.target.id
+    if (opts.target.kind === 'new' && plan.create.length > 0) {
+      projectId = (await projectRepo.create(opts.target.name, projectColorFor(opts.target.name))).id
+    }
+    // Oldest first, so the newest GitHub issue ends up at the top of the inbox.
+    for (const gh of [...plan.create].reverse()) {
+      await issueRepo.create({
+        title: gh.title,
+        description: gh.body,
+        type: gh.type,
+        status: gh.closed ? 'fixed' : 'open',
+        projectId,
+        githubUrl: gh.url,
+        githubNumber: gh.number,
+      })
+    }
+    for (const change of plan.setStatus) await issueRepo.update(change.id, { status: change.status })
+    await refreshData()
+    if (plan.create.length || plan.setStatus.length) notifyLocalChange()
+    return { imported: plan.create.length, updated: plan.setStatus.length, unchanged: plan.unchanged, projectId }
+  }, [issueRepo, projectRepo, refreshData])
+
   // Clear all data
   const clearAllData = useCallback(async (): Promise<void> => {
     // Wipe the underlying IndexedDB stores first, then reset local state.
@@ -316,6 +357,7 @@ export function useBugstowData() {
     createProject,
     updateProject,
     deleteProject,
+    importGithubIssues,
     clearAllData,
     restoreBackup,
     dismissBackupReminder,

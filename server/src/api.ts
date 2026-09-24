@@ -631,6 +631,8 @@ api.delete(
 )
 
 // ── GitHub import ────────────────────────────────────────────────────────────────
+// Same behaviour and error codes as the browser-side import in
+// src/services/githubImport.ts, so the dialog works the same everywhere.
 interface GhIssue {
   number: number
   title: string
@@ -646,13 +648,32 @@ function mapType(labels: Array<{ name?: string } | string>): 'bug' | 'uiux' | 'i
   if (names.some(n => /(feature|enhancement|idea|proposal|request)/.test(n))) return 'idea'
   return 'bug'
 }
+/** What the person should do next, from GitHub's answer. */
+function githubErrorCode(status: number, rateRemaining: string | null, hadToken: boolean): string {
+  if (status === 403 || status === 429) {
+    if (rateRemaining === '0' || status === 429) return hadToken ? 'RATE_LIMITED' : 'NEEDS_TOKEN'
+    return hadToken ? 'BAD_TOKEN' : 'NEEDS_TOKEN'
+  }
+  if (status === 401) return hadToken ? 'BAD_TOKEN' : 'NEEDS_TOKEN'
+  if (status === 404) return hadToken ? 'NOT_FOUND' : 'NEEDS_TOKEN'
+  return 'NETWORK'
+}
+const GITHUB_ERROR_TEXT: Record<string, string> = {
+  NEEDS_TOKEN: 'GitHub needs a key to show this repository’s issues. It’s probably private.',
+  BAD_TOKEN: 'GitHub didn’t accept that key for this repository.',
+  NOT_FOUND: 'GitHub couldn’t find this repository with that key.',
+  RATE_LIMITED: 'GitHub asked to slow down. Wait a few minutes and try again.',
+  NETWORK: 'Couldn’t reach GitHub.',
+}
+const GITHUB_MAX_PAGES = 10
 
 api.post(
   '/github-import',
   asyncRoute(async (req, res) => {
     if (config.offline) {
       res.status(403).json({
-        error: 'GitHub import is disabled in offline mode. Set BUGSTOW_OFFLINE=false to enable it.',
+        code: 'OFFLINE',
+        error: 'Internet features are turned off on this BugsTow server (BUGSTOW_OFFLINE=false turns them on).',
       })
       return
     }
@@ -666,74 +687,98 @@ api.post(
       .replace(/^https?:\/\/github\.com\//, '')
       .replace(/\.git$/, '')
     if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) || repo.includes('..')) {
-      res.status(400).json({ error: 'Repo must be in the form "owner/name".' })
+      res.status(400).json({ code: 'INVALID_REPO', error: 'Repo must be in the form "owner/name".' })
       return
     }
-    const headers: Record<string, string> = {
-      Accept: 'application/vnd.github+json',
-      'User-Agent': 'bugstow-import',
-      'X-GitHub-Api-Version': '2022-11-28',
-    }
-    const token = String(req.body?.token || '').trim()
-    if (token) headers.Authorization = `Bearer ${token}`
-    const state = req.body?.includeClosed === false ? 'open' : 'all'
     const projectId = req.body?.projectId || null
     if (!projectInTeam(projectId, teamId)) {
       res.status(400).json({ error: 'Project is not part of this team.' })
       return
     }
+    const newProjectName = String(req.body?.newProjectName || '').trim().slice(0, 120)
 
-    const insert = db.prepare(
-      `insert or ignore into issues (id, team_id, project_id, title, description, type, status, created_by, github_url, github_number, created_at, updated_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    let imported = 0
-    let skipped = 0
+    const token = String(req.body?.token || '').trim()
+    const headers: Record<string, string> = {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'bugstow-import',
+      'X-GitHub-Api-Version': '2022-11-28',
+    }
+    if (token) headers.Authorization = `Bearer ${token}`
+    const state = req.body?.includeClosed === true ? 'all' : 'open'
+
+    // Read everything from GitHub first, so a failure part-way leaves nothing behind.
+    const incoming: GhIssue[] = []
     try {
-      for (let page = 1; page <= 5; page++) {
+      for (let page = 1; page <= GITHUB_MAX_PAGES; page++) {
         const url = `https://api.github.com/repos/${repo}/issues?state=${state}&per_page=100&page=${page}`
         const resp = await fetch(url, { headers })
-        if (resp.status === 401 || resp.status === 403) {
-          res.status(400).json({ error: 'GitHub rejected the request. Check the token and its access.' })
-          return
-        }
-        if (resp.status === 404) {
-          res.status(404).json({ error: 'Repository not found (or no access).' })
-          return
-        }
         if (!resp.ok) {
-          res.status(502).json({ error: `GitHub error (${resp.status}).` })
+          const code = githubErrorCode(resp.status, resp.headers.get('x-ratelimit-remaining'), Boolean(token))
+          res.status(code === 'NETWORK' ? 502 : 400).json({ code, error: GITHUB_ERROR_TEXT[code] })
           return
         }
         const batch = (await resp.json()) as GhIssue[]
         if (!Array.isArray(batch) || batch.length === 0) break
-        const ts = now()
-        for (const gh of batch) {
-          if (gh.pull_request) continue
-          const result = insert.run(
-            randomUUID(),
-            teamId,
-            projectId,
-            gh.title || `#${gh.number}`,
-            gh.body || '',
-            mapType(gh.labels || []),
-            gh.state === 'closed' ? 'fixed' : 'open',
-            req.user!.id,
-            gh.html_url,
-            gh.number,
-            ts,
-            ts
-          )
-          if (result.changes > 0) imported++
-          else skipped++
-        }
+        incoming.push(...batch.filter(gh => !gh.pull_request))
         if (batch.length < 100) break
       }
     } catch (err) {
-      console.error('GitHub import failed:', err)
-      res.status(502).json({ error: 'Could not reach GitHub.' })
+      console.error('GitHub import failed:', err instanceof Error ? err.message : err)
+      res.status(502).json({ code: 'NETWORK', error: GITHUB_ERROR_TEXT.NETWORK })
       return
     }
-    res.json({ imported, skipped })
+
+    // New issues are added; ones imported before only follow GitHub's
+    // open/closed state (titles and notes edited here are kept).
+    const findExisting = db.prepare('select id, status from issues where team_id = ? and github_url = ?')
+    const insert = db.prepare(
+      `insert into issues (id, team_id, project_id, title, description, type, status, created_by, github_url, github_number, created_at, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    const setStatus = db.prepare('update issues set status = ?, updated_at = ? where id = ?')
+    const result = db.transaction(() => {
+      let target = projectId as string | null
+      let imported = 0
+      let updated = 0
+      let unchanged = 0
+      const isNew = incoming.filter(gh => !findExisting.get(teamId, gh.html_url))
+      if (!target && newProjectName && isNew.length > 0) {
+        target = randomUUID()
+        const ts = now()
+        db.prepare(
+          'insert into projects (id, team_id, name, color, description, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)'
+        ).run(target, teamId, newProjectName, '#5B50F6', `Imported from github.com/${repo}`, ts, ts)
+      }
+      // Oldest first, so the newest GitHub issue is at the top.
+      for (const gh of [...incoming].reverse()) {
+        const status = gh.state === 'closed' ? 'fixed' : 'open'
+        const existing = findExisting.get(teamId, gh.html_url) as { id: string; status: string } | undefined
+        if (existing) {
+          if (existing.status !== status) {
+            setStatus.run(status, now(), existing.id)
+            updated++
+          } else unchanged++
+          continue
+        }
+        const ts = now()
+        insert.run(
+          randomUUID(),
+          teamId,
+          target,
+          gh.title || `#${gh.number}`,
+          gh.body || '',
+          mapType(gh.labels || []),
+          status,
+          req.user!.id,
+          gh.html_url,
+          gh.number,
+          ts,
+          ts
+        )
+        imported++
+      }
+      return { imported, updated, unchanged, projectId: target }
+    })()
+    res.json(result)
   })
 )

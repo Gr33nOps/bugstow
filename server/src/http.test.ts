@@ -229,3 +229,85 @@ test('repeated failed sign-ins are throttled', async () => {
   }
   assert.ok(throttled, 'password guessing hits the limit')
 })
+
+// ── GitHub import, against a stand-in for api.github.com ────────────────────
+type FakeIssue = { number: number; title: string; state: 'open' | 'closed'; pull_request?: object; labels?: object[] }
+const fakeRepos: Record<string, { private?: boolean; issues: FakeIssue[] }> = {
+  'acme/web': {
+    issues: [
+      { number: 2, title: 'Checkout overlaps footer', state: 'open', labels: [{ name: 'design' }] },
+      { number: 1, title: 'Login fails', state: 'open' },
+      { number: 3, title: 'A pull request', state: 'open', pull_request: {} },
+    ],
+  },
+  'acme/api': { issues: [{ number: 1, title: 'Timeout on /orders', state: 'open' }] },
+  'acme/secret': { private: true, issues: [{ number: 7, title: 'Private bug', state: 'open' }] },
+}
+const realFetch = globalThis.fetch
+function withFakeGithub() {
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
+    if (url.hostname !== 'api.github.com') return realFetch(input, init)
+    const auth = new Headers(init?.headers).get('authorization')
+    const m = /^\/repos\/([^/]+\/[^/]+)\/issues$/.exec(url.pathname)
+    const repo = m ? fakeRepos[m[1]] : undefined
+    if (auth && auth !== 'Bearer good-key') return new Response('{}', { status: 401 })
+    if (!repo || (repo.private && !auth)) return new Response('{}', { status: 404 })
+    const state = url.searchParams.get('state')
+    const list = repo.issues
+      .filter(i => state === 'all' || i.state === 'open')
+      .map(i => ({ ...i, body: '', html_url: `https://github.com/${m![1]}/issues/${i.number}` }))
+    return Response.json(url.searchParams.get('page') === '1' ? list : [])
+  }) as typeof fetch
+}
+const imp = (body: Record<string, unknown>) => A('/api/github-import', { method: 'POST', body: { teamId, ...body } })
+
+test('GitHub import: a team server with internet features off says so', async () => {
+  const { config } = await import('./config.ts')
+  assert.equal(config.offline, true, 'team servers default to offline')
+  const r = await imp({ repo: 'acme/web' })
+  assert.equal(r.status, 403)
+  assert.equal(r.data.code, 'OFFLINE')
+  config.offline = false
+  withFakeGithub()
+})
+
+test('GitHub import: a public repository imports into a new project, pull requests left out', async () => {
+  const r = await imp({ repo: 'https://github.com/acme/web', newProjectName: 'web' })
+  assert.equal(r.status, 200, JSON.stringify(r.data))
+  assert.equal(r.data.imported, 2)
+  assert.ok(r.data.projectId)
+  const projects = (await A(`/api/projects?teamId=${teamId}`)).data.projects as Array<{ id: string; name: string }>
+  assert.ok(projects.some(p => p.id === r.data.projectId && p.name === 'web'))
+  const issues = (await A(`/api/issues?teamId=${teamId}`)).data.issues as Array<{ title: string; type: string; github_url: string }>
+  assert.equal(issues.find(i => i.title === 'Checkout overlaps footer')?.type, 'uiux', 'labels pick the type')
+  assert.ok(!issues.some(i => i.title === 'A pull request'))
+})
+
+test('GitHub import: importing again adds nothing new and follows GitHub open/closed', async () => {
+  const again = await imp({ repo: 'acme/web' })
+  assert.deepEqual([again.data.imported, again.data.updated, again.data.unchanged], [0, 0, 2])
+  fakeRepos['acme/web'].issues[1].state = 'closed'
+  const closed = await imp({ repo: 'acme/web', includeClosed: true })
+  assert.deepEqual([closed.data.imported, closed.data.updated], [0, 1])
+  const issues = (await A(`/api/issues?teamId=${teamId}`)).data.issues as Array<{ title: string; status: string }>
+  assert.equal(issues.find(i => i.title === 'Login fails')?.status, 'fixed')
+})
+
+test('GitHub import: another repository with the same issue numbers is not skipped', async () => {
+  const r = await imp({ repo: 'acme/api' })
+  assert.equal(r.data.imported, 1, 'acme/api #1 is a different issue from acme/web #1')
+})
+
+test('GitHub import: a private repository asks for a key, and a failed import leaves no project', async () => {
+  const before = (await A(`/api/projects?teamId=${teamId}`)).data.projects.length
+  const noKey = await imp({ repo: 'acme/secret', newProjectName: 'secret' })
+  assert.equal(noKey.status, 400)
+  assert.equal(noKey.data.code, 'NEEDS_TOKEN')
+  const badKey = await imp({ repo: 'acme/secret', token: 'wrong' })
+  assert.equal(badKey.data.code, 'BAD_TOKEN')
+  assert.equal((await A(`/api/projects?teamId=${teamId}`)).data.projects.length, before)
+  const ok = await imp({ repo: 'acme/secret', token: 'good-key', newProjectName: 'secret' })
+  assert.equal(ok.data.imported, 1)
+  globalThis.fetch = realFetch
+})

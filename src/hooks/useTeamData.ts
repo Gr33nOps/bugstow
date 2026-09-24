@@ -216,9 +216,15 @@ export function useTeamData(signedIn: boolean) {
   )
 
   const importGithub = useCallback(
-    async (repo: string, token: string, projectId: string | null, includeClosed: boolean) => {
+    async (params: {
+      repo: string
+      token: string
+      projectId: string | null
+      newProjectName?: string
+      includeClosed: boolean
+    }) => {
       if (!activeTeamId) throw new Error('No team selected.')
-      const result = await api.importGithubIssues({ teamId: activeTeamId, projectId, repo, token, includeClosed })
+      const result = await api.importGithubIssues({ teamId: activeTeamId, ...params })
       await refreshTeamData(activeTeamId)
       return result
     },

@@ -28,6 +28,8 @@ import { useTeamData } from '../../hooks/useTeamData'
 import { signOut, authClient } from '../../lib/authClient'
 import { getMe, resetUserPassword, IssueConflictError, listBackups, runBackupNow, type BackupStatus } from '../../services/teamApi'
 import { connectionKind } from '../../lib/connection'
+import { GithubImportModal } from '../features/github/GithubImportModal'
+import { GithubMark } from '../common/Icon'
 import { isDesktopEdition } from '../../lib/teamServer'
 import { generateIssuePrompt } from '../../services/promptService'
 import { validateBackupStructure, decryptBackup } from '../../services/backupService'
@@ -242,15 +244,14 @@ function Workspace({ onUseLocal, userLabel, offline = false, me }: TeamAppProps 
 
         <div className="flex-1" />
 
-        {!offline && (
-          <button
-            type="button"
-            onClick={() => setShowImport(true)}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
-          >
-            <GitBranch size={16} /> Import
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setShowImport(true)}
+          aria-label="Import from GitHub"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
+        >
+          <GithubMark size={16} /> <span className="hidden sm:inline">Import from GitHub</span>
+        </button>
         <button
           type="button"
           onClick={() => setShowMembers(true)}
@@ -320,13 +321,22 @@ function Workspace({ onUseLocal, userLabel, offline = false, me }: TeamAppProps 
           ) : filtered.length === 0 ? (
             <div className="p-8 flex flex-col items-center gap-3 text-center text-sm text-slate-500 dark:text-slate-400">
               No issues here yet.
-              <button
-                type="button"
-                onClick={() => setShowNew(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-xl bg-[#5B50F6] hover:bg-[#4E44E6] text-white"
-              >
-                <Plus size={15} /> New Issue
-              </button>
+              <div className="flex flex-wrap justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNew(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-xl bg-[#5B50F6] hover:bg-[#4E44E6] text-white"
+                >
+                  <Plus size={15} /> New Issue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowImport(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  <GithubMark size={15} /> Import from GitHub
+                </button>
+              </div>
             </div>
           ) : (
             filtered.map(issue => (
@@ -414,11 +424,20 @@ function Workspace({ onUseLocal, userLabel, offline = false, me }: TeamAppProps 
         />
       )}
       {showImport && (
-        <ImportModal
+        <GithubImportModal
           projects={projects}
-          onImport={data.importGithub}
           onClose={() => setShowImport(false)}
-          onToast={notify}
+          onImport={async req => {
+            const r = await data.importGithub({
+              repo: req.repo.full,
+              token: req.token || '',
+              includeClosed: req.includeClosed,
+              projectId: req.target.kind === 'existing' ? req.target.id : null,
+              newProjectName: req.target.kind === 'new' ? req.target.name : undefined,
+            })
+            if (r.imported || r.updated) notify(`Imported from ${req.repo.full}`)
+            return r
+          }}
         />
       )}
       {showMigrate && activeTeamId && (
@@ -1574,97 +1593,6 @@ function formatBackupName(name: string): string {
   const iso = name.replace(/T(\d\d)-(\d\d)-(\d\d)-(\d{3})Z$/, 'T$1:$2:$3.$4Z')
   const d = new Date(iso)
   return Number.isNaN(d.getTime()) ? name : d.toLocaleString()
-}
-
-function ImportModal({
-  projects,
-  onImport,
-  onClose,
-  onToast,
-}: {
-  projects: { id: string; name: string }[]
-  onImport: (repo: string, token: string, projectId: string | null, includeClosed: boolean) => Promise<{ imported: number; skipped: number }>
-  onClose: () => void
-  onToast: (m: string) => void
-}) {
-  const [repo, setRepo] = useState('')
-  const [token, setToken] = useState('')
-  const [projectId, setProjectId] = useState('')
-  const [includeClosed, setIncludeClosed] = useState(true)
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
-
-  return (
-    <ModalShell onClose={onClose}>
-      <form
-        onSubmit={async e => {
-          e.preventDefault()
-          if (!/^[^/]+\/[^/]+$/.test(repo.trim().replace(/^https?:\/\/github\.com\//, ''))) {
-            setErr('Enter a repo as owner/name.')
-            return
-          }
-          setBusy(true)
-          setErr(null)
-          try {
-            const r = await onImport(repo.trim(), token.trim(), projectId || null, includeClosed)
-            onToast(`Imported ${r.imported}, skipped ${r.skipped}`)
-            onClose()
-          } catch (e2) {
-            setErr(e2 instanceof Error ? e2.message : 'Import failed.')
-          } finally {
-            setBusy(false)
-          }
-        }}
-        className="flex flex-col gap-3.5"
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold flex items-center gap-2">
-            <GitBranch size={18} /> Import from GitHub
-          </h3>
-          <button type="button" onClick={onClose} className="text-slate-400">
-            <X size={16} />
-          </button>
-        </div>
-        <div className="flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400">
-          <WifiOff size={12} /> Online-only feature — this reaches GitHub over the internet.
-        </div>
-        {err && (
-          <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-700 dark:text-red-300">
-            {err}
-          </div>
-        )}
-        <input
-          value={repo}
-          onChange={e => setRepo(e.target.value)}
-          placeholder="owner/repository"
-          className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-[#5B50F6]"
-        />
-        <input
-          value={token}
-          onChange={e => setToken(e.target.value)}
-          type="password"
-          placeholder="GitHub token (required for private repos)"
-          className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-[#5B50F6]"
-        />
-        <select value={projectId} onChange={e => setProjectId(e.target.value)} className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
-          <option value="">Import into: No project</option>
-          {projects.map(p => (
-            <option key={p.id} value={p.id}>Import into: {p.name}</option>
-          ))}
-        </select>
-        <label className="flex items-center gap-2 text-xs text-slate-500">
-          <input type="checkbox" checked={includeClosed} onChange={e => setIncludeClosed(e.target.checked)} />
-          Include closed issues (as Fixed)
-        </label>
-        <p className="text-[11px] text-slate-400">
-          The token is sent only with this request to read issues, and is never stored. A fine-grained token with read-only Issues access is enough.
-        </p>
-        <button type="submit" disabled={busy} className="w-full py-2.5 text-sm font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] rounded-xl disabled:opacity-50">
-          {busy ? 'Importing…' : 'Import issues'}
-        </button>
-      </form>
-    </ModalShell>
-  )
 }
 
 // ── Migrate personal data into the team ──────────────────────────────────────

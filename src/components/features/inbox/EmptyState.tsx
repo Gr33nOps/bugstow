@@ -1,13 +1,15 @@
 import React from 'react'
 import { Plus } from 'lucide-react'
 import { shortcut } from '../../../lib/platform'
-import { EmptyStateIllustration, BRAND_PRIMARY } from '../../common/Icon'
+import { EmptyStateIllustration, BRAND_PRIMARY, GithubMark } from '../../common/Icon'
 
 interface EmptyStateProps {
   heading?: string
   subheading?: string
   actionLabel?: string
   onAction?: () => void
+  /** Second way to fill an empty list: bring issues in from GitHub. */
+  onImportGithub?: () => void
   showShortcutHint?: boolean
 }
 
@@ -16,6 +18,7 @@ export function EmptyState({
   subheading = 'Capture bugs, feedback or ideas while you build.',
   actionLabel = 'Capture Issue',
   onAction,
+  onImportGithub,
   showShortcutHint = true,
 }: EmptyStateProps) {
   return (
@@ -25,18 +28,32 @@ export function EmptyState({
         <EmptyStateIllustration size={68} color={BRAND_PRIMARY} />
       </div>
 
-      <h3 className="text-[22px] font-bold text-gray-900 tracking-tight mb-2">{heading}</h3>
+      <h3 className="text-[22px] font-bold text-gray-900 dark:text-white tracking-tight mb-2">{heading}</h3>
       <p className="text-[14px] text-gray-400 mb-6 max-w-sm leading-relaxed">{subheading}</p>
 
-      {onAction && (
-        <button
-          type="button"
-          onClick={onAction}
-          className="flex items-center gap-2 px-5 py-2.5 text-[14px] font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] active:bg-[#4338CA] rounded-xl transition-all shadow-sm active:scale-98"
-        >
-          <Plus size={16} strokeWidth={2.5} />
-          <span>{actionLabel}</span>
-        </button>
+      {(onAction || onImportGithub) && (
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          {onAction && (
+            <button
+              type="button"
+              onClick={onAction}
+              className="flex items-center gap-2 px-5 py-2.5 text-[14px] font-semibold text-white bg-[#5B50F6] hover:bg-[#4E44E6] active:bg-[#4338CA] rounded-xl transition-all shadow-sm active:scale-98"
+            >
+              <Plus size={16} strokeWidth={2.5} />
+              <span>{actionLabel}</span>
+            </button>
+          )}
+          {onImportGithub && (
+            <button
+              type="button"
+              onClick={onImportGithub}
+              className="flex items-center gap-2 px-5 py-2.5 text-[14px] font-semibold text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+            >
+              <GithubMark size={16} />
+              <span>Import from GitHub</span>
+            </button>
+          )}
+        </div>
       )}
 
       {onAction && showShortcutHint && (
