@@ -42,7 +42,12 @@ export async function createApp(): Promise<express.Express> {
           .replace(
             '<head>',
             '<head>\n    <meta name="bugstow-server" content="team" />' +
-              (config.desktop ? '\n    <meta name="bugstow-edition" content="desktop" />' : '')
+              (config.desktop ? '\n    <meta name="bugstow-edition" content="desktop" />' : '') +
+              // Checked against a strict pattern in config.ts, so safe in an attribute.
+              (config.googleClientId
+                ? `\n    <meta name="bugstow-google-client-id" content="${config.googleClientId}" />`
+                : '') +
+              (config.dropboxAppKey ? `\n    <meta name="bugstow-dropbox-app-key" content="${config.dropboxAppKey}" />` : '')
           )
       : null
 

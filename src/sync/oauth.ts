@@ -3,13 +3,24 @@
  * server involved). Uses a full-page redirect rather than a popup so it also
  * works in installed apps on phones.
  *
- * The site owner registers a free OAuth app with each provider and builds the
- * site with its client ID (not a secret): VITE_GOOGLE_CLIENT_ID and
- * VITE_DROPBOX_CLIENT_ID. See docs/CLOUD_SYNC.md.
+ * The maintainer registers a free OAuth app with each provider; its client ID
+ * is not a secret. It comes from, in order:
+ *  1. the BugsTow server serving this page (BUGSTOW_GOOGLE_CLIENT_ID /
+ *     BUGSTOW_DROPBOX_APP_KEY, e.g. in the installed app's bugstow.env), which
+ *     lets anyone use their own registration without rebuilding;
+ *  2. the build (VITE_GOOGLE_CLIENT_ID / VITE_DROPBOX_CLIENT_ID, .env.production).
+ * See docs/CLOUD_SYNC.md.
  */
 
-export const GOOGLE_CLIENT_ID: string = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
-export const DROPBOX_CLIENT_ID: string = import.meta.env.VITE_DROPBOX_CLIENT_ID || ''
+function fromServer(name: string): string {
+  if (typeof document === 'undefined') return ''
+  return document.querySelector(`meta[name="${name}"]`)?.getAttribute('content')?.trim() || ''
+}
+
+export const GOOGLE_CLIENT_ID: string =
+  fromServer('bugstow-google-client-id') || import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
+export const DROPBOX_CLIENT_ID: string =
+  fromServer('bugstow-dropbox-app-key') || import.meta.env.VITE_DROPBOX_CLIENT_ID || ''
 
 const PENDING_KEY = 'bugstow_oauth_pending'
 export const CALLBACK_PATH = '/oauth/callback'

@@ -219,14 +219,15 @@ function lastLogLines(n = 25) {
 
 /**
  * Optional server settings in <home>/bugstow.env (KEY=VALUE lines, # comments),
- * for example encrypted backups to a cloud folder. Only BUGSTOW_BACKUP_* and
- * BUGSTOW_OFFLINE are used; the launcher manages everything else.
+ * for example encrypted backups to a cloud folder, or your own Google/Dropbox
+ * app IDs. Only BUGSTOW_BACKUP_*, BUGSTOW_OFFLINE, BUGSTOW_GOOGLE_CLIENT_ID and
+ * BUGSTOW_DROPBOX_APP_KEY are used; the launcher manages everything else.
  */
 const ENV_FILE = path.join(HOME, 'bugstow.env')
 function userSettings() {
   const out = {}
   for (const line of readText(ENV_FILE).split(/\r?\n/)) {
-    const m = /^\s*(BUGSTOW_BACKUP_[A-Z_]+|BUGSTOW_OFFLINE)\s*=\s*(.*?)\s*$/.exec(line)
+    const m = /^\s*(BUGSTOW_BACKUP_[A-Z_]+|BUGSTOW_OFFLINE|BUGSTOW_GOOGLE_CLIENT_ID|BUGSTOW_DROPBOX_APP_KEY)\s*=\s*(.*?)\s*$/.exec(line)
     if (m) out[m[1]] = m[2].replace(/^(['"])(.*)\1$/, '$2')
   }
   return out
