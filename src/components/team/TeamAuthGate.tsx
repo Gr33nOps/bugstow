@@ -3,6 +3,7 @@ import { Users, HardDrive, AlertCircle } from 'lucide-react'
 import { authClient } from '../../lib/authClient'
 import { ConnectionNotice } from './ConnectionNotice'
 import { isDesktopEdition } from '../../lib/teamServer'
+import { connectionKind, offersInviteSignUp } from '../../lib/connection'
 
 /** Must match SETUP_TOKEN_HEADER in server/src/setup.ts. */
 const SETUP_TOKEN_HEADER = 'x-bugstow-setup-token'
@@ -222,7 +223,8 @@ export function TeamAuthGate({
         </button>
 
         <div className="flex items-center justify-between text-xs">
-          {!firstRun && !desktop ? (
+          {/* Hidden only on the installed app when opened on its own computer, where nobody else can be joining. */}
+          {!firstRun && offersInviteSignUp(desktop, connectionKind()) ? (
             <button
               type="button"
               onClick={() => {

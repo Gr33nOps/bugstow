@@ -12,3 +12,13 @@ export function connectionKind(loc: Pick<Location, 'protocol' | 'hostname'> = wi
   }
   return loc.protocol === 'https:' ? 'lan-https' : 'lan-http'
 }
+
+/**
+ * Whether the sign-in screen offers "I was invited: create my account".
+ * The installed app opened on its own computer has nobody joining; anywhere
+ * else (a team server, or the installed app reached over the network with
+ * `bugstow start --lan`) an invited person needs it.
+ */
+export function offersInviteSignUp(desktopEdition: boolean, kind: ConnectionKind): boolean {
+  return !(desktopEdition && kind === 'localhost')
+}

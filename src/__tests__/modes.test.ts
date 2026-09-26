@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { readMode } from '../hooks/useAppMode'
-import { connectionKind } from '../lib/connection'
+import { connectionKind, offersInviteSignUp } from '../lib/connection'
 
 // Minimal localStorage for the node test environment.
 const store = new Map<string, string>()
@@ -35,6 +35,18 @@ describe('saved app mode', () => {
 
   it('shows the picker when nothing was chosen', () => {
     expect(readMode()).toBeNull()
+  })
+})
+
+describe('invited people can find the sign-up', () => {
+  it('is hidden only on the installed app opened on its own computer', () => {
+    expect(offersInviteSignUp(true, 'localhost')).toBe(false)
+    // Someone joining over the network (bugstow start --lan) must see it.
+    expect(offersInviteSignUp(true, 'lan-https')).toBe(true)
+    expect(offersInviteSignUp(true, 'lan-http')).toBe(true)
+    // A team server always offers it.
+    expect(offersInviteSignUp(false, 'localhost')).toBe(true)
+    expect(offersInviteSignUp(false, 'lan-https')).toBe(true)
   })
 })
 

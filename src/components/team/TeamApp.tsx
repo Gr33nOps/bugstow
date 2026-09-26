@@ -418,6 +418,7 @@ function Workspace({ onUseLocal, userLabel, offline = false, me }: TeamAppProps 
           members={members}
           invites={data.invites}
           onInvite={data.inviteMember}
+          onCancelInvite={data.cancelInvite}
           onRemove={data.removeMember}
           onClose={() => setShowMembers(false)}
           onToast={notify}
@@ -1103,6 +1104,7 @@ function MembersModal({
   members,
   invites,
   onInvite,
+  onCancelInvite,
   onRemove,
   onClose,
   onToast,
@@ -1112,6 +1114,7 @@ function MembersModal({
   members: TeamMember[]
   invites: { id: string; email: string; role: string }[]
   onInvite: (email: string, role: 'admin' | 'member') => Promise<void>
+  onCancelInvite: (inviteId: string) => Promise<void>
   onRemove: (userId: string) => Promise<void>
   onClose: () => void
   onToast: (m: string) => void
@@ -1185,8 +1188,26 @@ function MembersModal({
               </span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm truncate">{inv.email}</p>
-                <p className="text-[11px] text-amber-500">Pending invite · {inv.role}</p>
+                <p className="text-[11px] text-amber-600 dark:text-amber-400">Waiting for them to sign up · {inv.role}</p>
               </div>
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await onCancelInvite(inv.id)
+                      onToast('Invite cancelled')
+                    } catch (e) {
+                      onToast(e instanceof Error ? e.message : 'Failed')
+                    }
+                  }}
+                  aria-label={`Cancel invite for ${inv.email}`}
+                  title="Cancel invite"
+                  className="p-1 text-slate-400 hover:text-rose-600"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -1203,7 +1224,7 @@ function MembersModal({
               try {
                 await onInvite(email.trim(), inviteRole)
                 setEmail('')
-                onToast('Invited. They join when they sign up with that email.')
+                onToast('Invited. No email is sent: share the address shown below.')
               } catch (e2) {
                 onToast(e2 instanceof Error ? e2.message : 'Failed')
               } finally {
@@ -1227,12 +1248,68 @@ function MembersModal({
             </button>
           </form>
         )}
-        <p className="text-[11px] text-slate-400">
-          People with an existing account are added instantly. Others join when they sign up with that email; the
-          invite expires after 7 days.
-        </p>
+        {canManage && <HowTheyJoin onToast={onToast} />}
       </div>
     </ModalShell>
+  )
+}
+
+/**
+ * BugsTow never sends email (no internet service is involved), so an invite is
+ * only a name on a list. This says so, and gives the admin the address to send
+ * people themselves: the one thing they otherwise have no way to find.
+ */
+function HowTheyJoin({ onToast }: { onToast: (m: string) => void }) {
+  const address = window.location.origin
+  const onlyThisComputer = connectionKind() === 'localhost'
+  const desktop = isDesktopEdition()
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3.5 flex flex-col gap-2.5 text-sm">
+      <p className="font-semibold">BugsTow doesn't send invitation emails</p>
+      <p className="text-slate-600 dark:text-slate-300">
+        Send this address to the person yourself. They open it, choose <strong>I was invited: create my account</strong>,
+        and sign up with <strong>the same email you invited</strong>. That is how they join. (If they already have an
+        account here, they were added as soon as you invited them. Invites expire after 7 days.)
+      </p>
+      <div className="flex items-center gap-2">
+        <code className="flex-1 min-w-0 truncate px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+          {address}
+        </code>
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(address)
+              onToast('Address copied')
+            } catch {
+              onToast('Copy it from the box')
+            }
+          }}
+          className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+        >
+          Copy
+        </button>
+      </div>
+      {onlyThisComputer && (
+        <div
+          role="note"
+          className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200"
+        >
+          <strong>Nobody else can open this address.</strong> It only works on this computer.{' '}
+          {desktop ? (
+            <>
+              To let people on your Wi-Fi or office network join, run <code>bugstow start --lan</code> in a terminal, use
+              the address it prints instead, and keep this computer on. People on other networks can't reach it.
+            </>
+          ) : (
+            <>
+              Set <code>BUGSTOW_BASE_URL</code> to the server's network address (see docs/SELF_HOSTING.md), so teammates
+              can open it.
+            </>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 

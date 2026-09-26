@@ -206,6 +206,15 @@ export function useTeamData(signedIn: boolean) {
     [activeTeamId]
   )
 
+  const cancelInvite = useCallback(
+    async (inviteId: string) => {
+      if (!activeTeamId) throw new Error('No team selected.')
+      await api.cancelInvite(activeTeamId, inviteId)
+      setInvites(prev => prev.filter(i => i.id !== inviteId))
+    },
+    [activeTeamId]
+  )
+
   const removeMember = useCallback(
     async (userId: string) => {
       if (!activeTeamId) throw new Error('No team selected.')
@@ -261,6 +270,7 @@ export function useTeamData(signedIn: boolean) {
     deleteProject,
     inviteMember,
     removeMember,
+    cancelInvite,
     importGithub,
   }
 }
