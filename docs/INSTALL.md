@@ -110,6 +110,20 @@ network connect over HTTPS, at the address the command prints (for example
 
 `bugstow start --local` switches back.
 
+### Inviting people
+
+BugsTow **doesn't send invitation emails**: it has no email service, on purpose. An invite is a name
+on a list, so you send the person the address yourself.
+
+1. Run `bugstow start --lan` and open the address it prints (not `localhost`).
+2. **Members → Invite**: enter their email. (Someone who already has an account here is added
+   immediately.)
+3. Send them the address shown under the invite box (use **Copy**).
+4. They open it, choose **I was invited: create my account**, and sign up with **exactly the email you
+   invited**. Then they see your team. Invites expire after 7 days and can be cancelled from the list.
+
+The address only works for people on the same network as your PC, and only while your PC is on.
+For people elsewhere you need a server they can reach; see below.
 ## For a whole team
 
 To run BugsTow on a server for many people, use the Docker setup in

@@ -23,6 +23,7 @@ browser or computer for the teammate.
 | D6 | Disconnect from the internet and repeat D4 | Works the same | |
 | D7 | Run the install command again (update) | Finishes; data and sign-in unchanged | |
 | D8 | `bugstow start --lan`, open the printed address on a phone on the same Wi-Fi | Certificate warning once; after accepting, sign in and see the issues | |
+| D8b | With `--lan` running, invite a second person's email; open the address on their device, choose *I was invited: create my account* | They sign up with that email and see the team. An uninvited email is refused | |
 | D9 | `bugstow uninstall` | Shortcuts and the command are gone; the data folder is still there | |
 
 ## GitHub import
