@@ -1,0 +1,30 @@
+services:
+  bugstow:
+    build: .
+    image: bugstow:latest
+    container_name: bugstow
+    restart: unless-stopped
+    ports:
+      # host:container — change the host port if 8080 is taken.
+      - '8080:8080'
+    env_file:
+      - .env
+    volumes:
+      # SQLite database + screenshots persist here across restarts/upgrades.
+      - bugstow-data:/data
+      # Optional second backup copy on separate hardware (USB disk, other drive,
+      # NAS mount). Uncomment, point the left side at that folder, and set
+      # BUGSTOW_BACKUP_EXTERNAL_DIR=/backup-external in .env. See docs/RELEASE_OFFLINE.md §8.
+      # - /mnt/usb-backup/bugstow:/backup-external
+      # Optional: a folder your cloud desktop app syncs, for encrypted cloud backups
+      # (set BUGSTOW_BACKUP_CLOUD_DIR=/backup-cloud and the passphrase; docs/CLOUD_SYNC.md).
+      # - "/home/you/Dropbox/BugsTow backups:/backup-cloud"
+    healthcheck:
+      # Works over HTTP and HTTPS (BUGSTOW_TLS=true).
+      test: ['CMD', 'node', 'healthcheck.mjs']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  bugstow-data:

@@ -1,0 +1,286 @@
+#!/usr/bin/env node
+// Offline acceptance test for the Team edition.
+//
+// Drives TWO independent clients against a running team server:
+//   Client A = administrator (Computer A / the host)
+//   Client B = teammate      (Computer B / a LAN client)
+// Two clients against one server is exactly what two computers on a LAN do, so
+// this validates the real multi-user workflow: account creation, auth, teams,
+// projects, issues, screenshots, assignment, editing, deletion, permissions,
+// and backup. Restart-persistence is a separate manual step (see --verify).
+//
+//   node scripts/acceptance-test.mjs --url http://localhost:8080 --setup-token <token>
+//
+// Run against a FRESH server (no accounts yet). The setup token is printed in
+// the server log (or: docker exec bugstow npm run -s setup-token). It can also
+// be given as BUGSTOW_SETUP_TOKEN. Exit code 0 = all passed.
+//
+// TLS note: for a self-signed HTTPS server, run with
+//   NODE_TLS_REJECT_UNAUTHORIZED=0 node scripts/acceptance-test.mjs --url https://localhost:8080
+
+import { randomBytes } from 'node:crypto'
+
+const urlFlag = process.argv.indexOf('--url')
+const BASE = (urlFlag !== -1 && process.argv[urlFlag + 1]) || process.env.BUGSTOW_URL || 'http://localhost:8080'
+const tokenFlag = process.argv.indexOf('--setup-token')
+const SETUP_TOKEN = (tokenFlag !== -1 && process.argv[tokenFlag + 1]) || process.env.BUGSTOW_SETUP_TOKEN || ''
+if (!SETUP_TOKEN) {
+  console.error('Missing setup token. Pass --setup-token <token> (see the server log) or set BUGSTOW_SETUP_TOKEN.')
+  process.exit(2)
+}
+
+const PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMCAQGYR54AAAAASUVORK5CYII='
+
+// Throwaway credentials, generated per run (never real accounts).
+const newPassword = () => randomBytes(12).toString('base64url')
+const ADMIN_PW = newPassword()
+const BOB_PW = newPassword()
+const BOB_PW_2 = newPassword()
+
+let pass = 0
+let fail = 0
+function check(cond, label) {
+  if (cond) {
+    pass++
+    console.log(`  ✓ ${label}`)
+  } else {
+    fail++
+    console.log(`  ✗ ${label}`)
+  }
+}
+
+function client() {
+  const jar = {}
+  return async function req(path, opts = {}) {
+    // Browsers always send Origin; better-auth requires it (CSRF protection).
+    const headers = { Origin: BASE, ...(opts.headers || {}) }
+    const cookie = Object.entries(jar)
+      .map(([k, v]) => `${k}=${v}`)
+      .join('; ')
+    if (cookie) headers.Cookie = cookie
+    let body = opts.body
+    if (body && typeof body === 'object') {
+      headers['Content-Type'] = 'application/json'
+      body = JSON.stringify(body)
+    }
+    const res = await fetch(BASE + path, { ...opts, body, headers, redirect: 'manual' })
+    const setCookies = typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : []
+    for (const sc of setCookies) {
+      const pair = sc.split(';')[0]
+      const i = pair.indexOf('=')
+      if (i > 0) jar[pair.slice(0, i).trim()] = pair.slice(i + 1)
+    }
+    const ct = res.headers.get('content-type') || ''
+    let data = null
+    if (ct.includes('application/json')) {
+      try {
+        data = await res.json()
+      } catch {
+        /* ignore */
+      }
+    } else {
+      data = Buffer.from(await res.arrayBuffer())
+    }
+    return { status: res.status, data }
+  }
+}
+
+async function main() {
+  console.log(`\nBugstow offline acceptance test → ${BASE}\n`)
+
+  const A = client() // admin / Computer A
+  const B = client() // teammate / Computer B
+
+  // ── Health & offline audit ──────────────────────────────────────────────
+  const health = await A('/api/health')
+  check(health.status === 200 && health.data?.app === 'bugstow-team', 'server health responds')
+  check(health.data?.setupComplete === false, 'server is fresh (no accounts yet)')
+  const offline = health.data?.offline === true
+  console.log(`  · offline mode: ${offline ? 'ON' : 'off'}`)
+
+  // ── Account creation & authentication ────────────────────────────────────
+  const adminEmail = `admin+${Date.now()}@lan.local`
+  const intruder = await client()('/api/auth/sign-up/email', {
+    method: 'POST',
+    body: { email: `intruder+${Date.now()}@lan.local`, password: newPassword(), name: 'Intruder' },
+  })
+  check(intruder.status === 403, 'nobody can claim the fresh server without the setup token')
+  const su = await A('/api/auth/sign-up/email', {
+    method: 'POST',
+    body: { email: adminEmail, password: ADMIN_PW, name: 'Admin A' },
+    headers: { 'x-bugstow-setup-token': SETUP_TOKEN },
+  })
+  check(su.status === 200, 'admin account created with the setup token (first account = admin)')
+  const after = await A('/api/health')
+  check(after.data?.setupComplete === true, 'setup is complete; the token no longer works')
+  const me = await A('/api/teams')
+  check(me.status === 200, 'admin session authenticates')
+
+  // ── Team & project ────────────────────────────────────────────────────────
+  const team = await A('/api/teams', { method: 'POST', body: { name: 'LAN Team' } })
+  const teamId = team.data?.team?.id
+  check(!!teamId && team.data.team.role === 'owner', 'admin creates a team (owner)')
+  const proj = await A(`/api/projects?teamId=${teamId}`, {
+    method: 'POST',
+    body: { name: 'Website', color: '#3B82F6' },
+  })
+  const projectId = proj.data?.project?.id
+  check(!!projectId, 'admin creates a project')
+
+  // ── Issue + screenshot ──────────────────────────────────────────────────
+  const issue = await A(`/api/issues?teamId=${teamId}`, {
+    method: 'POST',
+    body: { title: 'Navbar overlaps on mobile', description: 'seen on iPhone', type: 'uiux', projectId },
+  })
+  const issueId = issue.data?.issue?.id
+  check(!!issueId, 'admin creates an issue')
+  const shot = await A(`/api/screenshots?issueId=${issueId}`, {
+    method: 'POST',
+    body: { base64: PNG, mimeType: 'image/png', filename: 'nav.png' },
+  })
+  const shotId = shot.data?.id
+  check(shot.status === 201 && !!shotId, 'admin uploads a screenshot')
+
+  // ── Invite + teammate joins ─────────────────────────────────────────────
+  const bobEmail = `bob+${Date.now()}@lan.local`
+  const invite = await A(`/api/members?teamId=${teamId}`, {
+    method: 'POST',
+    body: { email: bobEmail, role: 'member' },
+  })
+  check(invite.status === 201 && invite.data?.invited === true, 'admin invites teammate by email')
+  const bobSignup = await B('/api/auth/sign-up/email', {
+    method: 'POST',
+    body: { email: bobEmail, password: BOB_PW, name: 'Bob B' },
+  })
+  check(bobSignup.status === 200, 'teammate registers (invited) and auto-joins')
+  const bobTeams = await B('/api/teams')
+  check(
+    bobTeams.status === 200 && bobTeams.data?.teams?.some(t => t.id === teamId),
+    'teammate sees the shared team (Computer B)'
+  )
+
+  // ── Shared data visibility ──────────────────────────────────────────────
+  const bobIssues = await B(`/api/issues?teamId=${teamId}`)
+  const seen = bobIssues.data?.issues?.find(i => i.id === issueId)
+  check(!!seen, 'teammate sees the shared issue')
+  check(seen?.screenshot_count === 1, 'teammate sees the screenshot count')
+  const bobShot = await B(`/api/screenshots?id=${shotId}`)
+  check(bobShot.status === 200 && Buffer.isBuffer(bobShot.data) && bobShot.data.length > 0, 'teammate downloads the screenshot')
+
+  // ── Assignment + editing propagation ────────────────────────────────────
+  const members = await A(`/api/members?teamId=${teamId}`)
+  const bobId = members.data?.members?.find(m => m.email?.toLowerCase() === bobEmail.toLowerCase())?.user_id
+  check(!!bobId, 'admin sees teammate in members list')
+  const assign = await A(`/api/issues?id=${issueId}`, { method: 'PATCH', body: { assigneeId: bobId } })
+  check(assign.data?.issue?.assignee_id === bobId, 'admin assigns the issue to the teammate')
+  const bobSees = await B(`/api/issues?teamId=${teamId}`)
+  check(
+    bobSees.data?.issues?.find(i => i.id === issueId)?.assignee_id === bobId,
+    'teammate sees the assignment'
+  )
+  const stale = assign.data?.issue?.updated_at
+  const edit = await B(`/api/issues?id=${issueId}`, { method: 'PATCH', body: { status: 'fixed', expectedUpdatedAt: stale } })
+  check(edit.data?.issue?.status === 'fixed', 'teammate edits the issue (mark fixed)')
+  const adminSees = await A(`/api/issues?teamId=${teamId}`)
+  check(
+    adminSees.data?.issues?.find(i => i.id === issueId)?.status === 'fixed',
+    'admin sees the teammate’s edit'
+  )
+  const clash = await A(`/api/issues?id=${issueId}`, {
+    method: 'PATCH',
+    body: { title: 'Admin edit from an old screen', expectedUpdatedAt: stale },
+  })
+  check(
+    clash.status === 409 && clash.data?.code === 'CONFLICT' && clash.data?.issue?.status === 'fixed',
+    'a stale edit is refused (409) instead of overwriting the teammate’s change'
+  )
+  const csrf = await A('/api/teams', { method: 'POST', body: { name: 'x' }, headers: { Origin: 'http://evil.example' } })
+  check(csrf.status === 403, 'writes from another website are refused')
+
+  // ── Permissions / isolation ─────────────────────────────────────────────
+  const outsider = client()
+  await outsider('/api/auth/sign-up/email', {
+    method: 'POST',
+    body: { email: `x+${Date.now()}@lan.local`, password: newPassword(), name: 'X' },
+  }).catch(() => {})
+  const bobPrivate = await B('/api/teams', { method: 'POST', body: { name: 'Bob Private' } })
+  const bobTeamId = bobPrivate.data?.team?.id
+  const adminBlocked = await A(`/api/issues?teamId=${bobTeamId}`)
+  check(adminBlocked.status === 403, 'admin cannot read a team they are not a member of')
+
+  // ── Deletion ────────────────────────────────────────────────────────────
+  const del = await A(`/api/issues?id=${issueId}`, { method: 'DELETE' })
+  check(del.status === 200 && del.data?.removed === true, 'admin deletes the issue')
+  const afterDel = await B(`/api/issues?teamId=${teamId}`)
+  check(!afterDel.data?.issues?.some(i => i.id === issueId), 'teammate no longer sees the deleted issue')
+
+  // ── GitHub import gate ──────────────────────────────────────────────────
+  if (offline) {
+    const gh = await A('/api/github-import', { method: 'POST', body: { teamId, repo: 'Gr33nOps/bugstow' } })
+    check(gh.status === 403, 'GitHub import is refused in offline mode (graceful)')
+  }
+
+  // ── Backup ──────────────────────────────────────────────────────────────
+  const backup = await A('/api/admin/backup', { method: 'POST' })
+  check(backup.status === 201 && backup.data?.ok === true, 'a backup can be created')
+  const backups = await A('/api/admin/backups')
+  check((backups.data?.backups?.length ?? 0) >= 1, 'backups are listed')
+
+  // ── Server admin vs. regular member ─────────────────────────────────────
+  const adminMe = await A('/api/me')
+  check(adminMe.data?.isServerAdmin === true, 'first account is the server administrator')
+  const bobMe = await B('/api/me')
+  check(bobMe.data?.isServerAdmin === false, 'teammate is not a server administrator')
+  const bobBackup = await B('/api/admin/backup', { method: 'POST' })
+  check(bobBackup.status === 403, 'teammate cannot trigger a backup')
+  const bobReset = await B('/api/admin/users/reset-password', { method: 'POST', body: { userId: adminMe.data?.id } })
+  check(bobReset.status === 403, 'teammate cannot reset passwords')
+
+  // ── Cross-team references are rejected ──────────────────────────────────
+  const bobProj = await B(`/api/projects?teamId=${bobTeamId}`, { method: 'POST', body: { name: 'Private' } })
+  const foreignProject = await A(`/api/issues?teamId=${teamId}`, {
+    method: 'POST',
+    body: { title: 'x', projectId: bobProj.data?.project?.id },
+  })
+  check(foreignProject.status === 400, "issue cannot point at another team's project")
+  const foreignAssignee = await B(`/api/issues?teamId=${bobTeamId}`, {
+    method: 'POST',
+    body: { title: 'x', assigneeId: adminMe.data?.id },
+  })
+  check(foreignAssignee.status === 400, 'issue cannot be assigned to a non-member')
+
+  // ── Admin password reset (offline, no email) ────────────────────────────
+  const selfReset = await A('/api/admin/users/reset-password', { method: 'POST', body: { userId: adminMe.data?.id } })
+  check(selfReset.status === 400, 'admin is told to use "Change password" for their own account')
+  const reset = await A('/api/admin/users/reset-password', { method: 'POST', body: { userId: bobId } })
+  const temp = reset.data?.temporaryPassword
+  check(reset.status === 200 && typeof temp === 'string' && temp.length >= 16, 'admin resets the teammate’s password')
+  const kicked = await B('/api/teams')
+  check(kicked.status === 401, 'teammate’s existing session is signed out')
+  const oldPw = await B('/api/auth/sign-in/email', { method: 'POST', body: { email: bobEmail, password: BOB_PW } })
+  check(oldPw.status !== 200, 'old password no longer works')
+  const tempIn = await B('/api/auth/sign-in/email', { method: 'POST', body: { email: bobEmail, password: temp } })
+  check(tempIn.status === 200, 'teammate signs in with the temporary password')
+  const forced = await B('/api/me')
+  check(forced.data?.mustChangePassword === true, 'teammate must choose a new password')
+  const blocked = await B(`/api/issues?teamId=${teamId}`)
+  check(blocked.status === 403 && blocked.data?.code === 'PASSWORD_CHANGE_REQUIRED', 'app data is blocked until then')
+  const changed = await B('/api/auth/change-password', {
+    method: 'POST',
+    body: { currentPassword: temp, newPassword: BOB_PW_2, revokeOtherSessions: true }, // ggignore: runtime-generated test values
+  })
+  check(changed.status === 200, 'teammate sets a new password')
+  const cleared = await B('/api/me')
+  check(cleared.data?.mustChangePassword === false, 'the forced-change flag is cleared')
+  const back = await B(`/api/issues?teamId=${teamId}`)
+  check(back.status === 200, 'teammate has access again')
+
+  console.log(`\nResult: ${pass} passed, ${fail} failed\n`)
+  process.exit(fail === 0 ? 0 : 1)
+}
+
+main().catch(err => {
+  console.error('\nAcceptance test crashed:', err)
+  process.exit(2)
+})

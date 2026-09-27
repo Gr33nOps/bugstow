@@ -1,0 +1,44 @@
+name: Bug report
+description: Something is not working as expected.
+body:
+  - type: markdown
+    attributes:
+      value: "For security problems, use the security policy instead. Do not include passwords, tokens or private data."
+  - type: input
+    id: version
+    attributes:
+      label: BugsTow version
+      placeholder: "2.5.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Workspace
+      options:
+        - Save on this computer
+        - Only in this browser
+        - Browser with cloud sync
+        - Self-hosted team server
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Operating system and browser
+      placeholder: "Windows 11, Chrome"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: What did you do, what happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Screenshots or logs
+      description: Optional. Remove private information before posting.
