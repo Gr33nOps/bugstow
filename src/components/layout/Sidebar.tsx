@@ -4,12 +4,12 @@ import {
   CheckCircle2,
   Settings,
   Plus,
-  HardDrive,
   ChevronRight,
 } from "lucide-react"
 import type { Tab, Project } from "../../types"
 import { BugstowLogoIcon, BRAND_PRIMARY, GithubMark } from "../common/Icon"
 import { shortcut } from "../../lib/platform"
+import { ModeSwitch } from "../common/ModeSwitch"
 
 interface SidebarProps {
   currentTab: Tab
@@ -25,6 +25,8 @@ interface SidebarProps {
   collapsed?: boolean
   onToggleCollapse?: () => void
   storageEstimateText?: string
+  /** Shows the Local | Team switch. */
+  onSwitchToTeam?: () => void
 }
 
 export function Sidebar({
@@ -40,6 +42,7 @@ export function Sidebar({
   onCreateProject,
   collapsed = false,
   storageEstimateText,
+  onSwitchToTeam,
 }: SidebarProps) {
   const navigate = (tab: Tab) => {
     onSelectTab(tab)
@@ -204,16 +207,13 @@ export function Sidebar({
           <Settings size={18} />
           {!collapsed && "Settings"}
         </button>
-        {!collapsed && (
-          <div className="px-3 pt-4 pb-2 text-xs text-slate-500 dark:text-slate-400">
-            <p className="flex items-center gap-2">
-              <HardDrive size={13} />
-              Local, in this browser
-            </p>
-            {storageEstimateText && (
-              <p className="mt-1.5 pl-5">{storageEstimateText}</p>
-            )}
-          </div>
+        {onSwitchToTeam && (
+          <ModeSwitch mode="local" onSwitch={onSwitchToTeam} collapsed={collapsed} />
+        )}
+        {!collapsed && storageEstimateText && (
+          <p className="px-2 pb-1 text-xs text-slate-500 dark:text-slate-400">
+            {storageEstimateText}
+          </p>
         )}
       </div>
     </aside>

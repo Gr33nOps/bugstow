@@ -511,6 +511,7 @@ export default function App({
           collapsed={sidebarCollapsed}
           onToggleCollapse={handleToggleSidebar}
           storageEstimateText={storageUsedFormatted ? `${storageUsedFormatted} stored in browser` : undefined}
+          onSwitchToTeam={onSwitchToTeam}
         />
       </div>
 
@@ -646,6 +647,7 @@ export default function App({
                 setShowQuickProjectModal(true)
               }}
               storageEstimateText={storageUsedFormatted ? `${storageUsedFormatted} on device` : undefined}
+              onSwitchToTeam={onSwitchToTeam}
             />
           </div>
         </div>

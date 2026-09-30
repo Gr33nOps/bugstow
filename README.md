@@ -60,7 +60,7 @@ Light and dark themes, keyboard shortcuts, and layouts that work on smaller scre
 | Account | None | A sign-in for each person |
 | Others join | No | On your Wi-Fi (`bugstow start --lan`) or from anywhere through Tailscale (`bugstow share`) |
 
-Switch any time in Settings. **Copy Local issues** brings your Local work into a Team workspace.
+Switch any time with the **Local | Team** switch at the bottom of the sidebar. **Copy Local issues** brings your Local work into a Team workspace.
 
 BugsTow has no cloud features: nothing is uploaded to Google Drive, Dropbox or any other online storage, and there is no hosted BugsTow service. Local data and the Team database are **not encrypted at rest by BugsTow**. Clearing browser data removes Local issues, so keep backups, and a copy on another drive if the work matters. The person running a Team computer can access its data.
 

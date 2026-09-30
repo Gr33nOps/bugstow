@@ -54,7 +54,8 @@ browser or computer for the teammate.
 | P6 | Browser menu → Install app | App opens in its own window | |
 | P7 | Turn off Wi-Fi/unplug network, close and reopen the installed app | App opens; issues and screenshots still there; new capture works | |
 | P8 | Browser devtools → Network while using P2–P5 | Only the site's own files; no `/api/…`, no other hosts | |
-| P9 | Settings | Two tabs (General, Data & backups); no cloud or sync options anywhere; "You're using Local" with **Switch to Team** | |
+| P9 | Sidebar bottom: **Local / Team** switch; click Team, then Local | Each click switches; the current mode is highlighted; same switch in both. Collapsed sidebar: one icon button | |
+| P9b | Settings | Two tabs (General, Data & backups); no cloud or sync options anywhere; "You're using Local" with **Switch to Team** | |
 | P10 | A browser that had 2.5 cloud sync connected: open 2.6 | Its issues are all still there; devtools → Application → IndexedDB has no `bugstow_sync` database | |
 
 ## Team
