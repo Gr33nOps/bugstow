@@ -29,3 +29,29 @@ test('Node 18 numeric family, docker bridges, and no network at all', () => {
   assert.equal(pickLanAddress({ Tailscale: v4('100.98.136.91') }), null, 'not a private LAN address')
   assert.equal(pickLanAddress({}), null)
 })
+
+import { pidFromNetstat, pidFromLsof } from './net.mjs'
+
+test('stops BugsTow, never the Tailscale listener that shares its port (Windows)', () => {
+  const netstat = [
+    '  TCP    100.98.136.91:5757     0.0.0.0:0              LISTENING       19788',
+    '  TCP    127.0.0.1:5757         0.0.0.0:0              LISTENING       39052',
+    '  TCP    127.0.0.1:5858         0.0.0.0:0              LISTENING       777',
+  ].join('\r\n')
+  assert.equal(pidFromNetstat(netstat, 5757), 39052)
+  assert.equal(pidFromNetstat(netstat, 5858), 777)
+  // Only Tailscale on that port: nothing of ours.
+  assert.equal(pidFromNetstat('  TCP    100.98.136.91:5757     0.0.0.0:0     LISTENING       19788', 5757), null)
+  // LAN mode binds every address.
+  assert.equal(pidFromNetstat('  TCP    0.0.0.0:5757     0.0.0.0:0     LISTENING       42', 5757), 42)
+  assert.equal(pidFromNetstat('  TCP    [::]:5757     [::]:0     LISTENING       43', 5757), 43)
+  assert.equal(pidFromNetstat('', 5757), null)
+})
+
+test('same on macOS / Linux (lsof -F output)', () => {
+  const lsof = 'p111\nn100.98.136.91:5757\np222\nn127.0.0.1:5757\n'
+  assert.equal(pidFromLsof(lsof, 5757), 222)
+  assert.equal(pidFromLsof('p111\nn100.98.136.91:5757\n', 5757), null)
+  assert.equal(pidFromLsof('p5\nn*:5757\n', 5757), 5)
+  assert.equal(pidFromLsof('', 5757), null)
+})

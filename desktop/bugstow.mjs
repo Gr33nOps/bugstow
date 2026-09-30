@@ -40,7 +40,7 @@ import {
   serveStatusArgs,
   portUse,
 } from './tailscale.mjs'
-import { pickLanAddress } from './net.mjs'
+import { pickLanAddress, pidFromNetstat, pidFromLsof } from './net.mjs'
 
 const APP_DIR = path.dirname(fileURLToPath(import.meta.url))
 const VERSION = readVersion()
@@ -134,7 +134,7 @@ function health(probe, timeoutMs = 1500) {
         host: '127.0.0.1',
         port: probe.port,
         path: '/api/health',
-        headers: { Host: `localhost:${probe.port}`, Accept: 'application/json' },
+        headers: { Host: probe.host || `localhost:${probe.port}`, Accept: 'application/json' },
         timeout: timeoutMs,
         // Our own self-signed certificate on this computer (LAN mode).
         rejectUnauthorized: false,
@@ -191,16 +191,9 @@ function pidAlive(pid) {
 function findListeningPid(port) {
   try {
     if (process.platform === 'win32') {
-      const out = execSync('netstat -ano -p tcp', { encoding: 'utf8', windowsHide: true })
-      for (const line of out.split(/\r?\n/)) {
-        const m = line.match(/^\s*TCP\s+\S*:(\d+)\s+\S+\s+LISTENING\s+(\d+)\s*$/i)
-        if (m && Number(m[1]) === port) return Number(m[2])
-      }
-    } else {
-      const out = execSync(`lsof -nP -iTCP:${port} -sTCP:LISTEN -t`, { encoding: 'utf8' })
-      const pid = parseInt(out.trim().split(/\s+/)[0], 10)
-      if (Number.isFinite(pid)) return pid
+      return pidFromNetstat(execSync('netstat -ano -p tcp', { encoding: 'utf8', windowsHide: true }), port)
     }
+    return pidFromLsof(execSync(`lsof -nP -iTCP:${port} -sTCP:LISTEN -Fpn`, { encoding: 'utf8' }), port)
   } catch {
     // netstat/lsof missing, or nothing listening; the caller falls back to PID_FILE.
   }
@@ -347,6 +340,17 @@ async function start({ open = true } = {}) {
   if (!fs.existsSync(SETTINGS_FILE)) saveSettings(s)
   const u = urls(s)
   let h = await health(u.probe)
+
+  // Running, but started before sharing was saved (or by an older launcher):
+  // it would answer 421 to the shared address. Restart it with the setting.
+  if (isBugstow(h) && s.shareUrl && !s.lan) {
+    const c = await health({ ...u.probe, host: new URL(s.shareUrl).host })
+    if (c && c.status === 421) {
+      say('  Restarting BugsTow so it answers at your shared address ...')
+      if (!(await stop({ quiet: true }))) fail('Could not restart BugsTow. Close it yourself (Task Manager on Windows) and run: bugstow')
+      h = null
+    }
+  }
 
   if (!isBugstow(h)) {
     const other = await portAnswers(s.port)
@@ -556,9 +560,18 @@ async function share() {
     fail(`Tailscale couldn't publish BugsTow (tailscale serve exited with ${r.status}).
   On Linux you may first need: sudo tailscale set --operator=$USER`)
   }
-  await stop({ quiet: true })
+  if (!(await stop({ quiet: true }))) {
+    fail(`BugsTow is published in Tailscale, but it could not be restarted to use that address.
+  Close BugsTow yourself (Task Manager on Windows), then run: bugstow share`)
+  }
   saveSettings({ ...s, lan: false, shareUrl: url })
   await start({ open: false })
+  // Prove it: the running server must accept the shared address as its Host.
+  const check = await health({ proto: 'http', port: s.port, host: new URL(url).host })
+  if (!check || check.status === 421) {
+    fail(`BugsTow restarted but still refuses ${url}. Run: bugstow restart
+  If it keeps happening, send the last lines of: bugstow logs`)
+  }
   say('')
   say(`  BugsTow is shared at ${url}`)
   say('')

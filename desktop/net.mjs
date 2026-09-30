@@ -36,3 +36,36 @@ export function pickLanAddress(interfaces) {
   // Only private addresses; a virtual adapter only if there is nothing else.
   return best && best.rank < 9 ? best.ip : null
 }
+
+/**
+ * Who is BugsTow on this port? More than one program can listen on the same
+ * port number: `bugstow share` makes Tailscale listen on the PC's Tailscale
+ * address (100.x) on BugsTow's own port. Only a listener bound to loopback or
+ * to every address is BugsTow; stopping "the first listener" once picked
+ * Tailscale's, which can't be stopped, so a restart silently did nothing.
+ */
+const OURS = new Set(['127.0.0.1', '0.0.0.0', '[::]', '[::1]', '::', '::1', '*'])
+
+const ourAddress = addr => OURS.has(addr.replace(/:\d+$/, ''))
+
+/** `netstat -ano -p tcp` (Windows). */
+export function pidFromNetstat(text, port) {
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(/^\s*TCP\s+(\S+):(\d+)\s+\S+\s+LISTENING\s+(\d+)\s*$/i)
+    if (m && Number(m[2]) === port && ourAddress(m[1])) return Number(m[3])
+  }
+  return null
+}
+
+/** `lsof -nP -iTCP:<port> -sTCP:LISTEN -Fpn` (macOS, Linux): "p<pid>" then "n<address>:<port>" lines. */
+export function pidFromLsof(text, port) {
+  let pid = null
+  for (const line of text.split(/\r?\n/)) {
+    if (line.startsWith('p')) pid = parseInt(line.slice(1), 10)
+    else if (line.startsWith('n') && pid !== null) {
+      const m = line.slice(1).match(/^(.*):(\d+)$/)
+      if (m && Number(m[2]) === port && ourAddress(m[1])) return pid
+    }
+  }
+  return null
+}
