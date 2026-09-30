@@ -16,10 +16,9 @@ body:
     attributes:
       label: Workspace
       options:
-        - Save on this computer
-        - Only in this browser
-        - Browser with cloud sync
-        - Self-hosted team server
+        - Local (just me, in the browser)
+        - Team on the installed app
+        - Team on a Docker server
         - Not sure
     validations:
       required: true

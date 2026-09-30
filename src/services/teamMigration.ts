@@ -1,10 +1,13 @@
 import type { BackupData } from '../types'
-import { createProject, createIssue, uploadScreenshot } from './teamApi'
+import { createProject, copyIssueIn, listProjects, uploadScreenshot } from './teamApi'
 
 export interface MigrationResult {
+  /** Projects created in the team (projects with the same name are reused). */
   projects: number
   issues: number
   screenshots: number
+  /** GitHub issues that were already in the team and were left as they are. */
+  alreadyThere: number
 }
 
 function parseDataUrl(dataUrl: string): { base64: string; mimeType: string } | null {
@@ -14,40 +17,56 @@ function parseDataUrl(dataUrl: string): { base64: string; mimeType: string } | n
 }
 
 /**
- * Copy a personal backup (from Settings → Export Backup) into a team.
+ * Copy Local data (read straight from this browser, or from a backup file)
+ * into a team workspace.
  *
- * This is additive: it creates new projects, issues, and screenshots on the
- * team server. It never reads or deletes the personal browser data — the user
- * keeps their local copy untouched. Project references are remapped to the
- * newly created team projects.
+ * It only adds to the team. Local data is never changed or deleted. Projects
+ * are matched by name, so a project that already exists in the team is reused
+ * instead of duplicated. Issues keep their type, completed/open status and
+ * GitHub link; a GitHub issue that is already in the team isn't copied again.
  */
 export async function migrateBackupToTeam(
   backup: BackupData,
   teamId: string,
   onProgress?: (message: string) => void
 ): Promise<MigrationResult> {
+  const byName = new Map((await listProjects(teamId)).map(p => [p.name.trim().toLowerCase(), p.id]))
   const projectMap = new Map<string, string>()
+  let projectsCreated = 0
 
   for (const p of backup.projects) {
-    onProgress?.(`Creating project “${p.name}”…`)
-    const created = await createProject(teamId, p.name, p.color, p.description || undefined)
-    projectMap.set(p.id, created.id)
+    const key = p.name.trim().toLowerCase()
+    let id = byName.get(key)
+    if (!id) {
+      onProgress?.(`Creating project “${p.name}”…`)
+      id = (await createProject(teamId, p.name, p.color, p.description || undefined)).id
+      byName.set(key, id)
+      projectsCreated++
+    }
+    projectMap.set(p.id, id)
   }
 
   const screenshotById = new Map(backup.screenshots.map(s => [s.id, s]))
   let issueCount = 0
   let screenshotCount = 0
+  let alreadyThere = 0
 
   for (const issue of backup.issues) {
-    onProgress?.(`Importing issue “${issue.title}”…`)
+    onProgress?.(`Copying “${issue.title}”…`)
     const projectId = issue.projectId ? projectMap.get(issue.projectId) ?? null : null
-    const created = await createIssue(teamId, {
+    const { issue: created, existing } = await copyIssueIn(teamId, {
       title: issue.title,
       description: issue.description,
       type: issue.type,
+      status: issue.status === 'fixed' ? 'fixed' : 'open',
       projectId,
-      assigneeId: null,
+      githubUrl: issue.githubUrl,
+      githubNumber: issue.githubNumber,
     })
+    if (existing) {
+      alreadyThere++
+      continue
+    }
     issueCount++
 
     const ids =
@@ -66,5 +85,5 @@ export async function migrateBackupToTeam(
     }
   }
 
-  return { projects: projectMap.size, issues: issueCount, screenshots: screenshotCount }
+  return { projects: projectsCreated, issues: issueCount, screenshots: screenshotCount, alreadyThere }
 }

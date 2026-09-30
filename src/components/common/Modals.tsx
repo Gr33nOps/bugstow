@@ -208,12 +208,12 @@ export function AboutModal({ onClose }: { onClose: () => void }) {
 
         <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">bugstow.</h3>
         <p className="text-sm font-semibold text-brand mt-0.5">Spot it. Stow it. Fix it.</p>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-4 font-mono">Version {APP_VERSION} · Personal mode</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-4 font-mono">Version {APP_VERSION} · Local</p>
 
         <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/80 rounded-lg p-3.5 text-xs text-slate-600 dark:text-slate-300 text-left leading-relaxed mb-6">
-          In Personal mode your projects, issues and screenshots stay in this browser (IndexedDB). BugsTow does not
-          need an account or a backend for Personal mode and includes no analytics or telemetry. Browser storage is
-          not encrypted on disk; exported backups can be.
+          In Local, your projects, issues and screenshots stay in this browser (IndexedDB). There is no account, and
+          BugsTow includes no analytics or telemetry. Browser storage is not encrypted on disk; downloaded backups
+          can be.
         </div>
 
         <button

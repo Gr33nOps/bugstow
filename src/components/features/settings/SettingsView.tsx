@@ -30,8 +30,6 @@ import {
 } from "../../../services/backupService"
 import { formatBytes } from "../../../services/storageService"
 import { useStorageEstimate } from "../../../hooks/useStorageEstimate"
-import type { CloudSync } from "../../../hooks/useCloudSync"
-import { CloudSyncPanel } from "./CloudSyncPanel"
 import { isDesktopEdition } from "../../../lib/teamServer"
 
 interface SettingsViewProps {
@@ -43,11 +41,9 @@ interface SettingsViewProps {
   onOpenKeyboardShortcuts: () => void
   onOpenAbout: () => void
   onSwitchToTeam?: () => void
-  cloudSync?: CloudSync
-  onDataChanged?: () => void
-  /** Scroll the Sync section into view on open (chosen from the welcome screen). */
-  focusSync?: boolean
-  initialSection?: "general" | "sync" | "data"
+  /** A BugsTow server is serving this page, so Team is one click away. */
+  teamAvailable?: boolean
+  initialSection?: "general" | "data"
 }
 
 export function SettingsView({
@@ -59,24 +55,15 @@ export function SettingsView({
   onOpenKeyboardShortcuts,
   onOpenAbout,
   onSwitchToTeam,
-  cloudSync,
-  onDataChanged,
-  focusSync = false,
+  teamAvailable = false,
   initialSection,
 }: SettingsViewProps) {
-  const [section, setSection] = useState<"general" | "sync" | "data">(
-    initialSection || (focusSync ? "sync" : "general"),
+  const [section, setSection] = useState<"general" | "data">(
+    initialSection || "general",
   )
-  useEffect(() => {
-    if (focusSync || cloudSync?.pending) setSection("sync")
-  }, [focusSync, cloudSync?.pending])
   useEffect(() => {
     if (initialSection) setSection(initialSection)
   }, [initialSection])
-  const syncRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (focusSync) syncRef.current?.scrollIntoView({ block: "start" })
-  }, [focusSync])
 
   const { estimate, requestPersistence } = useStorageEstimate()
   const desktop = isDesktopEdition()
@@ -123,7 +110,6 @@ export function SettingsView({
         >
           {([
             { id: "general", label: "General" },
-            ...(cloudSync ? [{ id: "sync", label: "Cloud sync" }] : []),
             { id: "data", label: "Data & backups" },
           ] as const).map((item) => (
             <button
@@ -189,50 +175,41 @@ export function SettingsView({
           </div>
         </div>
 
-        {cloudSync && (
-          <div
-            ref={syncRef}
-            hidden={section !== "sync"}
-            className="scroll-mt-6"
-          >
-            <CloudSyncPanel
-              sync={cloudSync}
-              onToast={onToast}
-              onDataChanged={onDataChanged ?? (() => {})}
-            />
-          </div>
-        )}
-
         {/* Team mode */}
         {onSwitchToTeam && (
           <div hidden={section !== "general"}>
             <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 tracking-wide mb-2">
               Workspace
             </h3>
-            <button
-              type="button"
-              onClick={onSwitchToTeam}
-              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs p-4 flex items-center gap-3.5 text-left hover:border-brand transition-colors"
-            >
-              <div className="w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-brand dark:text-indigo-300">
-                <Users size={18} />
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex items-start gap-3.5 flex-1">
+                <div className="w-9 h-9 shrink-0 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300">
+                  <HardDrive size={18} />
+                </div>
+                <div>
+                  <span className="text-[15px] font-semibold text-slate-900 dark:text-white block">
+                    You're using Local
+                  </span>
+                  <span className="text-sm text-slate-600 dark:text-slate-300">
+                    Only you, in this browser. No account.
+                  </span>
+                </div>
               </div>
-              <div className="flex-1">
-                <span className="text-[15px] font-semibold text-slate-900 dark:text-white block">
-                  {desktop
-                    ? "Save issues in a folder on this PC"
-                    : "Switch to Team mode"}
-                </span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">
-                  {desktop
-                    ? "Issues here stay in this browser. To move them, export a backup and import it after signing in."
-                    : "Share projects and assign work on a server your team controls."}
-                </span>
-              </div>
-              <span className="text-slate-400 text-lg font-semibold">
-                &rsaquo;
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={onSwitchToTeam}
+                className="shrink-0 flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 hover:border-brand hover:text-brand dark:hover:text-indigo-300 transition-colors"
+              >
+                <Users size={16} /> Switch to Team
+              </button>
+            </div>
+            <p className="mt-2.5 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+              {desktop
+                ? "Team keeps issues in BugsTow's folder on this PC, with a sign-in, and lets you invite people on your Wi-Fi or through Tailscale. Your Local issues stay here, and you can copy them into Team."
+                : teamAvailable
+                  ? "Team keeps issues on this server, with a sign-in, so you can work with the people you invite. Your Local issues stay here, and you can copy them into Team."
+                  : "Team needs the BugsTow app installed on a computer, so other people can join you."}
+            </p>
           </div>
         )}
 
@@ -300,10 +277,10 @@ export function SettingsView({
                     Browser storage
                   </p>
                   <p className="text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
-                    Your work is saved in this browser. If you turn on cloud
-                    sync, an encrypted copy is also saved to your chosen
-                    storage. Browser storage itself is not encrypted by BugsTow.
-                    Keep an encrypted backup before clearing browser data.
+                    Local issues are saved only in this browser, on this
+                    device. BugsTow doesn't upload them anywhere. Clearing this
+                    browser's site data deletes them, so download a backup now
+                    and then.
                   </p>
                 </div>
               </div>
@@ -410,8 +387,6 @@ export function SettingsView({
               <p className="text-xs text-red-600/80 dark:text-red-400/80 mt-0.5">
                 Permanently deletes all projects, issues, and screenshots stored
                 in this browser.
-                {cloudSync?.connection &&
-                  " Cloud sync is turned off on this device; the copy in your cloud is kept."}
               </p>
             </div>
             <button

@@ -14,12 +14,12 @@ import { config } from './config.ts'
 import { requireAuth, teamRole, asyncRoute } from './middleware.ts'
 import { saveScreenshot, resolveScreenshot, deleteScreenshotFile } from './storage.ts'
 import { runBackup, listBackups, listExternalBackups, getExternalBackupStatus } from './backup.ts'
-import { getCloudBackupStatus } from './cloudBackup.ts'
 import { getCurrentCert } from './tls.ts'
 import { resetUserPassword } from './passwords.ts'
 
 const TYPES = ['bug', 'uiux', 'idea']
 const STATUSES = ['open', 'fixed']
+const GITHUB_ISSUE_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(issues|pull)\/\d+$/
 
 function now(): string {
   return new Date().toISOString()
@@ -93,6 +93,9 @@ api.get('/me', (req, res) => {
     name: u.name,
     isServerAdmin: isServerAdmin(u.id),
     mustChangePassword: mustChangePassword(u.id),
+    // Where people on other networks reach this desktop app (bugstow share),
+    // so join links point there instead of at localhost.
+    shareUrl: config.shareUrl || null,
   })
 })
 
@@ -123,7 +126,6 @@ api.get(
       intervalHours: config.backupIntervalHours,
       retention: config.backupRetention,
       external: { ...getExternalBackupStatus(), backups: listExternalBackups() },
-      cloud: getCloudBackupStatus(),
     })
   })
 )
@@ -131,8 +133,8 @@ api.post(
   '/admin/backup',
   asyncRoute(async (req, res) => {
     if (!requireServerAdmin(req, res)) return
-    const { manifest, external, cloud } = await runBackup()
-    res.status(201).json({ ok: true, manifest, external, cloud })
+    const { manifest, external } = await runBackup()
+    res.status(201).json({ ok: true, manifest, external })
   })
 )
 
@@ -378,6 +380,68 @@ api.delete(
   })
 )
 
+// Move a project, with its issues and screenshots, to another workspace (for
+// example out of a shared one into one only you are in). Taking a project out
+// of a workspace removes it for everyone there, so it needs an owner or admin
+// of that workspace; the destination only needs you to be a member.
+api.post(
+  '/projects/move',
+  asyncRoute(async (req, res) => {
+    const projectId = String(req.body?.projectId || '')
+    const toTeamId = String(req.body?.toTeamId || '')
+    const fromTeamId = projectId ? teamIdForProject(projectId) : null
+    const fromRole = fromTeamId ? teamRole(req.user!.id, fromTeamId) : null
+    if (!fromTeamId || !fromRole) {
+      res.status(404).json({ error: 'Project not found.' })
+      return
+    }
+    if (fromRole !== 'owner' && fromRole !== 'admin') {
+      res.status(403).json({ error: 'Only owners and admins can move a project out of this workspace.' })
+      return
+    }
+    if (!toTeamId || !teamRole(req.user!.id, toTeamId)) {
+      res.status(403).json({ error: 'You are not a member of that workspace.' })
+      return
+    }
+    if (toTeamId === fromTeamId) {
+      res.json({ moved: 0 })
+      return
+    }
+    // A GitHub issue exists once per workspace; refuse rather than drop any.
+    const clash = db
+      .prepare(
+        `select count(*) as n from issues a join issues b
+           on b.team_id = ? and b.github_url = a.github_url
+         where a.project_id = ? and a.github_url is not null`
+      )
+      .get(toTeamId, projectId) as { n: number }
+    if (clash.n > 0) {
+      res.status(409).json({
+        code: 'GITHUB_DUPLICATE',
+        error: `The other workspace already has ${clash.n} of these GitHub issues. Delete them there first, or import the repository there instead.`,
+      })
+      return
+    }
+    const moved = db.transaction(() => {
+      const ts = now()
+      db.prepare('update projects set team_id = ?, updated_at = ? where id = ?').run(toTeamId, ts, projectId)
+      db.prepare(
+        `update screenshots set team_id = ? where issue_id in (select id from issues where project_id = ?)`
+      ).run(toTeamId, projectId)
+      // Assignees who aren't in the destination workspace are unassigned.
+      db.prepare(
+        `update issues set assignee_id = null
+         where project_id = ? and assignee_id is not null
+           and assignee_id not in (select user_id from team_members where team_id = ?)`
+      ).run(projectId, toTeamId)
+      return db
+        .prepare('update issues set team_id = ?, updated_at = ? where project_id = ?')
+        .run(toTeamId, ts, projectId).changes
+    })()
+    res.json({ moved })
+  })
+)
+
 // ── Issues ────────────────────────────────────────────────────────────────────
 function teamIdForIssue(id: string): string | null {
   const row = db.prepare('select team_id from issues where id = ?').get(id) as
@@ -432,11 +496,26 @@ api.post(
       return
     }
     const type = TYPES.includes(req.body?.type) ? req.body.type : 'bug'
+    const status = STATUSES.includes(req.body?.status) ? req.body.status : 'open'
+    // Issues copied in from Local keep their GitHub link, so a later GitHub
+    // import recognises them and copying twice doesn't make a second one.
+    const githubUrl =
+      typeof req.body?.githubUrl === 'string' && GITHUB_ISSUE_URL.test(req.body.githubUrl) ? req.body.githubUrl : null
+    const githubNumber = githubUrl && Number.isInteger(req.body?.githubNumber) ? req.body.githubNumber : null
+    if (githubUrl) {
+      const existing = db.prepare('select id from issues where team_id = ? and github_url = ?').get(teamId, githubUrl) as
+        | { id: string }
+        | undefined
+      if (existing) {
+        res.status(200).json({ issue: selectIssue(existing.id), existing: true })
+        return
+      }
+    }
     const id = randomUUID()
     const ts = now()
     db.prepare(
-      `insert into issues (id, team_id, project_id, title, description, type, status, assignee_id, created_by, created_at, updated_at)
-       values (?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`
+      `insert into issues (id, team_id, project_id, title, description, type, status, assignee_id, created_by, github_url, github_number, created_at, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       teamId,
@@ -444,8 +523,11 @@ api.post(
       title,
       req.body?.description || '',
       type,
+      status,
       req.body?.assigneeId || null,
       req.user!.id,
+      githubUrl,
+      githubNumber,
       ts,
       ts
     )

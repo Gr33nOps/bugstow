@@ -1,10 +1,9 @@
 # Install BugsTow on your computer
 
 BugsTow runs on your own computer, like other open-source local web apps. You install it with
-one command and open it in your browser at **http://localhost:5757**. Issues and screenshots
-are saved in a data folder on your PC when you choose that storage option.
-Local work runs offline after installation. Installing, updating, GitHub import and optional
-cloud sync need internet access; BugsTow does not operate a hosted storage service.
+one command and open it in your browser at **http://localhost:5757**. It has no cloud
+features and no hosted service: your issues stay on your computer. Everything works offline
+after installation; only installing, updating and GitHub import use the internet.
 
 ## Install
 
@@ -30,8 +29,15 @@ It:
    applications menu on Linux, `~/Applications` on macOS) and a `bugstow` command
 4. starts BugsTow and opens it in your browser.
 
-The first time, BugsTow asks where to keep your issues. Choose **Save on this computer** and
-create your sign-in. The email is only a sign-in name; nothing is emailed to it.
+The first time, BugsTow asks: **just you, or with other people?**
+
+- **Local**: just you. Issues are saved in this browser. No account, nothing to set up.
+- **Team**: you and people you invite. Issues are saved in BugsTow's data folder on this PC
+  and backed up daily. You create a sign-in (the email is only a sign-in name; nothing is
+  emailed to it), then invite people on your Wi-Fi or through Tailscale (below).
+
+You can switch any time in **Settings** (Local) or the account menu (Team). Switching doesn't
+move anything; in Team, **Copy Local issues** brings your Local issues over.
 
 ## Everyday use
 
@@ -47,6 +53,8 @@ isn't running yet) and opens it in your browser. You can also bookmark http://lo
 | `bugstow start --port 5858` | Use another port (remembered) |
 | `bugstow start --lan` | Let phones and other computers on your network connect (see below) |
 | `bugstow start --local` | This PC only again (the default) |
+| `bugstow share` | Let people on other networks connect through Tailscale (see below) |
+| `bugstow unshare` | Stop sharing through Tailscale |
 | `bugstow reset-password you@example.com` | Forgot your password: sets a temporary one |
 | `bugstow logs` | Show the log |
 | `bugstow uninstall` | Remove BugsTow; your data folder is kept |
@@ -60,6 +68,9 @@ entirely, put `BUGSTOW_OFFLINE=true` in `bugstow.env` and run `bugstow restart`.
 
 ## Where your data is
 
+Local issues are in the browser you use for BugsTow. Download a backup from **Settings → Data &
+backups** now and then. Team data is in this folder:
+
 | System | Data folder |
 |---|---|
 | Windows | `%LOCALAPPDATA%\BugsTow\data` |
@@ -69,28 +80,23 @@ entirely, put `BUGSTOW_OFFLINE=true` in `bugstow.env` and run `bugstow restart`.
 It holds the database (`bugstow.sqlite`), the screenshots and daily backups (`backups/`,
 the last 7 are kept). Installing, updating or uninstalling never changes this folder.
 
-### Extra copies: a second drive or your own cloud
+### A second copy on another drive
 
 Backups in the data folder don't help if the disk dies. BugsTow can also copy every backup to a
-second drive, and send **encrypted** copies to a folder your Google Drive, Dropbox, OneDrive,
-Mega or Terabox app syncs (or to WebDAV). Create a text file named `bugstow.env` in the BugsTow
-folder (the one that contains `data`) with the lines you need, then run `bugstow restart`:
+second drive (a USB disk, another internal drive, a NAS). Create an empty file named
+`.bugstow-backup-target` in that folder, then create a text file named `bugstow.env` in the
+BugsTow folder (the one that contains `data`) and run `bugstow restart`:
 
 ```env
-# A second drive (create an empty file named .bugstow-backup-target in that folder first)
 BUGSTOW_BACKUP_EXTERNAL_DIR=D:/BugsTow backups
-
-# Encrypted copies to a folder your cloud app syncs (same marker file needed)
-BUGSTOW_BACKUP_ENCRYPTION_PASSPHRASE=a long passphrase you keep in a password manager
-BUGSTOW_BACKUP_CLOUD_DIR=C:/Users/you/Dropbox/BugsTow backups
 ```
 
-Without the passphrase nothing is sent to the cloud. Every option is explained in
-[CLOUD_SYNC.md](CLOUD_SYNC.md#team-backups-to-your-cloud); `bugstow logs` shows whether
-backups succeed. Copying the data folder while BugsTow is stopped also works.
+`bugstow logs` shows whether backups succeed. Copying the data folder while BugsTow is stopped
+also works.
 
-The two browser-only choices on the welcome screen ("Only in this browser", "Synced with my
-own cloud") keep issues in the browser instead of the data folder. See the README.
+Don't point this at a folder that Google Drive, Dropbox or OneDrive syncs: the copies there are
+not encrypted. (BugsTow 2.5 and earlier had cloud backups; they were removed in 2.6, and
+`BUGSTOW_BACKUP_CLOUD_DIR` and the WebDAV settings are now ignored.)
 
 ## Update
 
@@ -111,24 +117,59 @@ network connect over HTTPS, at the address the command prints (for example
 
 `bugstow start --local` switches back.
 
-### Inviting people
+## People on other networks (`bugstow share`)
+
+A `localhost` address only ever opens on your own PC, and `--lan` only reaches your own
+network. For a friend somewhere else, BugsTow uses [Tailscale](https://tailscale.com), a free
+private-network app. Your PC and your friend's devices join it; nobody else can reach BugsTow,
+and it is not published on the open internet.
+
+1. Install Tailscale on your PC and sign in.
+2. Run `bugstow share`. It prints an address like `https://my-pc.tail1234.ts.net:5757` with a
+   real certificate (no browser warning). BugsTow keeps listening on this PC only; Tailscale
+   forwards to it. It uses BugsTow's own port and refuses if something else already uses that
+   port in Tailscale, so it never replaces other things you share.
+3. Share your PC with your friend: [Tailscale admin console](https://login.tailscale.com/admin/machines)
+   → **Machines** → your PC → **⋯** → **Share**, and send them the share link Tailscale gives you.
+4. Your friend installs Tailscale, signs in and accepts the share.
+5. Invite them (below). The join link BugsTow shows now uses the Tailscale address.
+
+Your PC must be on and BugsTow running while they use it. `bugstow unshare` stops sharing;
+`bugstow start --lan` also turns it off. The first run can ask you to enable HTTPS certificates
+in the Tailscale admin console (a one-time click).
+
+## Inviting people
+
+Inviting needs **Team**. Local is only ever you.
 
 BugsTow **doesn't send invitation emails**: it has no email service, on purpose. An invite is a name
-on a list, so you send the person the address yourself.
+on a list, so you send the person the link yourself. Until you do, they see nothing.
 
-1. Run `bugstow start --lan` and open the address it prints (not `localhost`).
-2. Choose **Invite people**, enter their email and click **Create invitation**. Choose Member
-   for everyday work; Admin can also manage people. Existing accounts are added immediately.
+1. Make BugsTow reachable for them first: `bugstow share` for people elsewhere, or
+   `bugstow start --lan` for people on your network (then open the address it prints, not
+   `localhost`).
+2. Open **People & invitations**, enter their email and click **Create invitation**. Choose
+   Member for everyday work; Admin can also manage people. Existing accounts are added immediately.
 3. Copy the join link and send it in your own chat or email. Use **Share link** beside a pending
-   invitation to find its link again.
+   invitation to find its link again. The panel warns you when the link would only work on your PC.
 4. The link opens account creation with their email already filled in. They choose a password
    and join automatically. Existing users choose **I already have an account** and sign in.
 
 Invitations expire after 7 days. Create the invitation again to renew it or change its role.
 You can cancel a pending invitation from the list.
 
-The address only works for people on the same network as your PC, and only while your PC is on.
-For people elsewhere you need a server they can reach; see below.
+## Keeping some projects to yourself
+
+Either keep them in Local, or keep them in Team in a workspace only you are in.
+
+People you invite see every project in that workspace. To make a Team project private, move it
+to a workspace only you are in: in the sidebar, click **⋯** next to the project → **Move to
+workspace** → **New workspace, only you** (or an existing one). Its issues and screenshots move
+with it. Switch between workspaces at the top left; each shows how many people are in it.
+
+(**Switch to Local** in the account menu opens your separate Local list in this browser. It
+doesn't move Team projects.)
+
 ## For a whole team
 
 To run BugsTow on a server for many people, use the Docker setup in

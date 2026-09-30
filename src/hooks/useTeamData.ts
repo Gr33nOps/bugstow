@@ -121,10 +121,11 @@ export function useTeamData(signedIn: boolean) {
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const createTeam = useCallback(
-    async (name: string) => {
+    async (name: string, opts: { activate?: boolean } = {}) => {
       const team = await api.createTeam(name)
       setTeams(prev => [...prev, team])
-      setActiveTeamId(team.id)
+      // Moving a project into a new workspace creates it first, then switches.
+      if (opts.activate !== false) setActiveTeamId(team.id)
       return team
     },
     [setActiveTeamId]
@@ -194,6 +195,17 @@ export function useTeamData(signedIn: boolean) {
     setProjects(prev => prev.filter(p => p.id !== id))
     setIssues(prev => prev.map(i => (i.project_id === id ? { ...i, project_id: null, project_name: null } : i)))
   }, [])
+
+  /** Moves a project out of the active workspace; it disappears here. */
+  const moveProject = useCallback(
+    async (projectId: string, toTeamId: string) => {
+      const result = await api.moveProject(projectId, toTeamId)
+      setProjects(prev => prev.filter(p => p.id !== projectId))
+      setIssues(prev => prev.filter(i => i.project_id !== projectId))
+      return result
+    },
+    []
+  )
 
   const inviteMember = useCallback(
     async (email: string, role: 'admin' | 'member') => {
@@ -268,6 +280,7 @@ export function useTeamData(signedIn: boolean) {
     deleteIssue,
     createProject,
     deleteProject,
+    moveProject,
     inviteMember,
     removeMember,
     cancelInvite,

@@ -66,7 +66,7 @@ Keep a pull request focused. Explain the problem, what changes for the user, and
 ## Project boundaries
 
 - Keep personal data in the browser and team data on the user's server.
-- Cloud storage is optional, user-owned, and encrypted before upload.
+- No cloud storage or sync: data stays in the browser (Local) or on the computer running BugsTow (Team).
 - Preserve existing data; database migrations must be additive.
 - Keep setup text short and specific. Match labels used in the app.
 - Do not add a hosted service, analytics or a required cloud account.

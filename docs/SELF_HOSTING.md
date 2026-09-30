@@ -73,10 +73,6 @@ curl http://localhost:8080/api/health
 | `BUGSTOW_BACKUP_RETENTION` | No | How many backups to keep (default `7`). |
 | `BUGSTOW_BACKUP_EXTERNAL_DIR` | **Recommended** | A second backup folder on separate hardware (USB disk, other drive, NAS mount). See [RELEASE_OFFLINE.md §8](RELEASE_OFFLINE.md#8-backups-and-restore). |
 | `BUGSTOW_BACKUP_EXTERNAL_RETENTION` | No | How many external backups to keep (default: same as `BUGSTOW_BACKUP_RETENTION`). |
-| `BUGSTOW_BACKUP_ENCRYPTION_PASSPHRASE` | For cloud backups | Encrypts backup archives sent to your cloud. Nothing is uploaded without it. See [CLOUD_SYNC.md](CLOUD_SYNC.md#team-backups-to-your-cloud). |
-| `BUGSTOW_BACKUP_CLOUD_DIR` | No | A folder a cloud desktop app syncs (Google Drive, Dropbox, OneDrive, Mega, Terabox…). Encrypted archives go there. |
-| `BUGSTOW_BACKUP_WEBDAV_URL` / `_USER` / `_PASSWORD` | No | Upload encrypted archives to a WebDAV folder (Nextcloud, ownCloud, pCloud, Koofr, Synology…). |
-| `BUGSTOW_BACKUP_CLOUD_RETENTION` | No | How many cloud archives to keep (default: same as `BUGSTOW_BACKUP_RETENTION`). |
 | `BUGSTOW_SETUP_TOKEN` | No | Fixed first-admin setup token (20+ characters) for scripted installs. Normally leave unset: a random one is printed in the log. |
 | `BUGSTOW_TRUST_PROXY` | No | Set to `1` only when a reverse proxy (Caddy/nginx) sits in front. Leave unset for direct/LAN access. |
 
@@ -202,16 +198,25 @@ Schema changes are **additive** (`CREATE TABLE IF NOT EXISTS`, new columns) and
 better-auth migrations run automatically on start. No destructive migrations are
 performed. Still, **back up first** (section 6) before upgrading.
 
-### Migrating personal data into a team
+### Bringing Local issues into Team
 
-A personal user can move their data into a team without losing their local copy:
+Someone who used Local can copy their issues into a Team workspace without
+losing the Local copy:
 
-1. In personal mode: **Settings → Export Backup** (encrypted recommended).
-2. In team mode: **user menu → Import personal data**, pick the backup file,
-   enter the passphrase if encrypted, review the counts, and confirm.
+- **Same browser, same address:** in Team, **account menu → Copy Local issues**
+  (an empty workspace also offers it). BugsTow reads them straight from the
+  browser, shows the counts, and copies them.
+- **Another device:** in Local there, **Settings → Data & backups → Download
+  backup**; then in Team, **Copy Local issues → Use a backup file**.
 
-This is **additive** — it creates the projects, issues, and screenshots on the
-team server and never deletes the personal browser data.
+Copying only adds to the team: completed issues stay completed, projects with
+the same name are reused, and GitHub issues already in the workspace aren't
+copied twice. Local data is never changed.
+
+Cloud backups (`BUGSTOW_BACKUP_CLOUD_DIR`, `BUGSTOW_BACKUP_WEBDAV_*`,
+`BUGSTOW_BACKUP_ENCRYPTION_PASSPHRASE`) were removed in 2.6. If they are still
+set, the server says so at startup and ignores them. Use
+`BUGSTOW_BACKUP_EXTERNAL_DIR` for a copy on separate hardware.
 
 ---
 

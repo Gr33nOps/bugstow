@@ -326,3 +326,83 @@ test('GitHub import: a private repository asks for a key, and a failed import le
   assert.equal(ok.data.imported, 1)
   globalThis.fetch = realFetch
 })
+
+// ── Moving a project to another workspace ───────────────────────────────────
+test('moving a project: only owners/admins, into a workspace you are in; issues follow, outside assignees are cleared', async () => {
+  const priv = await A('/api/teams', { method: 'POST', body: { name: 'Private' } })
+  assert.equal(priv.status, 201)
+  const privId = priv.data.team.id as string
+  const projects = (await A(`/api/projects?teamId=${teamId}`)).data.projects as Array<{ id: string; name: string }>
+  const web = projects.find(p => p.name === 'web')!
+  const bobId = (await B('/api/me')).data.id as string
+
+  // Assign one of its issues to Bob, who is not in the private workspace.
+  const webIssues = ((await A(`/api/issues?teamId=${teamId}`)).data.issues as Array<{ id: string; project_id: string }>).filter(
+    i => i.project_id === web.id
+  )
+  assert.ok(webIssues.length > 0)
+  const assign = await A(`/api/issues?id=${webIssues[0].id}`, { method: 'PATCH', body: { assigneeId: bobId } })
+  assert.equal(assign.status, 200)
+
+  // Bob is an admin of the team but not a member of "Private".
+  const bobMove = await B('/api/projects/move', { method: 'POST', body: { projectId: web.id, toTeamId: privId } })
+  assert.equal(bobMove.status, 403)
+  // Carol was removed from the team.
+  const carolMove = await C('/api/projects/move', { method: 'POST', body: { projectId: web.id, toTeamId: privId } })
+  assert.equal(carolMove.status, 404)
+
+  const move = await A('/api/projects/move', { method: 'POST', body: { projectId: web.id, toTeamId: privId } })
+  assert.equal(move.status, 200, JSON.stringify(move.data))
+  assert.equal(move.data.moved, webIssues.length)
+
+  const teamNow = (await A(`/api/issues?teamId=${teamId}`)).data.issues as Array<{ project_id: string }>
+  assert.ok(!teamNow.some(i => i.project_id === web.id), 'gone from the shared workspace')
+  const privIssues = (await A(`/api/issues?teamId=${privId}`)).data.issues as Array<{ id: string; assignee_id: string | null }>
+  assert.equal(privIssues.length, webIssues.length)
+  assert.equal(privIssues.find(i => i.id === webIssues[0].id)?.assignee_id, null, 'Bob is not in Private')
+  // Bob can no longer see them.
+  assert.equal((await B(`/api/issues?teamId=${privId}`)).status, 403)
+  const privProjects = (await A(`/api/projects?teamId=${privId}`)).data.projects as Array<{ id: string }>
+  assert.ok(privProjects.some(p => p.id === web.id))
+})
+
+test('moving a project refuses to create a second copy of a GitHub issue', async () => {
+  withFakeGithub()
+  // Import acme/web into the shared workspace again: its issues now live in Private.
+  const again = await imp({ repo: 'acme/web', includeClosed: true, newProjectName: 'web-again' })
+  assert.equal(again.status, 200, JSON.stringify(again.data))
+  const priv = ((await A('/api/teams')).data.teams as Array<{ id: string; name: string }>).find(t => t.name === 'Private')!
+  const web = ((await A(`/api/projects?teamId=${priv.id}`)).data.projects as Array<{ id: string; name: string }>).find(
+    p => p.name === 'web'
+  )!
+  const back = await A('/api/projects/move', { method: 'POST', body: { projectId: web.id, toTeamId: teamId } })
+  assert.equal(back.status, 409)
+  assert.equal(back.data.code, 'GITHUB_DUPLICATE')
+  globalThis.fetch = realFetch
+})
+
+test('copying Local issues in keeps completed status and GitHub links, and never copies a GitHub issue twice', async () => {
+  const url = 'https://github.com/acme/web/issues/77'
+  const first = await A(`/api/issues?teamId=${teamId}`, {
+    method: 'POST',
+    body: { title: 'Copied from Local', status: 'fixed', githubUrl: url, githubNumber: 77 },
+  })
+  assert.equal(first.status, 201)
+  assert.equal(first.data.issue.status, 'fixed')
+  assert.equal(first.data.issue.github_url, url)
+  assert.equal(first.data.issue.github_number, 77)
+
+  const again = await A(`/api/issues?teamId=${teamId}`, { method: 'POST', body: { title: 'Copied again', githubUrl: url } })
+  assert.equal(again.status, 200)
+  assert.equal(again.data.existing, true)
+  assert.equal(again.data.issue.id, first.data.issue.id)
+
+  // Not a GitHub issue address: ignored, and an unknown status means open.
+  const odd = await A(`/api/issues?teamId=${teamId}`, {
+    method: 'POST',
+    body: { title: 'Odd fields', status: 'deleted', githubUrl: 'javascript:alert(1)' },
+  })
+  assert.equal(odd.status, 201)
+  assert.equal(odd.data.issue.status, 'open')
+  assert.equal(odd.data.issue.github_url, null)
+})

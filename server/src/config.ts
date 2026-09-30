@@ -36,15 +36,6 @@ function parseTrustProxy(v: string | undefined): boolean | number {
   return Number.isFinite(n) && n > 0 ? n : false
 }
 
-/** A public app ID from the environment, or '' when unset or malformed. */
-function publicId(value: string | undefined, pattern: RegExp): string {
-  const v = (value || '').trim()
-  if (!v) return ''
-  if (pattern.test(v)) return v
-  console.warn(`  Ignoring a malformed sync app ID: ${v.slice(0, 40)}`)
-  return ''
-}
-
 function requireSecretInProd(value: string | undefined): string {
   if (value && value.length >= 16) return value
   if (process.env.NODE_ENV === 'production') {
@@ -59,6 +50,25 @@ function requireSecretInProd(value: string | undefined): string {
 
 const DESKTOP = boolEnv('BUGSTOW_DESKTOP', false)
 const PORT = parseInt(process.env.PORT || '8080', 10)
+
+/**
+ * The address people on other networks use to reach this desktop app, when
+ * `bugstow share` has published it through Tailscale (tailscale serve):
+ * https://<machine>.<tailnet>.ts.net. Only an https:// origin is accepted.
+ */
+function shareOrigin(value: string | undefined): string {
+  const v = (value || '').trim()
+  if (!v) return ''
+  try {
+    const u = new URL(v)
+    if (u.protocol === 'https:' && !u.username && !u.password && (u.pathname === '/' || u.pathname === '')) return u.origin
+  } catch {
+    // fall through
+  }
+  console.warn(`  Ignoring BUGSTOW_SHARE_URL (needs an https:// address): ${v.slice(0, 60)}`)
+  return ''
+}
+const SHARE_URL = DESKTOP ? shareOrigin(process.env.BUGSTOW_SHARE_URL) : ''
 
 export const config = {
   port: PORT,
@@ -114,20 +124,15 @@ export const config = {
     10
   ),
   /**
-   * Encrypted backups to your own cloud (see cloudBackup.ts). Nothing is
-   * uploaded unless BUGSTOW_BACKUP_ENCRYPTION_PASSPHRASE is set.
+   * Cloud backup settings from 2.5 and earlier that are still set. Cloud
+   * backups were removed in 2.6; these are only named in a startup notice so
+   * nobody assumes an off-site copy still exists.
    */
-  backupEncryptionPassphrase: process.env.BUGSTOW_BACKUP_ENCRYPTION_PASSPHRASE || '',
-  /** A folder synced by a cloud desktop app (Google Drive, Dropbox, OneDrive, Mega, Terabox...). */
-  backupCloudDir: (process.env.BUGSTOW_BACKUP_CLOUD_DIR || '').trim(),
-  /** A WebDAV folder (Nextcloud, ownCloud, pCloud, Koofr, Synology...). */
-  backupWebdavUrl: (process.env.BUGSTOW_BACKUP_WEBDAV_URL || '').trim(),
-  backupWebdavUser: process.env.BUGSTOW_BACKUP_WEBDAV_USER || '',
-  backupWebdavPassword: process.env.BUGSTOW_BACKUP_WEBDAV_PASSWORD || '',
-  backupCloudRetention: parseInt(
-    process.env.BUGSTOW_BACKUP_CLOUD_RETENTION || process.env.BUGSTOW_BACKUP_RETENTION || '7',
-    10
-  ),
+  retiredCloudSettings: [
+    'BUGSTOW_BACKUP_CLOUD_DIR',
+    'BUGSTOW_BACKUP_WEBDAV_URL',
+    'BUGSTOW_BACKUP_ENCRYPTION_PASSPHRASE',
+  ].filter(k => (process.env[k] || '').trim()),
   /**
    * Extra host names / IPs for the generated HTTPS certificate (comma-separated).
    * The hostname of BUGSTOW_BASE_URL is always included. Needed in Docker, where
@@ -160,14 +165,14 @@ export const config = {
       DESKTOP
         ? ['localhost', '127.0.0.1'].map(h => `${boolEnv('BUGSTOW_TLS', false) ? 'https' : 'http'}://${h}:${PORT}`)
         : []
-    ),
+    )
+    // ...and at its Tailscale address while it's shared.
+    .concat(SHARE_URL ? [SHARE_URL] : []),
   /**
-   * OAuth app IDs for Personal sync to Google Drive / Dropbox (public values,
-   * not secrets). When set, they are handed to the page and override the IDs
-   * built into the frontend. Malformed values are ignored.
+   * Desktop app shared through Tailscale (`bugstow share`): the address
+   * teammates on other networks open. Join links use it. Empty when not shared.
    */
-  googleClientId: publicId(process.env.BUGSTOW_GOOGLE_CLIENT_ID, /^[\w-]+\.apps\.googleusercontent\.com$/),
-  dropboxAppKey: publicId(process.env.BUGSTOW_DROPBOX_APP_KEY, /^[a-z0-9]{8,32}$/),
+  shareUrl: SHARE_URL,
   /** Max screenshot upload size in bytes (default 10 MB). */
   maxUploadBytes: parseInt(process.env.BUGSTOW_MAX_UPLOAD_BYTES || String(10 * 1024 * 1024), 10),
   /**

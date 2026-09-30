@@ -21,8 +21,10 @@ process.env.BUGSTOW_BASE_URL = `http://localhost:${PORT}`
 process.env.BUGSTOW_PUBLIC_DIR = publicDir
 process.env.BUGSTOW_BACKUP_ENABLED = 'false'
 process.env.BUGSTOW_DESKTOP = 'true'
+// Shared through Tailscale (bugstow share).
+process.env.BUGSTOW_SHARE_URL = 'https://my-pc.tail1234.ts.net:5757'
+// Left over from 2.5: must not reach the page any more.
 process.env.BUGSTOW_GOOGLE_CLIENT_ID = '123-abc.apps.googleusercontent.com'
-process.env.BUGSTOW_DROPBOX_APP_KEY = '"><script>alert(1)</script>'
 
 const { createApp } = await import('./app.ts')
 const { config } = await import('./config.ts')
@@ -64,21 +66,51 @@ test('requests for other host names are refused (DNS rebinding)', async () => {
   assert.equal((await get('/', `[::1]:${PORT}`)).status, 200)
 })
 
-test('the page may reach https: hosts (Personal sync to your own cloud)', async () => {
+test('the page may reach only itself and api.github.com (GitHub import); no cloud hosts', async () => {
   const res = await new Promise<http.IncomingMessage>((resolve, reject) => {
     http.get({ host: '127.0.0.1', port: PORT, path: '/', headers: { Host: `localhost:${PORT}` } }, resolve).on('error', reject)
   })
   res.resume()
   const csp = String(res.headers['content-security-policy'])
-  assert.match(csp, /connect-src 'self' https:/)
+  const connect = csp.split(';').map(d => d.trim()).find(d => d.startsWith('connect-src'))
+  assert.equal(connect, "connect-src 'self' https://api.github.com")
 })
 
-test('sync app IDs from the environment reach the page; malformed ones are ignored', async () => {
+test('no cloud sign-in IDs are handed to the page', async () => {
   const page = await get('/', `localhost:${PORT}`)
-  assert.match(page.body, /<meta name="bugstow-google-client-id" content="123-abc\.apps\.googleusercontent\.com" \/>/)
-  assert.doesNotMatch(page.body, /bugstow-dropbox-app-key|<script>alert/)
+  assert.doesNotMatch(page.body, /bugstow-google-client-id|bugstow-dropbox-app-key|googleusercontent/)
 })
 
 test('127.0.0.1 is a trusted origin as well as localhost', () => {
   assert.ok(config.trustedOrigins.includes(`http://127.0.0.1:${PORT}`))
+})
+
+function post(p: string, host: string, origin: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        host: '127.0.0.1',
+        port: PORT,
+        path: p,
+        method: 'POST',
+        headers: { Host: host, Origin: origin, 'Content-Type': 'application/json' },
+      },
+      res => {
+        res.resume()
+        res.on('end', () => resolve(res.statusCode ?? 0))
+      }
+    )
+    req.on('error', reject)
+    req.end('{"name":"x"}')
+  })
+}
+
+test('shared through Tailscale: its ts.net address is answered and trusted, other names are not', async () => {
+  assert.equal(config.shareUrl, 'https://my-pc.tail1234.ts.net:5757')
+  assert.equal((await get('/api/health', 'my-pc.tail1234.ts.net:5757')).status, 200)
+  assert.equal((await get('/api/health', 'other-pc.tail1234.ts.net')).status, 421)
+  // A write from the shared address passes the cross-site check (then needs sign-in: 401)...
+  assert.equal(await post('/api/teams', 'my-pc.tail1234.ts.net:5757', 'https://my-pc.tail1234.ts.net:5757'), 401)
+  // ...one from any other site is refused before that.
+  assert.equal(await post('/api/teams', 'my-pc.tail1234.ts.net', 'https://evil.tail1234.ts.net'), 403)
 })

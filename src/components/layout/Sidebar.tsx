@@ -208,7 +208,7 @@ export function Sidebar({
           <div className="px-3 pt-4 pb-2 text-xs text-slate-500 dark:text-slate-400">
             <p className="flex items-center gap-2">
               <HardDrive size={13} />
-              Browser workspace
+              Local, in this browser
             </p>
             {storageEstimateText && (
               <p className="mt-1.5 pl-5">{storageEstimateText}</p>

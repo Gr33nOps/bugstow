@@ -25,6 +25,10 @@ browser or computer for the teammate.
 | D7 | Run the install command again (update) | Finishes; data and sign-in unchanged | |
 | D8 | `bugstow start --lan`, open the printed address on a phone on the same Wi-Fi | Certificate warning once; after accepting, sign in and see the issues | |
 | D8b | With `--lan` running, invite a second person's email; open the address on their device, choose *I was invited: create my account* | They sign up with that email and see the team. An uninvited email is refused | |
+| D8c | On localhost, People & invitations → create an invitation | Amber note: the link only works on this PC, with the `bugstow share` steps. No `#join=` link without an email | |
+| D8d | With Tailscale signed in: `bugstow share`, then invite someone on another network whose device has Tailscale and accepted the machine share | Join link is `https://<pc>.<tailnet>.ts.net:<port>/#join=…`, green note; they sign up and see the workspace. `tailscale serve status` shows only BugsTow's port; anything already on 443 is untouched | |
+| D8e | `bugstow unshare` | The ts.net address stops working; other `tailscale serve` entries remain | |
+| D8f | Sidebar ⋯ next to a project → Move to workspace → New workspace, only you | Project and its issues leave the shared workspace; the invited person no longer sees them; the switcher says “Only you” | |
 | D9 | `bugstow uninstall` | Shortcuts and the command are gone; the data folder is still there | |
 
 ## GitHub import
@@ -36,45 +40,28 @@ browser or computer for the teammate.
 | G3 | Close an issue on GitHub, import again with "Also bring in closed issues" | That issue moves to Completed | |
 | G4 | Paste a private repo | The dialog shows the key steps; "Create a key on GitHub" opens GitHub's key page with the name, 90-day expiry and Issues: Read-only filled in | |
 | G5 | Paste the key and import | Issues arrive; the key isn't shown again after closing the dialog | |
-| G6 | Same in "Save on this computer" (server) mode, top-bar **Import from GitHub** | Same results | |
+| G6 | Same in Team, sidebar **Import from GitHub** | Same results | |
 
-## Personal mode
+## Local
 
 | # | Check | Expected | PASS/FAIL |
 |---|---|---|---|
-| P1 | First open of the installed app (or `node serve-personal.mjs`) | "Welcome to BugsTow" picker; nothing else loads until you choose | |
-| P2 | Choose **Only in this browser** (or **Just me · Local**), capture an issue with title + description | Appears in the inbox | |
+| P1 | First open of the installed app (or `node serve-personal.mjs`) | "Just you, or with other people?" with exactly two choices, Local and Team; nothing else loads until you choose | |
+| P2 | Choose **Local**, capture an issue with title + description | Appears in the inbox; sidebar says "Local, in this browser" | |
 | P3 | Copy an image, focus the capture dialog, press Ctrl/⌘+V | Screenshot preview appears; saved with the issue | |
-| P4 | Settings → Data & backups → Export Backup with *Encrypt* ticked and a passphrase | A `.json` file downloads | |
+| P4 | Settings → Data & backups → Download backup with *Encrypt* ticked and a passphrase | A `.json` file downloads | |
 | P5 | Clear data (Settings → danger zone) then Import that file with the passphrase | All issues and screenshots return. Wrong passphrase is refused with a message | |
 | P6 | Browser menu → Install app | App opens in its own window | |
 | P7 | Turn off Wi-Fi/unplug network, close and reopen the installed app | App opens; issues and screenshots still there; new capture works | |
 | P8 | Browser devtools → Network while using P2–P5 | Only the site's own files; no `/api/…`, no other hosts | |
+| P9 | Settings | Two tabs (General, Data & backups); no cloud or sync options anywhere; "You're using Local" with **Switch to Team** | |
+| P10 | A browser that had 2.5 cloud sync connected: open 2.6 | Its issues are all still there; devtools → Application → IndexedDB has no `bugstow_sync` database | |
 
-## Personal cloud sync (docs/CLOUD_SYNC.md)
-
-Use a laptop **and** a phone. Google Drive and Dropbox need `VITE_GOOGLE_CLIENT_ID` / `VITE_DROPBOX_CLIENT_ID` set when the app package is built. The phone opens the laptop's BugsTow over Wi-Fi (`bugstow start --lan`) or another computer's installed app.
-
-| # | Check | Expected | PASS/FAIL |
-|---|---|---|---|
-| S1 | Settings → Cloud sync on the laptop | Five options, each explaining what will happen; unavailable ones say why | |
-| S2 | Connect Google Drive, create a passphrase | Returns to Settings; "Google Drive · synced just now" | |
-| S3 | On the phone: connect the same Google account, enter the same passphrase | The laptop's issues and screenshots appear | |
-| S4 | Wrong passphrase on the phone first | "The passphrase does not match…"; nothing changes | |
-| S5 | Edit an issue on the phone; wait ~10 s; open the laptop | The edit shows up | |
-| S6 | Delete an issue on the laptop; open the phone | Gone on the phone too | |
-| S7 | Wait over an hour (Google) and open the app | "Sign in again" message with a Reconnect link; reconnect works | |
-| S8 | Repeat S2–S6 with Dropbox | Same results; no hourly reconnect | |
-| S9 | Synced folder (desktop Chrome) pointed at a Mega/OneDrive/Dropbox folder | Files appear in that folder; the cloud app uploads them | |
-| S10 | Sync file: export on laptop, upload to any cloud, import on phone with the passphrase | Issues appear on the phone; "Download merged file" offered | |
-| S11 | Open the cloud (Drive app data / Dropbox Apps/BugsTow / WebDAV folder) | Only `bugstow-index.json` and `shots/*.bin`, unreadable | |
-| S12 | Turn off sync on one device | Data stays on that device and in the cloud | |
-
-## Team mode
+## Team
 
 | # | Check | Expected | PASS/FAIL |
 |---|---|---|---|
-| T1 | Open the server, choose **My team** | "Set up this server" with Setup token field and "Encrypted connection (HTTPS)" | |
+| T1 | Open the server, choose **Team** | "Set up this server" with Setup token field and "Encrypted connection (HTTPS)" | |
 | T2 | Create administrator with a wrong token, then the right one | Wrong: clear error. Right: signed in | |
 | T3 | Sign out, sign in again | Sign-in form (not the setup form); sign-in works | |
 | T4 | People & invitations → invite a teammate's email | Listed as pending invite | |
@@ -86,7 +73,9 @@ Use a laptop **and** a phone. Google Drive and Dropbox need `VITE_GOOGLE_CLIENT_
 | T10 | Create a project; create an issue in it | Both visible to the teammate after reload | |
 | T11 | Assign the issue to the teammate | Teammate sees the assignment | |
 | T12 | Attach a screenshot, open it from the teammate's browser | Image shows | |
-| T13 | Admin: user menu → **Backups** → Back up now | Success message; count increases; external copy status shown (or "Not set up") | |
+| T13 | Admin: user menu → **Backups** → Back up now | Success message; count increases; second-drive status shown (or "Not set up"); no cloud row | |
+| T19 | Installed app, Local has issues (one completed, one imported from GitHub): Settings → **Switch to Team**, create the first workspace | Empty workspace offers **Copy N Local issues**; after copying, counts match, the completed one is in Completed, the GitHub link is kept. Copying again doesn't duplicate the GitHub issue | |
+| T20 | Team account menu → **Switch to Local** | Local issues shown; Team data untouched when switching back | |
 | T14 | Open the same issue in both browsers; change the title in one, then the description in the other without reloading | "This issue was changed by another teammate. Reload it before saving." Reload issue shows the other change | |
 | T15 | Open the server over `http://<IP>:8080` with TLS off | Amber "Not encrypted" warning on sign-in and "Not encrypted" chip in the header | |
 | T16 | Over HTTPS before trusting the certificate | Browser warning (expected). Download `/api/tls/certificate`, compare fingerprint with the server log | |

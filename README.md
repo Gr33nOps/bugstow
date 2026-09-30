@@ -8,7 +8,7 @@
     <a href="https://github.com/Gr33nOps/bugstow/actions/workflows/ci.yml"><img src="https://github.com/Gr33nOps/bugstow/actions/workflows/ci.yml/badge.svg" alt="Build and tests" /></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-475569" alt="MIT license" /></a>
   </p>
-  <p><a href="#install">Install</a> · <a href="docs/SELF_HOSTING.md">Team setup</a> · <a href="docs/CLOUD_SYNC.md">Cloud sync</a> · <a href="CONTRIBUTING.md">Contribute</a></p>
+  <p><a href="#install">Install</a> · <a href="docs/SELF_HOSTING.md">Team setup</a> · <a href="CONTRIBUTING.md">Contribute</a></p>
 </div>
 
 <picture>
@@ -36,7 +36,7 @@ curl -fsSL https://raw.githubusercontent.com/Gr33nOps/bugstow/main/install.sh | 
 
 The installer downloads the app and its own Node.js runtime, checks their checksums, adds a shortcut, and opens **http://localhost:5757**. No administrator account is needed. Internet access is required for installation and updates.
 
-On first open, choose **Save on this computer** and create your sign-in. To update, run the same command again. `bugstow uninstall` removes the app and keeps your data folder.
+On first open, choose **Local** (just you, no account) or **Team** (a sign-in, and you can invite people). To update, run the same command again. `bugstow uninstall` removes the app and keeps your data folder.
 
 [Installation guide](docs/INSTALL.md) · [Latest release and downloads](https://github.com/Gr33nOps/bugstow/releases/latest)
 
@@ -46,25 +46,25 @@ On first open, choose **Save on this computer** and create your sign-in. To upda
 - **Find the next task.** Search issues, filter by project or type, and mark finished work as completed.
 - **Bring in GitHub issues.** Paste a repository URL. Public repositories usually need no token; private ones need a token with access to their issues. Repeat imports update matching issues without duplicates. Import is one-way; BugsTow does not edit GitHub.
 - **Work with a team.** Share projects, assign issues and invite people to your own server.
-- **Keep a backup.** Export browser data or use automatic server backups. Optional cloud sync encrypts data before upload to your own storage.
+- **Keep a backup.** Download a backup file from Local, or rely on Team's automatic daily backups (plus an optional second drive).
 - **Copy a prompt.** Turn an issue's details into a prompt for your coding assistant.
 
 Light and dark themes, keyboard shortcuts, and layouts that work on smaller screens are included.
 
-## Choose where your data lives
+## Two ways to use it
 
-| Option | Storage | Good for |
+| | Local | Team |
 | --- | --- | --- |
-| **Save on this computer** | A local database and screenshot folder, with automatic backups | Everyday use on your computer |
-| **Only in this browser** | This browser's IndexedDB; no account needed | A quick personal workspace |
-| **Your own cloud** | Browser storage plus encrypted sync to storage you connect | Personal work across devices |
-| **Team server** | A database and screenshots on a server you control | Shared projects and invitations |
+| Who | Just you | You and people you invite |
+| Where issues are saved | This browser (IndexedDB) | A database and screenshot folder on the computer running BugsTow, backed up daily |
+| Account | None | A sign-in for each person |
+| Others join | No | On your Wi-Fi (`bugstow start --lan`) or from anywhere through Tailscale (`bugstow share`) |
 
-Cloud options include Google Drive, Dropbox, WebDAV, a synced folder, and a portable sync file. Provider setup and browser support vary; see the [cloud sync guide](docs/CLOUD_SYNC.md).
+Switch any time in Settings. **Copy Local issues** brings your Local work into a Team workspace.
 
-Local databases and browser storage are **not encrypted at rest by BugsTow**. Clearing browser data removes a browser-only workspace. Keep backups, and store a copy on another drive if the work matters. The person operating a team server can access its data.
+BugsTow has no cloud features: nothing is uploaded to Google Drive, Dropbox or any other online storage, and there is no hosted BugsTow service. Local data and the Team database are **not encrypted at rest by BugsTow**. Clearing browser data removes Local issues, so keep backups, and a copy on another drive if the work matters. The person running a Team computer can access its data.
 
-BugsTow does not store your issues on maintainer-operated infrastructure. Normal local work works offline after installation; GitHub import, cloud sync and updates need their respective services. [Network and offline details](docs/OFFLINE.md).
+After installation everything works offline; only GitHub import and updates use the internet. [Network and offline details](docs/OFFLINE.md).
 
 ## Invite your team
 
@@ -74,9 +74,13 @@ For people on the same network, start the installed app with:
 bugstow start --lan
 ```
 
+For people somewhere else, install [Tailscale](https://tailscale.com) (a free private-network app) on your PC and theirs, then run `bugstow share` and share your PC with them in Tailscale. Only people you share with can reach it; it is not put on the open internet. [Step by step](docs/INSTALL.md#people-on-other-networks-bugstow-share).
+
 1. Open **People & invitations** and add your teammate's email.
 2. Copy the join link and send it through your usual chat or email. BugsTow does not send invitation emails.
 3. Your teammate opens the link and creates an account using that email, or signs in if they already have one.
+
+Invited people see every project in that workspace. To keep a project to yourself, use **⋯ → Move to workspace → New workspace, only you** next to it in the sidebar.
 
 The host must stay running and reachable. LAN mode uses a local HTTPS certificate; follow the [connection and certificate instructions](docs/INSTALL.md#phones-and-other-computers---lan). Invitations expire after seven days and can be renewed.
 
@@ -88,12 +92,11 @@ For a dedicated team server, use [Docker Compose and the self-hosting guide](doc
 | --- | --- |
 | Install, update or troubleshoot | [Install guide](docs/INSTALL.md) |
 | Run a team server | [Self-hosting](docs/SELF_HOSTING.md) |
-| Sync personal issues or back up to my cloud | [Cloud sync](docs/CLOUD_SYNC.md) |
 | Use BugsTow without internet access | [Offline guide](docs/OFFLINE.md) |
 | Report a bug or suggest an improvement | [Open an issue](https://github.com/Gr33nOps/bugstow/issues/new/choose) |
 | Report a security problem privately | [Security policy](SECURITY.md) |
 
-To move browser data, open **Settings → Data & backups** and export a backup. Restore it in another browser workspace, or choose **Import personal data** from a server workspace's user menu.
+To move Local issues to another device, open **Settings → Data & backups**, download a backup and restore it there. To bring them into Team, use **Copy Local issues** in the Team account menu.
 
 ## Development
 
