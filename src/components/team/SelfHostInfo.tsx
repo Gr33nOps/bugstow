@@ -38,7 +38,7 @@ export function SelfHostInfo({ onBack }: { onBack: () => void }) {
               <dd><pre className="mt-1.5 rounded-lg bg-slate-950 px-4 py-3 text-white overflow-x-auto">bugstow share</pre></dd>
             </div>
           </dl>
-          <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Then open People &amp; invitations, add their email and send them the join link yourself. Keep that computer on while they use it.</p>
+          <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Then open People &amp; invitations → Create invite link, and send the link in any chat. They pick a username and password; no email needed. Keep that computer on while they use it.</p>
           <a className="inline-block mt-3 text-sm font-semibold text-indigo-600 dark:text-indigo-300" href={`${REPO_URL}/blob/main/docs/INSTALL.md`} target="_blank" rel="noreferrer">Desktop installation guide</a>
         </div>
         <h2 className="mt-8 text-lg font-semibold">For a dedicated server</h2>

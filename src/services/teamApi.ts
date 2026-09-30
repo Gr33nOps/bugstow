@@ -238,3 +238,20 @@ export async function runBackupNow(): Promise<{
 }> {
   return api('admin/backup', { method: 'POST' })
 }
+
+// ── Invite links (no email) ──────────────────────────────────────────────────
+export interface InviteLink {
+  id: string
+  role: 'admin' | 'member'
+  created_at: string
+}
+export async function listInviteLinks(teamId: string): Promise<InviteLink[]> {
+  return (await api<{ links: InviteLink[] }>(`invite-links?teamId=${encodeURIComponent(teamId)}`)).links
+}
+/** The token is returned only here, once; the server keeps just its hash. */
+export async function createInviteLink(teamId: string, role: 'admin' | 'member'): Promise<{ token: string; link: InviteLink }> {
+  return api(`invite-links?teamId=${encodeURIComponent(teamId)}`, { method: 'POST', body: JSON.stringify({ role }) })
+}
+export async function deleteInviteLink(teamId: string, id: string): Promise<void> {
+  await api(`invite-links?teamId=${encodeURIComponent(teamId)}&id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+}

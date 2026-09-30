@@ -22,7 +22,7 @@ Tokens live in `src/index.css`: neutral surfaces, a teal accent (`brand`), seman
 | Local → Team | "Copy Local issues": read straight from this browser, or from a backup file |
 | GitHub | Repository link, destination project, optional closed issues and private-repository token |
 | Team | Same navigation style; search, status/type/project filters and people management |
-| Invitations | Create an invitation, then share its join link; no automatic email. Say where the link works: this PC, the Wi-Fi (`--lan`) or Tailscale (`bugstow share`) |
+| Invitations | Create invite link → Copy; the invited person picks a username and password. No email anywhere. Say where the link works: this PC, the Wi-Fi (`--lan`) or Tailscale (`bugstow share`) |
 | Recovery | Failed team-code downloads show a reload action without clearing saved data |
 
 BugsTow has no cloud features. Never suggest syncing or storing issues online. GitHub import is one-way; editing an imported issue does not update GitHub.

@@ -10,7 +10,7 @@
  *   bugstow                 start if needed, then open BugsTow in the browser
  *   bugstow start [--lan] [--local] [--port N] [--no-open]
  *   bugstow stop | restart | status | logs | data | setup-token
- *   bugstow reset-password <email>
+ *   bugstow reset-password <username or email>
  *   bugstow share | unshare   let people on other networks join (via Tailscale)
  *   bugstow run             run in this terminal (Ctrl+C stops it)
  *   bugstow uninstall       remove the app; your data folder is kept
@@ -470,7 +470,7 @@ function run() {
 
 /** Sets a temporary password for a sign-in (you choose a new one when signing in). */
 function resetPassword(email) {
-  if (!email || !email.includes('@')) fail('Usage: bugstow reset-password you@example.com')
+  if (!email) fail('Usage: bugstow reset-password <username or email>')
   const s = readSettings()
   const cmd = serverCommand()
   const r = spawnSync(process.execPath, ['--import', 'tsx', 'src/reset-password.ts', email], {
@@ -609,7 +609,7 @@ function help() {
   bugstow logs             Show the last lines of the log
   bugstow data             Open the data folder
   bugstow setup-token      Show the one-time token for creating the first sign-in
-  bugstow reset-password E Forgot your password? Sets a temporary one for sign-in E
+  bugstow reset-password N Forgot a password? Temporary one for username (or email) N
   bugstow share            Let people on other networks join, through Tailscale
   bugstow unshare          Stop that
   bugstow run              Run in this terminal instead of the background
@@ -687,7 +687,7 @@ switch (cmd) {
     break
   case 'setup-token': {
     const t = readText(TOKEN_FILE)
-    say(t ? `  Setup token: ${t}` : '  No setup token: a sign-in already exists. Forgot the password? bugstow reset-password <email>')
+    say(t ? `  Setup token: ${t}` : '  No setup token: a sign-in already exists. Forgot the password? bugstow reset-password <username>')
     break
   }
   case 'share':

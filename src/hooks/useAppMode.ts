@@ -10,7 +10,16 @@ const STORAGE_KEY = 'bugstow_app_mode'
  * choice after upgrading.
  */
 export function readMode(): AppMode | null {
-  if (typeof location !== 'undefined' && location.hash.startsWith('#join=')) return 'team'
+  // Opened a team invite (link or older email invitation): straight to Team,
+  // and remembered, so opening the plain address later goes there too.
+  if (typeof location !== 'undefined' && /^#(join|invite)=/.test(location.hash)) {
+    try {
+      localStorage.setItem(STORAGE_KEY, 'team')
+    } catch {
+      // private mode: this visit still opens Team
+    }
+    return 'team'
+  }
   try {
     const v = localStorage.getItem(STORAGE_KEY)
     if (v === 'cloud') {
@@ -31,7 +40,9 @@ export function useAppMode() {
   const [mode, setModeState] = useState<AppMode | null>(() => readMode())
 
   const setMode = useCallback((next: AppMode) => {
-    if (location.hash.startsWith('#join=')) history.replaceState(null, '', location.pathname + location.search)
+    if (location.hash.startsWith('#join=') || (next === 'local' && location.hash.startsWith('#invite='))) {
+      history.replaceState(null, '', location.pathname + location.search)
+    }
     try {
       localStorage.setItem(STORAGE_KEY, next)
     } catch {

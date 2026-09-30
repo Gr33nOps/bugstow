@@ -55,7 +55,7 @@ isn't running yet) and opens it in your browser. You can also bookmark http://lo
 | `bugstow start --local` | This PC only again (the default) |
 | `bugstow share` | Let people on other networks connect through Tailscale (see below) |
 | `bugstow unshare` | Stop sharing through Tailscale |
-| `bugstow reset-password you@example.com` | Forgot your password: sets a temporary one |
+| `bugstow reset-password <username>` | Forgot a password: sets a temporary one (an email works for older accounts) |
 | `bugstow logs` | Show the log |
 | `bugstow uninstall` | Remove BugsTow; your data folder is kept |
 
@@ -132,7 +132,7 @@ and it is not published on the open internet.
 3. Share your PC with your friend: [Tailscale admin console](https://login.tailscale.com/admin/machines)
    → **Machines** → your PC → **⋯** → **Share**, and send them the share link Tailscale gives you.
 4. Your friend installs Tailscale, signs in and accepts the share.
-5. Invite them (below). The join link BugsTow shows now uses the Tailscale address.
+5. Invite them (below). Invite links now use the Tailscale address.
 
 Your PC must be on and BugsTow running while they use it. `bugstow unshare` stops sharing;
 `bugstow start --lan` also turns it off. The first run can ask you to enable HTTPS certificates
@@ -142,21 +142,21 @@ in the Tailscale admin console (a one-time click).
 
 Inviting needs **Team**. Local is only ever you.
 
-BugsTow **doesn't send invitation emails**: it has no email service, on purpose. An invite is a name
-on a list, so you send the person the link yourself. Until you do, they see nothing.
+No email is needed or sent. You send an invite link yourself, in any chat.
 
 1. Make BugsTow reachable for them first: `bugstow share` for people elsewhere, or
    `bugstow start --lan` for people on your network (then open the address it prints, not
-   `localhost`).
-2. Open **People & invitations**, enter their email and click **Create invitation**. Choose
-   Member for everyday work; Admin can also manage people. Existing accounts are added immediately.
-3. Copy the join link and send it in your own chat or email. Use **Share link** beside a pending
-   invitation to find its link again. The panel warns you when the link would only work on your PC.
-4. The link opens account creation with their email already filled in. They choose a password
-   and join automatically. Existing users choose **I already have an account** and sign in.
+   `localhost`). The panel warns you when a link would only work on your PC.
+2. Open **People & invitations** → **Create invite link** (as a member, or as an admin who can
+   invite others too) → **Copy**, and send the link.
+3. They open it and see **Join <workspace>**. They pick a **username** and **password** and
+   they're in. Next time they sign in with that username.
 
-Invitations expire after 7 days. Create the invitation again to renew it or change its role.
-You can cancel a pending invitation from the list.
+Each link works **once, for one person, for 7 days**. Make one link per person. Unused links are
+listed in the panel, and you can cancel one there. Someone who already has an account chooses
+**I already have an account** on the link's page and signs in; the workspace is added to it.
+
+Forgot a password? On this PC, `bugstow reset-password <username>` sets a temporary one.
 
 ## Keeping some projects to yourself
 
@@ -191,5 +191,5 @@ folder stays; delete it yourself if you want your issues gone.
 - **It doesn't start**: `bugstow logs` shows why.
 - **The `bugstow` command isn't found**: open a new terminal. On Linux/macOS, make sure
   `~/.local/bin` is on your PATH.
-- **Forgot your password**: `bugstow reset-password you@example.com` prints a temporary
+- **Forgot a password**: `bugstow reset-password <username>` (or the email of an older account) prints a temporary
   password; you choose a new one when you sign in.

@@ -28,6 +28,7 @@ import {
   Archive,
   MoreHorizontal,
   FolderInput,
+  Link2,
 } from "lucide-react"
 import { filterTeamIssues } from "../../lib/teamFilters"
 import { useTeamData } from "../../hooks/useTeamData"
@@ -39,10 +40,15 @@ import {
   listBackups,
   runBackupNow,
   type BackupStatus,
+  listInviteLinks,
+  createInviteLink,
+  deleteInviteLink,
+  type InviteLink,
 } from "../../services/teamApi"
+import { displayLogin } from "../../lib/login"
 import { connectionKind } from "../../lib/connection"
 import { GithubImportModal } from "../features/github/GithubImportModal"
-import { BugstowLogoIcon, BRAND_PRIMARY, GithubMark } from "../common/Icon"
+import { BugstowLogoIcon, BRAND_PRIMARY, GithubMark, timeAgo } from "../common/Icon"
 import { ModeSwitch } from "../common/ModeSwitch"
 import { isDesktopEdition } from "../../lib/teamServer"
 import { generateIssuePrompt } from "../../services/promptService"
@@ -742,9 +748,10 @@ function Workspace({
           <MembersModal
             role={activeTeam.role}
             me={me}
+            teamId={activeTeam.id}
+            teamName={activeTeam.name}
             members={members}
             invites={data.invites}
-            onInvite={data.inviteMember}
             onCancelInvite={data.cancelInvite}
             onRemove={data.removeMember}
             onClose={() => setShowMembers(false)}
@@ -1451,7 +1458,7 @@ function IssueDetail({
               { value: "", label: "Unassigned" },
               ...members.map((m) => ({
                 value: m.user_id,
-                label: m.name || m.email || m.user_id,
+                label: m.name || displayLogin(m.email) || m.user_id,
               })),
             ]}
           />
@@ -1706,7 +1713,7 @@ function NewIssueModal({
             <option value="">Unassigned</option>
             {members.map((m) => (
               <option key={m.user_id} value={m.user_id}>
-                {m.name || m.email}
+                {m.name || displayLogin(m.email)}
               </option>
             ))}
           </select>
@@ -1769,9 +1776,10 @@ function NewIssueModal({
 function MembersModal({
   role,
   me,
+  teamId,
+  teamName,
   members,
   invites,
-  onInvite,
   onCancelInvite,
   onRemove,
   onClose,
@@ -1779,371 +1787,341 @@ function MembersModal({
 }: {
   role: "owner" | "admin" | "member"
   me: CurrentUser
+  teamId: string
+  teamName: string
   members: TeamMember[]
+  /** Email invitations from before invite links; still shown so they can be cancelled. */
   invites: { id: string; email: string; role: string }[]
-  onInvite: (email: string, role: "admin" | "member") => Promise<void>
   onCancelInvite: (inviteId: string) => Promise<void>
   onRemove: (userId: string) => Promise<void>
   onClose: () => void
   onToast: (m: string) => void
 }) {
-  const [email, setEmail] = useState("")
-  const [lastInvited, setLastInvited] = useState("")
-  const [inviteError, setInviteError] = useState("")
-  const [inviteRole, setInviteRole] = useState<"admin" | "member">("member")
-  const [busy, setBusy] = useState(false)
   const canManage = role === "owner" || role === "admin"
+  const [inviteRole, setInviteRole] = useState<"admin" | "member">("member")
+  const [newLink, setNewLink] = useState<string | null>(null)
+  const [openLinks, setOpenLinks] = useState<InviteLink[]>([])
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
   const [resetTarget, setResetTarget] = useState<TeamMember | null>(null)
+  const base = me.shareUrl || window.location.origin
+
+  const loadLinks = () => {
+    if (!canManage) return
+    listInviteLinks(teamId)
+      .then(setOpenLinks)
+      .catch(() => {
+        // the list is a convenience; creating links still works
+      })
+  }
+  useEffect(loadLinks, [teamId, canManage])
 
   if (resetTarget) {
-    return (
-      <ResetPasswordDialog
-        member={resetTarget}
-        onClose={() => setResetTarget(null)}
-      />
-    )
+    return <ResetPasswordDialog member={resetTarget} onClose={() => setResetTarget(null)} />
+  }
+
+  const makeLink = async () => {
+    setBusy(true)
+    setError("")
+    try {
+      const { token } = await createInviteLink(teamId, inviteRole)
+      setNewLink(`${base}/#invite=${token}`)
+      loadLinks()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create a link. Try again.")
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
     <ModalShell onClose={onClose}>
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-5">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <Users size={18} /> People & invitations
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close dialog"
-            className="p-2 text-slate-400"
-          >
+          <h3 className="text-lg font-semibold">People in {teamName}</h3>
+          <button type="button" onClick={onClose} aria-label="Close dialog" className="p-2 text-slate-400">
             <X size={16} />
           </button>
         </div>
 
         {canManage && (
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault()
-              if (!email.includes("@")) {
-                onToast("Enter a valid email")
-                return
-              }
-              setBusy(true)
-              setInviteError("")
-              try {
-                await onInvite(email.trim(), inviteRole)
-                setLastInvited(email.trim().toLowerCase())
-                setEmail("")
-                onToast("Ready. Share the join link with your teammate.")
-              } catch (e2) {
-                setInviteError(
-                  e2 instanceof Error
-                    ? e2.message
-                    : "Could not invite. Try again.",
-                )
-              } finally {
-                setBusy(false)
-              }
-            }}
-            className="grid grid-cols-2 sm:grid-cols-[1fr_auto_auto] gap-2"
-          >
-            <input
-              type="email"
-              required
-              aria-label="Teammate email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="teammate@email.com"
-              className="min-w-0 col-span-2 sm:col-span-1 flex-1 px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-brand"
-            />
-            <select
-              aria-label="Team role"
-              value={inviteRole}
-              onChange={(e) =>
-                setInviteRole(e.target.value as "admin" | "member")
-              }
-              className="px-2 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
-            >
-              <option value="member">Member</option>
-              <option value="admin">Admin</option>
-            </select>
-            <button
-              type="submit"
-              disabled={busy}
-              className="px-3 py-2 text-sm font-semibold text-white bg-brand rounded-lg disabled:opacity-50"
-            >
-              {busy ? "Creating…" : "Create invitation"}
-            </button>
-          </form>
+          <section className="flex flex-col gap-3" aria-labelledby="invite-heading">
+            <h4 id="invite-heading" className="text-sm font-semibold">
+              Invite someone
+            </h4>
+            {!newLink ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  aria-label="Their role"
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as "admin" | "member")}
+                  className="px-2 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
+                >
+                  <option value="member">As a member</option>
+                  <option value="admin">As an admin (can invite too)</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={makeLink}
+                  disabled={busy}
+                  className="px-4 py-2 text-sm font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg disabled:opacity-50"
+                >
+                  {busy ? "Creating…" : "Create invite link"}
+                </button>
+              </div>
+            ) : (
+              <InviteLinkBox link={newLink} onToast={onToast} onAnother={() => setNewLink(null)} />
+            )}
+            {error && (
+              <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
+                {error}
+              </p>
+            )}
+            <Reachability shareUrl={me.shareUrl ?? null} onToast={onToast} />
+          </section>
         )}
-        <div className="max-h-60 overflow-y-auto flex flex-col divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg">
-          {members.map((m) => (
-            <div
-              key={m.user_id}
-              className="flex items-center gap-3 px-3 py-2.5"
-            >
-              <span className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 text-xs font-semibold flex items-center justify-center text-slate-600 dark:text-slate-200">
-                {initials(m.name, m.email)}
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">
-                  {m.name || m.email}
-                </p>
-                <p className="text-xs text-slate-400 truncate">{m.email}</p>
-              </div>
-              <span className="text-xs font-semibold text-slate-500 capitalize">
-                {m.role}
-              </span>
-              {me.isServerAdmin && m.user_id !== me.id && (
-                <button
-                  type="button"
-                  onClick={() => setResetTarget(m)}
-                  title="Reset password"
-                  aria-label={`Reset password for ${m.name || m.email}`}
-                  className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                >
-                  <KeyRound size={14} />
-                </button>
-              )}
-              {canManage && m.role !== "owner" && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await onRemove(m.user_id)
-                      onToast("Member removed")
-                    } catch (e) {
-                      onToast(e instanceof Error ? e.message : "Failed")
-                    }
-                  }}
-                  aria-label={`Remove ${m.name || m.email}`}
-                  className="p-2 text-slate-400 hover:text-rose-600"
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </div>
-          ))}
-          {invites.map((inv) => (
-            <div
-              key={inv.id}
-              className="flex items-center gap-3 px-3 py-2.5 opacity-70"
-            >
-              <span className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-xs flex items-center justify-center text-slate-400">
-                @
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm truncate">{inv.email}</p>
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  Pending · {inv.role}
-                </p>
-              </div>
-              {canManage && (
-                <button
-                  type="button"
-                  onClick={() => setLastInvited(inv.email)}
-                  className="px-2 py-2 text-xs font-semibold text-indigo-600 dark:text-indigo-300"
-                >
-                  Share link
-                </button>
-              )}
-              {canManage && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await onCancelInvite(inv.id)
-                      onToast("Invite cancelled")
-                    } catch (e) {
-                      onToast(e instanceof Error ? e.message : "Failed")
-                    }
-                  }}
-                  aria-label={`Cancel invite for ${inv.email}`}
-                  title="Cancel invite"
-                  className="p-1 text-slate-400 hover:text-rose-600"
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
 
-        {inviteError && (
-          <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
-            {inviteError}
+        <section className="flex flex-col gap-2" aria-label="Members">
+          <div className="max-h-60 overflow-y-auto flex flex-col divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg">
+            {members.map((m) => {
+              const login = displayLogin(m.email)
+              return (
+                <div key={m.user_id} className="flex items-center gap-3 px-3 py-2.5">
+                  <span className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 text-xs font-semibold flex items-center justify-center text-slate-600 dark:text-slate-200">
+                    {initials(m.name, login)}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {m.name || login}
+                      {m.user_id === me.id && <span className="font-normal text-slate-400"> (you)</span>}
+                    </p>
+                    {m.name && m.name !== login && <p className="text-xs text-slate-400 truncate">{login}</p>}
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500 capitalize">{m.role}</span>
+                  {me.isServerAdmin && m.user_id !== me.id && (
+                    <button
+                      type="button"
+                      onClick={() => setResetTarget(m)}
+                      title="Reset password"
+                      aria-label={`Reset password for ${m.name || login}`}
+                      className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                    >
+                      <KeyRound size={14} />
+                    </button>
+                  )}
+                  {canManage && m.role !== "owner" && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await onRemove(m.user_id)
+                          onToast("Removed from the workspace")
+                        } catch (e) {
+                          onToast(e instanceof Error ? e.message : "Failed")
+                        }
+                      }}
+                      aria-label={`Remove ${m.name || login}`}
+                      className="p-2 text-slate-400 hover:text-rose-600"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+            {canManage &&
+              openLinks.map((l) => (
+                <div key={l.id} className="flex items-center gap-3 px-3 py-2.5">
+                  <span className="w-8 h-8 rounded-full border border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-400">
+                    <Link2 size={14} />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm">Invite link, not used yet</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {l.role === "admin" ? "Admin" : "Member"} · made {timeAgo(l.created_at)}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await deleteInviteLink(teamId, l.id)
+                        loadLinks()
+                        onToast("Link cancelled. It no longer works.")
+                      } catch (e) {
+                        onToast(e instanceof Error ? e.message : "Failed")
+                      }
+                    }}
+                    aria-label="Cancel this invite link"
+                    title="Cancel link"
+                    className="p-1 text-slate-400 hover:text-rose-600"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            {canManage &&
+              invites.map((inv) => (
+                <div key={inv.id} className="flex items-center gap-3 px-3 py-2.5 opacity-70">
+                  <span className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-xs flex items-center justify-center text-slate-400">
+                    @
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate">{inv.email}</p>
+                    <p className="text-xs text-slate-500">Older email invitation · {inv.role}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await onCancelInvite(inv.id)
+                        onToast("Invitation cancelled")
+                      } catch (e) {
+                        onToast(e instanceof Error ? e.message : "Failed")
+                      }
+                    }}
+                    aria-label={`Cancel invitation for ${inv.email}`}
+                    title="Cancel invitation"
+                    className="p-1 text-slate-400 hover:text-rose-600"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Everyone here sees every project in {teamName}. To keep a project to yourself, use ⋯ next to it → Move to
+            workspace.
           </p>
-        )}
-        {canManage && (
-          <HowTheyJoin email={lastInvited} shareUrl={me.shareUrl ?? null} onToast={onToast} />
-        )}
+        </section>
       </div>
     </ModalShell>
   )
 }
 
-/**
- * BugsTow never sends email (no internet service is involved), so an invite is
- * only a name on a list. This says so, gives the join link to send yourself,
- * and, when that link can't be opened by anyone else, says how to fix that:
- * `bugstow share` (Tailscale) for people on other networks.
- */
-function HowTheyJoin({
-  email,
-  shareUrl,
-  onToast,
-}: {
-  email: string
-  /** Set while the desktop app is shared through Tailscale. */
-  shareUrl: string | null
-  onToast: (m: string) => void
-}) {
-  const base = shareUrl || window.location.origin
-  const address = email ? `${base}/#join=${encodeURIComponent(email)}` : base
-  const desktop = isDesktopEdition()
-  const onlyThisComputer = !shareUrl && connectionKind() === "localhost"
-  const copy = async (text: string, what: string) => {
+/** A fresh invite link, ready to copy. It's shown once: only its hash is stored. */
+function InviteLinkBox({ link, onToast, onAnother }: { link: string; onToast: (m: string) => void; onAnother: () => void }) {
+  const copy = async () => {
     try {
-      await navigator.clipboard.writeText(text)
-      onToast(`${what} copied`)
+      await navigator.clipboard.writeText(link)
+      onToast("Invite link copied")
     } catch {
-      onToast("Select it and copy it yourself")
+      onToast("Select the link and copy it yourself")
     }
   }
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3.5 flex flex-col gap-2.5 text-sm">
-      <p className="font-semibold">
-        {email ? `Send ${email} this link` : "How people join"}
-      </p>
-      <p className="text-slate-600 dark:text-slate-300">
-        BugsTow doesn't send emails. Invite their email above, then send them
-        the link in your own chat or email. They open it and create an account
-        with that same email. Invitations last 7 days.
-      </p>
+    <div className="flex flex-col gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3">
       <div className="flex items-center gap-2">
         <input
-          aria-label="Join link"
+          aria-label="Invite link"
           readOnly
-          value={address}
+          value={link}
           onFocus={(e) => e.target.select()}
-          className="flex-1 min-w-0 px-2.5 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs"
+          className="flex-1 min-w-0 px-2.5 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono"
         />
         <button
           type="button"
-          onClick={() => copy(address, "Link")}
-          className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+          onClick={copy}
+          className="px-3 py-2 text-sm font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg"
         >
           Copy
         </button>
       </div>
-
-      {shareUrl && (
-        <div
-          role="note"
-          className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-200 flex flex-col gap-1.5"
-        >
-          <p>
-            <strong>Shared through Tailscale.</strong> For this link to open for
-            them, your friend also needs:
-          </p>
-          <ol className="list-decimal pl-4 space-y-0.5">
-            <li>
-              This PC shared with them in Tailscale:{" "}
-              <a
-                href="https://login.tailscale.com/admin/machines"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline font-semibold"
-              >
-                Machines
-              </a>{" "}
-              → this PC → ⋯ → Share.
-            </li>
-            <li>The free Tailscale app, signed in, with your share accepted.</li>
-          </ol>
-          <p>Keep this computer on while they use BugsTow.</p>
-        </div>
-      )}
-
-      {onlyThisComputer && desktop && (
-        <div
-          role="note"
-          className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 flex flex-col gap-1.5"
-        >
-          <p>
-            <strong>Right now this link only opens on this computer.</strong>{" "}
-            First let them reach it, one of two ways:
-          </p>
-          <dl className="grid gap-2">
-            <div>
-              <dt className="font-semibold">On the same Wi-Fi or office network</dt>
-              <dd>
-                In a terminal, run{" "}
-                <button
-                  type="button"
-                  onClick={() => copy("bugstow start --lan", "Command")}
-                  title="Copy"
-                  className="font-mono px-1 rounded bg-amber-100 dark:bg-amber-900/60 hover:underline"
-                >
-                  bugstow start --lan
-                </button>
-                , then open this panel from the address it prints.
-              </dd>
-            </div>
-            <div>
-              <dt className="font-semibold">Somewhere else</dt>
-              <dd>
-                Install{" "}
-                <a
-                  href="https://tailscale.com/download"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline font-semibold"
-                >
-                  Tailscale
-                </a>{" "}
-                (free) on this PC and theirs, run{" "}
-                <button
-                  type="button"
-                  onClick={() => copy("bugstow share", "Command")}
-                  title="Copy"
-                  className="font-mono px-1 rounded bg-amber-100 dark:bg-amber-900/60 hover:underline"
-                >
-                  bugstow share
-                </button>{" "}
-                and follow what it prints. Then reopen this panel.
-              </dd>
-            </div>
-          </dl>
-        </div>
-      )}
-
-      {desktop && !shareUrl && !onlyThisComputer && (
-        <p className="text-xs text-slate-600 dark:text-slate-300">
-          This link works for people on the same network as this PC, while it’s on.
-          For someone elsewhere, run <code>bugstow share</code> (Tailscale).
-        </p>
-      )}
-
-      {onlyThisComputer && !desktop && (
-        <div
-          role="note"
-          className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200"
-        >
-          <strong>Nobody else can open this address.</strong> Set{" "}
-          <code>BUGSTOW_BASE_URL</code> to the server's network address (see
-          docs/SELF_HOSTING.md), so teammates can open it.
-        </div>
-      )}
-
-      <p className="text-xs text-slate-500 dark:text-slate-400">
-        Want some projects to stay yours only? Keep them in a workspace nobody
-        else is in: next to a project in the sidebar, choose ⋯ → Move to
-        workspace.
+      <p className="text-xs text-slate-600 dark:text-slate-300">
+        Send it in any chat. It works once, for one person, for 7 days. They open it, pick a username and password,
+        and they're in.
       </p>
+      <button
+        type="button"
+        onClick={onAnother}
+        className="self-start text-xs font-semibold text-brand dark:text-indigo-300 hover:underline"
+      >
+        Create another link
+      </button>
     </div>
   )
+}
+
+/**
+ * Whether the people you invite can reach this BugsTow at all, and if not,
+ * how to fix it: the Wi-Fi (`bugstow start --lan`) or Tailscale (`bugstow share`).
+ */
+function Reachability({ shareUrl, onToast }: { shareUrl: string | null; onToast: (m: string) => void }) {
+  const desktop = isDesktopEdition()
+  const onlyThisComputer = !shareUrl && connectionKind() === "localhost"
+  const copy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      onToast("Command copied")
+    } catch {
+      onToast("Select it and copy it yourself")
+    }
+  }
+  const Cmd = ({ text }: { text: string }) => (
+    <button
+      type="button"
+      onClick={() => copy(text)}
+      title="Copy"
+      className="font-mono px-1 rounded bg-amber-100 dark:bg-amber-900/60 hover:underline"
+    >
+      {text}
+    </button>
+  )
+
+  if (shareUrl) {
+    return (
+      <p className="text-xs text-slate-600 dark:text-slate-300">
+        <span className="font-semibold text-emerald-700 dark:text-emerald-400">Shared through Tailscale.</span> The link
+        opens for people you've shared this PC with in Tailscale (
+        <a
+          href="https://login.tailscale.com/admin/machines"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline"
+        >
+          Machines
+        </a>{" "}
+        → this PC → ⋯ → Share) who have the Tailscale app. Keep this PC on while they use it.
+      </p>
+    )
+  }
+  if (onlyThisComputer && desktop) {
+    return (
+      <div
+        role="note"
+        className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 flex flex-col gap-2"
+      >
+        <p>
+          <strong>Right now links only open on this computer.</strong> Let people reach it first:
+        </p>
+        <p>
+          <strong>Same Wi-Fi or office:</strong> run <Cmd text="bugstow start --lan" /> and open this panel from the
+          address it prints.
+        </p>
+        <p>
+          <strong>Somewhere else:</strong> install{" "}
+          <a href="https://tailscale.com/download" target="_blank" rel="noopener noreferrer" className="underline font-semibold">
+            Tailscale
+          </a>{" "}
+          (free) on this PC and theirs, run <Cmd text="bugstow share" />, then reopen this panel.
+        </p>
+      </div>
+    )
+  }
+  if (onlyThisComputer) {
+    return (
+      <p role="note" className="text-xs text-amber-800 dark:text-amber-300">
+        Nobody else can open this address. Set <code>BUGSTOW_BASE_URL</code> to the server's network address (see
+        docs/SELF_HOSTING.md).
+      </p>
+    )
+  }
+  return desktop ? (
+    <p className="text-xs text-slate-600 dark:text-slate-300">
+      The link works for people on the same network as this PC, while it's on. For someone elsewhere, run{" "}
+      <code>bugstow share</code> (Tailscale).
+    </p>
+  ) : null
 }
 
 const INPUT_CLS =
@@ -2260,7 +2238,7 @@ function ResetPasswordDialog({
   member: TeamMember
   onClose: () => void
 }) {
-  const who = member.name || member.email || "this person"
+  const who = member.name || displayLogin(member.email) || "this person"
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [temp, setTemp] = useState<string | null>(null)
@@ -2355,7 +2333,7 @@ function ResetPasswordDialog({
               <strong className="text-slate-900 dark:text-slate-100">
                 {who}
               </strong>
-              {member.name && member.email ? ` (${member.email})` : ""}. Their
+              {member.name && member.email && member.name !== displayLogin(member.email) ? ` (${displayLogin(member.email)})` : ""}. Their
               current password stops working and they're signed out on every
               device.
             </p>

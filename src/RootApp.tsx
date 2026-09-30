@@ -3,6 +3,7 @@ import App from "./App"
 import { loadWithFallback } from "./lib/lazyModule"
 import { useAppMode } from "./hooks/useAppMode"
 import { detectTeamServer, type TeamServerInfo } from "./lib/teamServer"
+import { connectionKind } from "./lib/connection"
 import { ModePicker } from "./components/team/ModePicker"
 import { SelfHostInfo } from "./components/team/SelfHostInfo"
 
@@ -68,6 +69,19 @@ export default function RootApp() {
     return (
       <div className="h-full">
         <SelfHostInfo onBack={() => setShowSelfHost(false)} />
+      </div>
+    )
+  }
+
+  // Someone reaching the desktop app from another device (Wi-Fi or Tailscale)
+  // is here to join its Team; Local vs Team is the owner's choice on that PC.
+  const remoteVisitor = team.available && team.edition === "desktop" && connectionKind() !== "localhost"
+  if (mode === null && remoteVisitor) {
+    return (
+      <div className="h-full">
+        <Suspense fallback={<Loading />}>
+          <TeamRoot setupComplete={team.setupComplete} offline={team.offline} onUseLocal={() => setMode("local")} />
+        </Suspense>
       </div>
     )
   }

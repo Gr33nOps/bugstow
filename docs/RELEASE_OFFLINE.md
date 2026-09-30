@@ -142,8 +142,9 @@ docker exec bugstow npm run -s setup-token
 2. Enter the setup token, your name, email and a password → **Create administrator**.
 3. The token stops working immediately. From now on only invited people can
    register (unless you set `BUGSTOW_OPEN_SIGNUP=true`).
-4. Create a team, then invite teammates by email from **Members**. An invite is
-   simply permission to register with that email; it expires after 7 days.
+4. Create a team, then invite teammates from **People & invitations → Create
+   invite link**. Each link lets one person register (username and password),
+   once, within 7 days.
 
 Restarting the server before setup shows the same token again. Servers that
 already have an administrator never get a token.
@@ -464,7 +465,7 @@ Write PASS or FAIL in each box. Stop at the first FAIL and note what you saw.
 | 8 | On A open `https://<A's IP>:8080`. Accept the warning **only this once** | BugsTow welcome page | |
 | 9 | Choose **My team**. Fill name/email/password but a **wrong** setup token → Create administrator | Refused: "setup token is missing or wrong" | |
 | 10 | Enter the **correct** token → Create administrator | You are signed in | |
-| 11 | Sign out. Choose My team → "I was invited…" and try to register a new email | Refused: sign-up is closed | |
+| 11 | Sign out. Without an invite link there is no way to create an account | Only "Sign in" is offered | |
 
 **Certificate trust (on B)**
 
@@ -478,8 +479,8 @@ Write PASS or FAIL in each box. Stop at the first FAIL and note what you saw.
 
 | # | Do this | Expected | PASS/FAIL |
 |---|---|---|---|
-| 15 | On A sign in as admin, create team "Test", open **Members**, invite B's email | Invite listed | |
-| 16 | On B choose My team → "I was invited…", register with that email | B is signed in and sees team "Test" | |
+| 15 | On A sign in as admin, create team "Test", open **People & invitations** → **Create invite link**, copy it to B | "Invite link, not used yet" listed | |
+| 16 | On B open the link: "Join Test"; pick a username and password | B is signed in and sees team "Test"; the link now says expired | |
 | 17 | On B sign out, then sign in again | Works | |
 | 18 | On A create project "Website" | Appears on A | |
 | 19 | On A create an issue in "Website" and paste a screenshot | Issue shows the screenshot | |

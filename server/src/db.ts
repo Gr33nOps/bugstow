@@ -96,6 +96,22 @@ export function migrateAppSchema(): void {
       value text not null
     );
 
+    -- Invite links (2.7): a single-use link, no email needed. Only a hash of
+    -- the secret token is stored. claimed_login is set while the invited
+    -- person's account is being created; used_by once they have joined.
+    create table if not exists invite_links (
+      id text primary key,
+      team_id text not null references teams(id) on delete cascade,
+      role text not null default 'member' check (role in ('admin','member')),
+      token_hash text not null unique,
+      created_by text not null,
+      created_at text not null,
+      claimed_login text,
+      used_by text,
+      used_at text
+    );
+    create index if not exists invite_links_team_idx on invite_links(team_id);
+
     create table if not exists user_flags (
       user_id text primary key,
       must_change_password integer not null default 0,

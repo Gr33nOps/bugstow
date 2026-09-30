@@ -235,6 +235,66 @@ test('reinviting an email refreshes one invitation and uses the latest role', as
   assert.equal(members.find((m: any) => m.email === email).role, 'member')
 })
 
+test('invite links: no email, single use, and a username-only account signs in', async () => {
+  const D = client() // someone new, opening the link
+  const E = client() // someone else who got hold of the same link
+  const guest = client(null)
+  // Members can't make links; owners/admins can.
+  assert.equal((await C(`/api/invite-links?teamId=${teamId}`, { method: 'POST', body: {} })).status, 403)
+  const made = await A(`/api/invite-links?teamId=${teamId}`, { method: 'POST', body: { role: 'member' } })
+  assert.equal(made.status, 201)
+  const token = made.data.token as string
+  assert.equal((await A(`/api/invite-links?teamId=${teamId}`)).data.links.length, 1)
+
+  // The join page can say what it's for, without an account.
+  const info = await guest(`/api/invite-links/info?token=${token}`)
+  assert.equal(info.status, 200)
+  assert.equal(info.data.teamName, 'LAN Team')
+  assert.equal((await guest('/api/invite-links/info?token=not-a-real-token-at-all-xx')).status, 404)
+
+  // Without the link, sign-up stays closed; with a wrong link it's refused.
+  const login = 'dana@bugstow.invalid' // what the app sends for username "dana"
+  const body = { email: login, password: pw(), name: 'dana' }
+  assert.equal((await D('/api/auth/sign-up/email', { method: 'POST', body })).status, 403)
+  assert.equal(
+    (await D('/api/auth/sign-up/email', { method: 'POST', body, headers: { 'x-bugstow-invite': 'x'.repeat(32) } })).status,
+    403
+  )
+  const joined = await D('/api/auth/sign-up/email', { method: 'POST', body, headers: { 'x-bugstow-invite': token } })
+  assert.equal(joined.status, 200)
+  const teams = (await D('/api/teams')).data.teams as Array<{ id: string; role: string }>
+  assert.deepEqual(teams.map(t => [t.id, t.role]), [[teamId, 'member']])
+
+  // Used up: nobody else gets in with it, and it's gone from the list.
+  const again = await E('/api/auth/sign-up/email', {
+    method: 'POST',
+    body: { email: 'eve@bugstow.invalid', password: pw(), name: 'eve' },
+    headers: { 'x-bugstow-invite': token },
+  })
+  assert.equal(again.status, 403)
+  assert.equal((await guest(`/api/invite-links/info?token=${token}`)).status, 404)
+  assert.equal((await A(`/api/invite-links?teamId=${teamId}`)).data.links.length, 0)
+
+  // Signs in later with the same username-based login.
+  const F = client()
+  const signIn = await F('/api/auth/sign-in/email', { method: 'POST', body: { email: login, password: body.password } })
+  assert.equal(signIn.status, 200)
+
+  // An existing account opening a new link joins that team.
+  const other = await A('/api/teams', { method: 'POST', body: { name: 'Second' } })
+  const link2 = (await A(`/api/invite-links?teamId=${other.data.team.id}`, { method: 'POST', body: { role: 'admin' } })).data.token
+  assert.equal((await D('/api/invite-links/accept', { method: 'POST', body: { token: link2 } })).status, 200)
+  assert.equal((await D('/api/invite-links/accept', { method: 'POST', body: { token: link2 } })).status, 404)
+  const roles = ((await D('/api/teams')).data.teams as Array<{ id: string; role: string }>).find(t => t.id === other.data.team.id)
+  assert.equal(roles?.role, 'admin')
+
+  // A link can be cancelled before it's used.
+  const link3 = await A(`/api/invite-links?teamId=${teamId}`, { method: 'POST', body: {} })
+  await A(`/api/invite-links?teamId=${teamId}&id=${link3.data.link.id}`, { method: 'DELETE' })
+  assert.equal((await guest(`/api/invite-links/info?token=${link3.data.token}`)).status, 404)
+})
+
+
 test('repeated failed sign-ins are throttled', async () => {
   const guesser = client()
   let throttled = false
@@ -406,3 +466,4 @@ test('copying Local issues in keeps completed status and GitHub links, and never
   assert.equal(odd.data.issue.status, 'open')
   assert.equal(odd.data.issue.github_url, null)
 })
+

@@ -24,9 +24,9 @@ browser or computer for the teammate.
 | D6 | Disconnect from the internet and repeat D4 | Works the same | |
 | D7 | Run the install command again (update) | Finishes; data and sign-in unchanged | |
 | D8 | `bugstow start --lan`, open the printed address on a phone on the same Wi-Fi | Certificate warning once; after accepting, sign in and see the issues | |
-| D8b | With `--lan` running, invite a second person's email; open the address on their device, choose *I was invited: create my account* | They sign up with that email and see the team. An uninvited email is refused | |
-| D8c | On localhost, People & invitations → create an invitation | Amber note: the link only works on this PC, with the `bugstow share` steps. No `#join=` link without an email | |
-| D8d | With Tailscale signed in: `bugstow share`, then invite someone on another network whose device has Tailscale and accepted the machine share | Join link is `https://<pc>.<tailnet>.ts.net:<port>/#join=…`, green note; they sign up and see the workspace. `tailscale serve status` shows only BugsTow's port; anything already on 443 is untouched | |
+| D8b | With `--lan` running, **Create invite link** and open it on a second device | "Join <workspace>"; they pick a username and password and see the team. Opening the same link again: "expired or already used" | |
+| D8c | On localhost, People & invitations | Amber note: links only open on this PC, with the `--lan` and `bugstow share` steps | |
+| D8d | With Tailscale signed in: `bugstow share`, then invite someone on another network whose device has Tailscale and accepted the machine share | Invite link is `https://<pc>.<tailnet>.ts.net:<port>/#invite=…`; they join with a username and see the workspace; later the plain address opens Team directly (no Local/Team screen). `tailscale serve status` shows only BugsTow's port; anything already on 443 is untouched | |
 | D8e | `bugstow unshare` | The ts.net address stops working; other `tailscale serve` entries remain | |
 | D8f | Sidebar ⋯ next to a project → Move to workspace → New workspace, only you | Project and its issues leave the shared workspace; the invited person no longer sees them; the switcher says “Only you” | |
 | D9 | `bugstow uninstall` | Shortcuts and the command are gone; the data folder is still there | |
@@ -65,8 +65,8 @@ browser or computer for the teammate.
 | T1 | Open the server, choose **Team** | "Set up this server" with Setup token field and "Encrypted connection (HTTPS)" | |
 | T2 | Create administrator with a wrong token, then the right one | Wrong: clear error. Right: signed in | |
 | T3 | Sign out, sign in again | Sign-in form (not the setup form); sign-in works | |
-| T4 | People & invitations → invite a teammate's email | Listed as pending invite | |
-| T5 | Teammate: "I was invited: create my account" with that email | Signed in, sees the team | |
+| T4 | People & invitations → Create invite link | Link shown with Copy; "Invite link, not used yet" in the list; cancel removes it and the link stops working | |
+| T5 | Teammate opens the link, picks a username and password | Signed in, sees the team; the owner sees their username (no email) in the list | |
 | T6 | Admin: People & invitations → key icon → Reset password for the teammate | Temporary password shown once, Copy works | |
 | T7 | Teammate reloads, signs in with the temporary password | Forced "Choose a new password" screen; nothing else reachable | |
 | T8 | Teammate sets a new password | Back in the workspace | |

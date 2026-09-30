@@ -16,6 +16,13 @@ import { saveScreenshot, resolveScreenshot, deleteScreenshotFile } from './stora
 import { runBackup, listBackups, listExternalBackups, getExternalBackupStatus } from './backup.ts'
 import { getCurrentCert } from './tls.ts'
 import { resetUserPassword } from './passwords.ts'
+import {
+  acceptInviteLink,
+  createInviteLink,
+  deleteInviteLink,
+  findUsableInviteLink,
+  listOpenInviteLinks,
+} from './inviteLinks.ts'
 
 const TYPES = ['bug', 'uiux', 'idea']
 const STATUSES = ['open', 'fixed']
@@ -79,6 +86,18 @@ api.get('/tls/certificate', (_req, res) => {
   res.setHeader('Content-Type', 'application/x-x509-ca-cert')
   res.setHeader('Content-Disposition', 'attachment; filename="bugstow-server.crt"')
   res.send(cert.cert)
+})
+
+// What an invite link is for, so the join page can say "Join Studio". Public:
+// the person opening it has no account yet. Says nothing without a valid token.
+api.get('/invite-links/info', (req, res) => {
+  const link = findUsableInviteLink(req.query.token)
+  if (!link) {
+    res.status(404).json({ code: 'INVITE_INVALID', error: 'This invite link has expired or was already used.' })
+    return
+  }
+  const team = db.prepare('select name from teams where id = ?').get(link.team_id) as { name: string } | undefined
+  res.json({ teamName: team?.name ?? 'a workspace', invitedBy: getUserById(link.created_by)?.name || null, role: link.role })
 })
 
 // Everything below requires a session.
@@ -216,7 +235,8 @@ api.get(
       .prepare(
         `select tm.user_id, tm.role, u.name, u.email
          from team_members tm left join user u on u.id = tm.user_id
-         where tm.team_id = ? order by tm.role, u.email`
+         where tm.team_id = ?
+         order by case tm.role when 'owner' then 0 when 'admin' then 1 else 2 end, lower(coalesce(u.name, u.email))`
       )
       .all(teamId)
     const invites = db
@@ -314,6 +334,63 @@ api.delete(
     }
     db.prepare('delete from team_members where team_id = ? and user_id = ?').run(teamId, targetUserId)
     res.json({ removed: true })
+  })
+)
+
+// ── Invite links (no email) ─────────────────────────────────────────────────────
+function requireTeamManager(req: import('express').Request, res: import('express').Response): string | null {
+  const teamId = qp(req, 'teamId')
+  const role = teamId ? teamRole(req.user!.id, teamId) : null
+  if (!teamId || !role) {
+    res.status(403).json({ error: 'Not a member of this team.' })
+    return null
+  }
+  if (role !== 'owner' && role !== 'admin') {
+    res.status(403).json({ error: 'Only owners and admins can invite people.' })
+    return null
+  }
+  return teamId
+}
+
+api.get(
+  '/invite-links',
+  asyncRoute(async (req, res) => {
+    const teamId = requireTeamManager(req, res)
+    if (!teamId) return
+    res.json({ links: listOpenInviteLinks(teamId) })
+  })
+)
+
+api.post(
+  '/invite-links',
+  asyncRoute(async (req, res) => {
+    const teamId = requireTeamManager(req, res)
+    if (!teamId) return
+    const { token, link } = createInviteLink(teamId, req.body?.role === 'admin' ? 'admin' : 'member', req.user!.id)
+    res.status(201).json({ token, link })
+  })
+)
+
+api.delete(
+  '/invite-links',
+  asyncRoute(async (req, res) => {
+    const teamId = requireTeamManager(req, res)
+    if (!teamId) return
+    deleteInviteLink(String(qp(req, 'id') || ''), teamId)
+    res.json({ removed: true })
+  })
+)
+
+// Someone who already has an account opened a link.
+api.post(
+  '/invite-links/accept',
+  asyncRoute(async (req, res) => {
+    const joined = acceptInviteLink(req.body?.token, req.user!.id)
+    if (!joined) {
+      res.status(404).json({ code: 'INVITE_INVALID', error: 'This invite link has expired or was already used.' })
+      return
+    }
+    res.json({ teamId: joined.teamId })
   })
 )
 

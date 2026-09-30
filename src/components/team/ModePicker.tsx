@@ -97,7 +97,7 @@ export function ModePicker({ teamAvailable, desktop = false, onChoose, onSelfHos
           Just you, or with other people?
         </h1>
         <p className="mt-2 mb-8 text-base text-slate-600 dark:text-slate-300">
-          You can switch in Settings at any time.
+          You can switch any time at the bottom of the sidebar.
         </p>
         <div className="grid md:grid-cols-2 gap-4">{teamFirst ? [team, local] : [local, team]}</div>
         <p className="mt-6 text-sm text-slate-500 dark:text-slate-400">

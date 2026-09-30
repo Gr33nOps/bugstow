@@ -10,6 +10,7 @@ import {
 } from './db.ts'
 import { config } from './config.ts'
 import { SETUP_TOKEN_HEADER, verifySetupToken, clearSetupToken } from './setup.ts'
+import { INVITE_LINK_HEADER, claimInviteLink, completeClaimedInviteLink } from './inviteLinks.ts'
 
 /**
  * Self-hosted better-auth instance backed by the shared SQLite database.
@@ -68,10 +69,18 @@ export const authOptions = {
             }
             return { data: user }
           }
+          // Opened an invite link: the link (not the email) is the permission.
+          const inviteToken = ctx?.headers?.get(INVITE_LINK_HEADER)
+          if (inviteToken) {
+            if (email && claimInviteLink(inviteToken, email)) return { data: user }
+            throw new APIError('FORBIDDEN', {
+              message: 'This invite link has expired or was already used. Ask for a new one.',
+            })
+          }
           if (config.openSignup) return { data: user }
           if (email && hasPendingInvite(email)) return { data: user }
           throw new APIError('FORBIDDEN', {
-            message: 'Sign-up is closed on this server. Ask an admin to invite you.',
+            message: 'Sign-up is closed on this server. Ask for an invite link.',
           })
         },
         after: async user => {
@@ -80,7 +89,10 @@ export const authOptions = {
             setServerAdmin(user.id)
             clearSetupToken() // one-time: can never be used again
           }
-          if (user.email) acceptInvitesForEmail(user.id, user.email)
+          if (user.email) {
+            completeClaimedInviteLink(user.id, user.email)
+            acceptInvitesForEmail(user.id, user.email)
+          }
         },
       },
     },
