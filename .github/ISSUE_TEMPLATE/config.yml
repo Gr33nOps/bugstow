@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Installation and troubleshooting
+    url: https://github.com/Gr33nOps/bugstow/blob/main/docs/INSTALL.md
+    about: Start here for setup, updates, connections and backups.
+  - name: Report a security vulnerability
+    url: https://github.com/Gr33nOps/bugstow/security/policy
+    about: Follow the private reporting instructions. Do not post details publicly.

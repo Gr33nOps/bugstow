@@ -1,0 +1,19 @@
+node_modules
+server/node_modules
+dist
+build
+.git
+.github
+**/data
+server/data
+server/testdata
+server/intdata
+*.log
+.env
+.env.*
+.vscode
+.idea
+.playwright-mcp
+# any local tool folder (dot-directories) stays out of the image
+.*/
+docs/screenshots

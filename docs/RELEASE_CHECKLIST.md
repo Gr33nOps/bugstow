@@ -1,0 +1,92 @@
+# BugsTow — Manual Release Checklist
+
+Browser checks that automated tests can't fully cover. Do them in a real browser
+before announcing a release. Write PASS or FAIL in each box; nothing here counts
+as passed until a person has done it.
+
+This is a reusable manual checklist. Blank cells mean **not recorded**, not passed.
+
+Setup: the app installed with the one-command installer (docs/INSTALL.md) on a
+Windows PC and, if possible, a Mac or Linux computer; a fresh Team server with
+HTTPS on (`BUGSTOW_TLS=true`, `BUGSTOW_BASE_URL=https://<IP>:8080`); and a second
+browser or computer for the teammate.
+
+## Installed app
+
+| # | Check | Expected | PASS/FAIL |
+|---|---|---|---|
+| D1 | Run the install command in a new terminal | Node.js and BugsTow download with "Checksum OK"; the browser opens http://localhost:5757 | |
+| D2 | Choose **Save on this computer** | The sign-in form opens without asking for a setup token | |
+| D3 | Create the sign-in, capture an issue with a screenshot | Saved; `bugstow status` shows the data folder, which contains `bugstow.sqlite` | |
+| D4 | Close the browser, run `bugstow stop`, then click the **BugsTow** shortcut | BugsTow starts and opens; you are still signed in; the issue is there | |
+| D5 | Restart the computer and click the shortcut | Same as D4 | |
+| D6 | Disconnect from the internet and repeat D4 | Works the same | |
+| D7 | Run the install command again (update) | Finishes; data and sign-in unchanged | |
+| D8 | `bugstow start --lan`, open the printed address on a phone on the same Wi-Fi | Certificate warning once; after accepting, sign in and see the issues | |
+| D8b | With `--lan` running, **Create invite link** and open it on a second device | "Join <workspace>"; they pick a username and password and see the team. Opening the same link again: "expired or already used" | |
+| D8c | On localhost, People & invitations | Amber note: links only open on this PC, with the `--lan` and `bugstow share` steps | |
+| D8d | With Tailscale signed in: `bugstow share`, then invite someone on another network whose device has Tailscale and accepted the machine share | Invite link is `https://<pc>.<tailnet>.ts.net:<port>/#invite=…`; they join with a username and see the workspace; later the plain address opens Team directly (no Local/Team screen). `tailscale serve status` shows only BugsTow's port; anything already on 443 is untouched | |
+| D8e | `bugstow unshare` | The ts.net address stops working; other `tailscale serve` entries remain | |
+| D8f | Sidebar ⋯ next to a project → Move to workspace → New workspace, only you | Project and its issues leave the shared workspace; the invited person no longer sees them; the switcher says “Only you” | |
+| D9 | `bugstow uninstall` | Shortcuts and the command are gone; the data folder is still there | |
+
+## GitHub import
+
+| # | Check | Expected | PASS/FAIL |
+|---|---|---|---|
+| G1 | Installed app, fresh: click **Import from GitHub** (sidebar or empty inbox), paste a public repo link | Issues arrive in a new project named after the repo; each shows "#N on GitHub" | |
+| G2 | Import the same repo again | "Everything … is already here"; no duplicates | |
+| G3 | Close an issue on GitHub, import again with "Also bring in closed issues" | That issue moves to Completed | |
+| G4 | Paste a private repo | The dialog shows the key steps; "Create a key on GitHub" opens GitHub's key page with the name, 90-day expiry and Issues: Read-only filled in | |
+| G5 | Paste the key and import | Issues arrive; the key isn't shown again after closing the dialog | |
+| G6 | Same in Team, sidebar **Import from GitHub** | Same results | |
+
+## Local
+
+| # | Check | Expected | PASS/FAIL |
+|---|---|---|---|
+| P1 | First open of the installed app (or `node serve-personal.mjs`) | "Just you, or with other people?" with exactly two choices, Local and Team; nothing else loads until you choose | |
+| P2 | Choose **Local**, capture an issue with title + description | Appears in the inbox; sidebar says "Local, in this browser" | |
+| P3 | Copy an image, focus the capture dialog, press Ctrl/⌘+V | Screenshot preview appears; saved with the issue | |
+| P4 | Settings → Data & backups → Download backup with *Encrypt* ticked and a passphrase | A `.json` file downloads | |
+| P5 | Clear data (Settings → danger zone) then Import that file with the passphrase | All issues and screenshots return. Wrong passphrase is refused with a message | |
+| P6 | Browser menu → Install app | App opens in its own window | |
+| P7 | Turn off Wi-Fi/unplug network, close and reopen the installed app | App opens; issues and screenshots still there; new capture works | |
+| P8 | Browser devtools → Network while using P2–P5 | Only the site's own files; no `/api/…`, no other hosts | |
+| P9 | Sidebar bottom: **Local / Team** switch; click Team, then Local | Each click switches; the current mode is highlighted; same switch in both. Collapsed sidebar: one icon button | |
+| P9b | Settings | Two tabs (General, Data & backups); no cloud or sync options anywhere; "You're using Local" with **Switch to Team** | |
+| P10 | A browser that had 2.5 cloud sync connected: open 2.6 | Its issues are all still there; devtools → Application → IndexedDB has no `bugstow_sync` database | |
+| P11 | New issue and Edit issue: use **Fix writing**, **Voice**, and a custom badge | Writing corrections keep the meaning; voice appends words using on-device recognition or clearly says it is unavailable; the custom badge is saved and shown | |
+| P12 | Save an issue with a screenshot, then **Copy with prompt** and paste into a rich editor | Prompt text and screenshot arrive together; a browser that cannot write rich clipboard content still copies the prompt text | |
+| P13 | Local → Projects → open the last project's **⋯** menu, then **Copy to Team** | The full menu stays visible; Team opens a confirmation for only that project; its issues and screenshots copy over; Local stays unchanged | |
+
+## Team
+
+| # | Check | Expected | PASS/FAIL |
+|---|---|---|---|
+| T1 | Open the server, choose **Team** | "Set up this server" with Setup token field and "Encrypted connection (HTTPS)" | |
+| T2 | Create administrator with a wrong token, then the right one | Wrong: clear error. Right: signed in | |
+| T3 | Sign out, sign in again | Sign-in form (not the setup form); sign-in works | |
+| T4 | People & invitations → Create invite link | Link shown with Copy; "Invite link, not used yet" in the list; cancel removes it and the link stops working | |
+| T5 | Teammate opens the link, picks a username and password | Signed in, sees the team; the owner sees their username (no email) in the list | |
+| T6 | Admin: People & invitations → key icon → Reset password for the teammate | Temporary password shown once, Copy works | |
+| T7 | Teammate reloads, signs in with the temporary password | Forced "Choose a new password" screen; nothing else reachable | |
+| T8 | Teammate sets a new password | Back in the workspace | |
+| T9 | Create a second team from the team menu and switch between the two | Each shows its own projects and issues | |
+| T10 | Create a project; create an issue in it | Both visible to the teammate after reload | |
+| T11 | Assign the issue to the teammate | Teammate sees the assignment | |
+| T12 | Attach a screenshot, open it from the teammate's browser | Image shows | |
+| T13 | Admin: user menu → **Backups** → Back up now | Success message; count increases; second-drive status shown (or "Not set up"); no cloud row | |
+| T19 | Installed app, Local has issues (one completed, one imported from GitHub): Settings → **Switch to Team**, create the first workspace | Empty workspace offers **Copy N Local issues**; after copying, counts match, the completed one is in Completed, the GitHub link is kept. Copying again doesn't duplicate the GitHub issue | |
+| T20 | Team account menu → **Switch to Local** | Local issues shown; Team data untouched when switching back | |
+| T14 | Open the same issue in both browsers; change the title in one, then the description in the other without reloading | "This issue was changed by another teammate. Reload it before saving." Reload issue shows the other change | |
+| T15 | Open the server over `http://<IP>:8080` with TLS off | Amber "Not encrypted" warning on sign-in and "Not encrypted" chip in the header | |
+| T16 | Over HTTPS before trusting the certificate | Browser warning (expected). Download `/api/tls/certificate`, compare fingerprint with the server log | |
+| T17 | Trust the certificate, restart the browser, reload | No warning; padlock shown | |
+| T18 | Phone-width window (≈375 px) on sign-in, workspace, Members, Backups | Readable, no sideways scrolling, buttons reachable | |
+| T21 | Create and edit an issue using **Fix writing**, **Voice**, and a custom badge; reload in the teammate's browser | The cleaned text and custom badge persist for both people; voice stays on device or reports that the browser does not support it | |
+| T22 | Open a Team issue with a screenshot, choose **Copy for AI**, and paste into a rich editor | Prompt text and screenshot arrive together when the destination supports rich paste | |
+
+Record who did the checks and when:
+
+- Performed by: ______  Date: ______  Browser(s): ______

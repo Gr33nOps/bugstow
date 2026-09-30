@@ -1,0 +1,193 @@
+import path from 'node:path'
+import fs from 'node:fs'
+
+/**
+ * Server configuration from environment variables. Data lives under DATA_DIR
+ * (a Docker volume in production): the SQLite database and the screenshots
+ * directory. Nothing here is sent to any third party.
+ */
+
+const DATA_DIR = process.env.BUGSTOW_DATA_DIR || path.resolve(process.cwd(), 'data')
+const SCREENSHOTS_DIR = path.join(DATA_DIR, 'screenshots')
+const BACKUPS_DIR = path.join(DATA_DIR, 'backups')
+const CERTS_DIR = path.join(DATA_DIR, 'certs')
+
+// better-auth ships an anonymous telemetry module. It is off by default but can
+// be switched on by an environment variable; BugsTow never sends telemetry, so
+// that switch is removed before better-auth loads.
+delete process.env.BETTER_AUTH_TELEMETRY
+delete process.env.BETTER_AUTH_TELEMETRY_ENDPOINT
+
+fs.mkdirSync(DATA_DIR, { recursive: true })
+fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true })
+fs.mkdirSync(BACKUPS_DIR, { recursive: true })
+fs.mkdirSync(CERTS_DIR, { recursive: true })
+
+function boolEnv(name: string, dflt: boolean): boolean {
+  const v = process.env[name]
+  if (v === undefined) return dflt
+  return v === 'true' || v === '1'
+}
+
+function parseTrustProxy(v: string | undefined): boolean | number {
+  if (!v || v === 'false' || v === '0') return false
+  if (v === 'true') return 1
+  const n = parseInt(v, 10)
+  return Number.isFinite(n) && n > 0 ? n : false
+}
+
+function requireSecretInProd(value: string | undefined): string {
+  if (value && value.length >= 16) return value
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'BUGSTOW_AUTH_SECRET must be set to a strong random value (>= 16 chars) in production. ' +
+        'Generate one with: openssl rand -base64 32'
+    )
+  }
+  // Development fallback only.
+  return 'dev-insecure-secret-change-me-0123456789'
+}
+
+const DESKTOP = boolEnv('BUGSTOW_DESKTOP', false)
+const PORT = parseInt(process.env.PORT || '8080', 10)
+
+/**
+ * The address people on other networks use to reach this desktop app, when
+ * `bugstow share` has published it through Tailscale (tailscale serve):
+ * https://<machine>.<tailnet>.ts.net. Only an https:// origin is accepted.
+ */
+function shareOrigin(value: string | undefined): string {
+  const v = (value || '').trim()
+  if (!v) return ''
+  try {
+    const u = new URL(v)
+    if (u.protocol === 'https:' && !u.username && !u.password && (u.pathname === '/' || u.pathname === '')) return u.origin
+  } catch {
+    // fall through
+  }
+  console.warn(`  Ignoring BUGSTOW_SHARE_URL (needs an https:// address): ${v.slice(0, 60)}`)
+  return ''
+}
+const SHARE_URL = DESKTOP ? shareOrigin(process.env.BUGSTOW_SHARE_URL) : ''
+
+export const config = {
+  port: PORT,
+  /**
+   * Network interface to listen on. Empty = all interfaces (the team server
+   * default). The installed desktop app uses 127.0.0.1, so only this computer
+   * can reach it.
+   */
+  host: (process.env.BUGSTOW_HOST || '').trim(),
+  /**
+   * Desktop edition: the one-command local install (`bugstow` launcher). The
+   * same server, used by one person on their own computer. Only changes wording
+   * in the app and adds a Host-header check (see app.ts).
+   */
+  desktop: DESKTOP,
+  dataDir: DATA_DIR,
+  screenshotsDir: SCREENSHOTS_DIR,
+  backupsDir: BACKUPS_DIR,
+  certsDir: CERTS_DIR,
+  dbPath: path.join(DATA_DIR, 'bugstow.sqlite'),
+  /** Directory of the built frontend (dist) to serve. Empty disables static serving (dev). */
+  publicDir: process.env.BUGSTOW_PUBLIC_DIR || '',
+
+  /**
+   * Strict offline mode. Disables every feature where this server would reach
+   * the public internet (currently only GitHub import).
+   *  - Team server: on by default (a shared, LAN-first server; its
+   *    administrator decides). BUGSTOW_OFFLINE=false allows GitHub import.
+   *  - Desktop app: off by default. It's one person's own computer, and it only
+   *    goes online at the moment they click Import. BUGSTOW_OFFLINE=true forbids it.
+   */
+  offline: boolEnv('BUGSTOW_OFFLINE', !DESKTOP),
+
+  /** Serve over HTTPS with a locally generated self-signed certificate. */
+  tls: boolEnv('BUGSTOW_TLS', false),
+  tlsCertPath: process.env.BUGSTOW_TLS_CERT || path.join(CERTS_DIR, 'server.crt'),
+  tlsKeyPath: process.env.BUGSTOW_TLS_KEY || path.join(CERTS_DIR, 'server.key'),
+
+  /** Automatic local backups. */
+  backupEnabled: boolEnv('BUGSTOW_BACKUP_ENABLED', true),
+  backupIntervalHours: parseFloat(process.env.BUGSTOW_BACKUP_INTERVAL_HOURS || '24'),
+  backupRetention: parseInt(process.env.BUGSTOW_BACKUP_RETENTION || '7', 10),
+  /**
+   * Optional second backup location on separate hardware (another drive, a USB
+   * disk, a mounted NAS folder). Each backup is copied there as well. The
+   * folder must already exist and contain a `.bugstow-backup-target` marker
+   * file, so an unmounted drive is detected instead of silently filling the
+   * main disk. Empty = disabled.
+   */
+  backupExternalDir: (process.env.BUGSTOW_BACKUP_EXTERNAL_DIR || '').trim(),
+  backupExternalRetention: parseInt(
+    process.env.BUGSTOW_BACKUP_EXTERNAL_RETENTION || process.env.BUGSTOW_BACKUP_RETENTION || '7',
+    10
+  ),
+  /**
+   * Cloud backup settings from 2.5 and earlier that are still set. Cloud
+   * backups were removed in 2.6; these are only named in a startup notice so
+   * nobody assumes an off-site copy still exists.
+   */
+  retiredCloudSettings: [
+    'BUGSTOW_BACKUP_CLOUD_DIR',
+    'BUGSTOW_BACKUP_WEBDAV_URL',
+    'BUGSTOW_BACKUP_ENCRYPTION_PASSPHRASE',
+  ].filter(k => (process.env[k] || '').trim()),
+  /**
+   * Extra host names / IPs for the generated HTTPS certificate (comma-separated).
+   * The hostname of BUGSTOW_BASE_URL is always included. Needed in Docker, where
+   * the container cannot see the host's LAN IP.
+   */
+  tlsHosts: (process.env.BUGSTOW_TLS_HOSTS || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean),
+  /**
+   * Optional fixed setup token for creating the first administrator (>= 20
+   * characters). Normally leave unset: a random one is generated and printed in
+   * the server log.
+   */
+  setupTokenOverride: (process.env.BUGSTOW_SETUP_TOKEN || '').trim(),
+  authSecret: requireSecretInProd(process.env.BUGSTOW_AUTH_SECRET),
+  /** Public base URL of this server, used by better-auth for cookies/links. */
+  baseURL: process.env.BUGSTOW_BASE_URL || `http://localhost:${process.env.PORT || '8080'}`,
+  /**
+   * Extra origins allowed to authenticate (besides baseURL). Comma-separated.
+   * Teammates usually hit the same origin, so this is rarely needed.
+   */
+  trustedOrigins: (process.env.BUGSTOW_TRUSTED_ORIGINS || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+    // The desktop app may be opened as localhost or 127.0.0.1 on this computer,
+    // besides its base URL (a LAN address when phones connect over Wi-Fi).
+    .concat(
+      DESKTOP
+        ? ['localhost', '127.0.0.1'].map(h => `${boolEnv('BUGSTOW_TLS', false) ? 'https' : 'http'}://${h}:${PORT}`)
+        : []
+    )
+    // ...and at its Tailscale address while it's shared.
+    .concat(SHARE_URL ? [SHARE_URL] : []),
+  /**
+   * Desktop app shared through Tailscale (`bugstow share`): the address
+   * teammates on other networks open. Join links use it. Empty when not shared.
+   */
+  shareUrl: SHARE_URL,
+  /** Max screenshot upload size in bytes (default 10 MB). */
+  maxUploadBytes: parseInt(process.env.BUGSTOW_MAX_UPLOAD_BYTES || String(10 * 1024 * 1024), 10),
+  /**
+   * When true, anyone can self-register. Default false: after the first admin
+   * exists, new members are created by admins / invited by email.
+   */
+  openSignup: process.env.BUGSTOW_OPEN_SIGNUP === 'true',
+  /**
+   * Express "trust proxy" setting. Leave unset (false) when clients connect
+   * directly; otherwise rate limiting could be bypassed with a forged
+   * X-Forwarded-For header. Set to the number of reverse proxies in front of
+   * the server (usually 1) when behind Caddy/nginx.
+   */
+  trustProxy: parseTrustProxy(process.env.BUGSTOW_TRUST_PROXY),
+  isProd: process.env.NODE_ENV === 'production',
+}
+
+export const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])

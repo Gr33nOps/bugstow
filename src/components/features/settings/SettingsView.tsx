@@ -1,0 +1,943 @@
+import React, { useState, useRef, useEffect } from "react"
+import {
+  Download,
+  Upload,
+  Shield,
+  Layout,
+  Keyboard,
+  Info,
+  Trash2,
+  HardDrive,
+  CheckCircle2,
+  AlertTriangle,
+  X,
+  Lock,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  Sun,
+  Moon,
+  Monitor,
+  Users,
+} from "lucide-react"
+import type { BackupData, EncryptedBackupPayload } from "../../../types"
+import type { Theme } from "../../../hooks/useTheme"
+import {
+  exportBackupFile,
+  triggerDownload,
+  validateBackupStructure,
+  decryptBackup,
+} from "../../../services/backupService"
+import { formatBytes } from "../../../services/storageService"
+import { useStorageEstimate } from "../../../hooks/useStorageEstimate"
+import { isDesktopEdition } from "../../../lib/teamServer"
+
+interface SettingsViewProps {
+  theme: Theme
+  onSetTheme: (theme: Theme) => void
+  onClearAllData: () => Promise<void>
+  onRestoreBackup: (data: BackupData) => Promise<void>
+  onToast: (msg: string, type?: "success" | "error" | "info") => void
+  onOpenKeyboardShortcuts: () => void
+  onOpenAbout: () => void
+  onSwitchToTeam?: () => void
+  /** A BugsTow server is serving this page, so Team is one click away. */
+  teamAvailable?: boolean
+  initialSection?: "general" | "data"
+}
+
+export function SettingsView({
+  theme,
+  onSetTheme,
+  onClearAllData,
+  onRestoreBackup,
+  onToast,
+  onOpenKeyboardShortcuts,
+  onOpenAbout,
+  onSwitchToTeam,
+  teamAvailable = false,
+  initialSection,
+}: SettingsViewProps) {
+  const [section, setSection] = useState<"general" | "data">(
+    initialSection || "general",
+  )
+  useEffect(() => {
+    if (initialSection) setSection(initialSection)
+  }, [initialSection])
+
+  const { estimate, requestPersistence } = useStorageEstimate()
+  const desktop = isDesktopEdition()
+
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [isPersisting, setIsPersisting] = useState(false)
+
+  const handleRequestPersistence = async () => {
+    setIsPersisting(true)
+    try {
+      const granted = await requestPersistence()
+      if (granted) {
+        onToast("Persistent storage granted by browser")
+      } else {
+        onToast("Persistent storage not granted or not supported", "info")
+      }
+    } catch (err) {
+      onToast("Could not request persistent storage", "error")
+    } finally {
+      setIsPersisting(false)
+    }
+  }
+
+  const themeOptions: Array<{
+    value: Theme
+    label: string
+    icon: React.ElementType
+  }> = [
+    { value: "light", label: "Light", icon: Sun },
+    { value: "dark", label: "Dark", icon: Moon },
+    { value: "system", label: "System", icon: Monitor },
+  ]
+
+  return (
+    <div className="flex-1 overflow-y-auto bg-white dark:bg-slate-900 transition-colors">
+      <div className="page-heading">
+        <h1 className="page-title text-slate-900 dark:text-white">Settings</h1>
+        <p className="page-description">Make this workspace work for you.</p>
+        <nav
+          aria-label="Settings sections"
+          className="flex gap-6 mt-6 border-b border-slate-200 dark:border-slate-800"
+        >
+          {([
+            { id: "general", label: "General" },
+            { id: "data", label: "Data & backups" },
+          ] as const).map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              aria-current={section === item.id ? "page" : undefined}
+              className="settings-tab"
+              onClick={() => setSection(item.id as typeof section)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+      <div className="px-5 sm:px-7 pb-10 flex flex-col gap-7 max-w-3xl">
+        {/* Appearance Section */}
+        <div hidden={section !== "general"}>
+          <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 tracking-wide mb-2">
+            Appearance
+          </h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-3.5">
+            Choose your preferred color mode.
+          </p>
+
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs p-4 flex flex-wrap gap-4 items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300">
+                <Layout size={18} />
+              </div>
+              <div>
+                <span className="text-[15px] font-semibold text-slate-900 dark:text-white block">
+                  Theme
+                </span>
+                <span className="text-xs text-slate-400">
+                  Current: {theme.charAt(0).toUpperCase() + theme.slice(1)}
+                </span>
+              </div>
+            </div>
+
+            {/* 3-way toggle button group */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200/60 dark:border-slate-700/60">
+              {themeOptions.map((opt) => {
+                const active = theme === opt.value
+                const IconComponent = opt.icon
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => onSetTheme(opt.value)}
+                    aria-pressed={active}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                      active
+                        ? "bg-white dark:bg-slate-700 text-brand dark:text-indigo-300 shadow-xs"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    <IconComponent size={14} />
+                    <span>{opt.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Team mode */}
+        {onSwitchToTeam && (
+          <div hidden={section !== "general"}>
+            <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 tracking-wide mb-2">
+              Workspace
+            </h3>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex items-start gap-3.5 flex-1">
+                <div className="w-9 h-9 shrink-0 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300">
+                  <HardDrive size={18} />
+                </div>
+                <div>
+                  <span className="text-[15px] font-semibold text-slate-900 dark:text-white block">
+                    You're using Local
+                  </span>
+                  <span className="text-sm text-slate-600 dark:text-slate-300">
+                    Only you, in this browser. No account.
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onSwitchToTeam}
+                className="shrink-0 flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 hover:border-brand hover:text-brand dark:hover:text-indigo-300 transition-colors"
+              >
+                <Users size={16} /> Switch to Team
+              </button>
+            </div>
+            <p className="mt-2.5 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+              {desktop
+                ? "Team keeps issues in BugsTow's folder on this PC, with a sign-in, and lets you invite people on your Wi-Fi or through Tailscale. Your Local issues stay here, and you can copy them into Team."
+                : teamAvailable
+                  ? "Team keeps issues on this server, with a sign-in, so you can work with the people you invite. Your Local issues stay here, and you can copy them into Team."
+                  : "Team needs the BugsTow app installed on a computer, so other people can join you."}
+            </p>
+          </div>
+        )}
+
+        {/* Backups Section */}
+        <div hidden={section !== "data"}>
+          <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 tracking-wide mb-2">
+            Backups
+          </h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-3.5">
+            Download a backup file to keep somewhere safe, or restore one.
+          </p>
+
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs divide-y divide-slate-100 dark:divide-slate-800">
+            {/* Download backup button */}
+            <button
+              type="button"
+              onClick={() => setShowExportModal(true)}
+              className="w-full flex items-center gap-3.5 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+            >
+              <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300">
+                <Download size={18} />
+              </div>
+              <div className="flex-1">
+                <span className="text-[15px] font-semibold text-slate-900 dark:text-white block">
+                  Download backup
+                </span>
+                <span className="text-xs text-slate-400">
+                  Download projects, issues and screenshots as one file,
+                  encrypted if you like
+                </span>
+              </div>
+              <span className="text-slate-400 text-lg font-semibold">
+                &rsaquo;
+              </span>
+            </button>
+
+            {/* Restore backup button */}
+            <button
+              type="button"
+              onClick={() => setShowImportModal(true)}
+              className="w-full flex items-center gap-3.5 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+            >
+              <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300">
+                <Upload size={18} />
+              </div>
+              <div className="flex-1">
+                <span className="text-[15px] font-semibold text-slate-900 dark:text-white block">
+                  Restore backup
+                </span>
+                <span className="text-xs text-slate-400">
+                  Restore from a backup file made here or on another device
+                </span>
+              </div>
+              <span className="text-slate-400 text-lg font-semibold">
+                &rsaquo;
+              </span>
+            </button>
+
+            {/* Storage explanation & persistence banner */}
+            <div className="p-5 bg-indigo-50/50 dark:bg-slate-850 border-t border-indigo-100/60 dark:border-slate-800 flex flex-col gap-3.5">
+              <div className="flex items-start gap-3">
+                <Shield size={20} className="text-brand shrink-0 mt-0.5" />
+                <div className="flex-1 text-xs">
+                  <p className="font-semibold text-slate-900 dark:text-white text-sm">
+                    Browser storage
+                  </p>
+                  <p className="text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+                    Local issues are saved only in this browser, on this
+                    device. BugsTow doesn't upload them anywhere. Clearing this
+                    browser's site data deletes them, so download a backup now
+                    and then.
+                  </p>
+                </div>
+              </div>
+
+              {/* Approximate Storage usage info */}
+              <div className="bg-white/90 dark:bg-slate-800 rounded-lg p-3.5 border border-slate-200/80 dark:border-slate-700 flex flex-col gap-2.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <HardDrive size={14} className="text-slate-400" />
+                    Storage used:
+                  </span>
+                  <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
+                    {formatBytes(estimate.usageBytes)}
+                    {estimate.quotaBytes > 0 &&
+                      ` (approx. ${formatBytes(estimate.quotaBytes)} available)`}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100 dark:border-slate-700">
+                  <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <CheckCircle2
+                      size={14}
+                      className={
+                        estimate.persisted
+                          ? "text-emerald-500"
+                          : "text-slate-400"
+                      }
+                    />
+                    Protected from browser cleanup:
+                  </span>
+                  {estimate.persisted ? (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                      Enabled
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleRequestPersistence}
+                      disabled={isPersisting}
+                      className="text-xs font-semibold text-brand dark:text-indigo-400 hover:underline disabled:opacity-50"
+                    >
+                      {isPersisting ? "Asking…" : "Ask the browser"}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-400 dark:text-slate-500 leading-snug">
+                When disk space runs low, a browser may delete site data it
+                isn't asked to keep. Backups are still the safest copy.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Application Information Section */}
+        <div hidden={section !== "general"}>
+          <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 tracking-wide mb-2">
+            Help
+          </h3>
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs divide-y divide-slate-100 dark:divide-slate-800">
+            {/* Keyboard Shortcuts */}
+            <button
+              type="button"
+              onClick={onOpenKeyboardShortcuts}
+              className="w-full flex items-center gap-3.5 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+            >
+              <Keyboard size={18} className="text-slate-400" />
+              <span className="flex-1 text-[15px] font-semibold text-slate-800 dark:text-slate-200">
+                Keyboard Shortcuts
+              </span>
+              <span className="text-xs text-slate-400 font-mono bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+                ?
+              </span>
+            </button>
+
+            {/* About */}
+            <button
+              type="button"
+              onClick={onOpenAbout}
+              className="w-full flex items-center gap-3.5 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+            >
+              <Info size={18} className="text-slate-400" />
+              <span className="flex-1 text-[15px] font-semibold text-slate-800 dark:text-slate-200">
+                About BugsTow
+              </span>
+              <span className="text-slate-400 text-lg font-semibold">
+                &rsaquo;
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* Delete workspace data */}
+        <div hidden={section !== "data"}>
+          <h3 className="text-sm font-semibold text-red-500 tracking-wide mb-2">
+            Delete workspace data
+          </h3>
+          <div className="p-5 bg-red-50/50 dark:bg-red-950/20 border border-red-200/80 dark:border-red-900/60 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <p className="text-[15px] font-semibold text-red-900 dark:text-red-200">
+                Delete data from this browser
+              </p>
+              <p className="text-xs text-red-600/80 dark:text-red-400/80 mt-0.5">
+                Permanently deletes all projects, issues, and screenshots stored
+                in this browser.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowClearConfirm(true)}
+              className="shrink-0 flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 active:bg-red-800 rounded-lg transition-all shadow-xs"
+            >
+              <Trash2 size={16} />
+              <span>Delete browser data</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <ExportBackupModal
+          onClose={() => setShowExportModal(false)}
+          onExportDone={(filename) => {
+            setShowExportModal(false)
+            onToast(`Backup saved: ${filename}`)
+          }}
+          onError={(err) => onToast(err, "error")}
+        />
+      )}
+
+      {/* Import Modal */}
+      {showImportModal && (
+        <ImportBackupModal
+          onRestore={onRestoreBackup}
+          onClose={() => setShowImportModal(false)}
+          onRestoreDone={() => {
+            // onRestoreBackup already confirms it ("Backup restored").
+            setShowImportModal(false)
+          }}
+          onError={(err) => onToast(err, "error")}
+        />
+      )}
+
+      {/* Clear Confirmation Modal */}
+      {showClearConfirm && (
+        <ClearDataModal
+          onConfirm={async () => {
+            setShowClearConfirm(false)
+            // onClearAllData confirms it.
+            await onClearAllData()
+          }}
+          onClose={() => setShowClearConfirm(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Download backup Modal ───────────────────────────────────────────────────
+
+function ExportBackupModal({
+  onClose,
+  onExportDone,
+  onError,
+}: {
+  onClose: () => void
+  onExportDone: (filename: string) => void
+  onError: (msg: string) => void
+}) {
+  const [encrypt, setEncrypt] = useState(true)
+  const [passphrase, setPassphrase] = useState("")
+  const [confirmPass, setConfirmPass] = useState("")
+  const [showPass, setShowPass] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleExport = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+
+    if (encrypt) {
+      if (!passphrase || passphrase.length < 6) {
+        setError("Passphrase must be at least 6 characters long.")
+        return
+      }
+      if (passphrase !== confirmPass) {
+        setError("Passphrases do not match.")
+        return
+      }
+    }
+
+    setIsExporting(true)
+    try {
+      const { filename, blob } = await exportBackupFile(
+        encrypt ? passphrase : undefined,
+      )
+      triggerDownload(blob, filename)
+      onExportDone(filename)
+    } catch (err) {
+      console.error("Export failed:", err)
+      setError("Export failed. Please try again.")
+      onError("Export failed.")
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
+      <div
+        className="absolute inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-xs"
+        onClick={onClose}
+      />
+      <form
+        onSubmit={handleExport}
+        className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200/80 dark:border-slate-800 w-full max-w-md p-6 sm:p-7 flex flex-col gap-4 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Download size={20} className="text-brand" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+              Download backup
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+          Create a full, portable backup of all your projects, issues, and
+          screenshots into a single file.
+        </p>
+
+        {error && (
+          <div className="p-3.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
+            <AlertCircle size={15} className="shrink-0 text-red-500" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* Encrypt toggle */}
+        <label className="flex items-start gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer">
+          <input
+            type="checkbox"
+            checked={encrypt}
+            onChange={(e) => setEncrypt(e.target.checked)}
+            className="mt-0.5 rounded text-brand focus:ring-brand"
+          />
+          <div className="text-xs">
+            <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+              <Lock size={13} className="text-brand" />
+              Encrypt backup with passphrase (recommended)
+            </span>
+            <p className="text-slate-400 dark:text-slate-500 mt-0.5">
+              Uses AES-256-GCM encryption. A lost passphrase cannot be
+              recovered.
+            </p>
+          </div>
+        </label>
+
+        {encrypt ? (
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1 tracking-wide">
+                Passphrase
+              </label>
+              <div className="relative">
+                <input
+                  type={showPass ? "text" : "password"}
+                  placeholder="Enter a secure passphrase"
+                  value={passphrase}
+                  onChange={(e) => setPassphrase(e.target.value)}
+                  className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-brand pr-10 text-slate-900 dark:text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1 tracking-wide">
+                Confirm Passphrase
+              </label>
+              <input
+                type={showPass ? "text" : "password"}
+                placeholder="Confirm your passphrase"
+                value={confirmPass}
+                onChange={(e) => setConfirmPass(e.target.value)}
+                className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-brand text-slate-900 dark:text-white"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-lg text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+            <AlertTriangle
+              size={15}
+              className="shrink-0 text-amber-600 mt-0.5"
+            />
+            <span>
+              Unencrypted export stores all issues and screenshots in plain
+              text.
+            </span>
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isExporting}
+            className="flex-1 py-2.5 text-sm font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg shadow-sm disabled:opacity-50"
+          >
+            {isExporting ? "Exporting..." : "Download backup"}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+// ── Restore backup Modal ───────────────────────────────────────────────────
+
+function ImportBackupModal({
+  onRestore,
+  onClose,
+  onRestoreDone,
+  onError,
+}: {
+  onRestore: (data: BackupData) => Promise<void>
+  onClose: () => void
+  onRestoreDone: () => void
+  onError: (msg: string) => void
+}) {
+  const [fileContent, setFileContent] =
+    useState<Record<string, unknown> | null>(null)
+  const [isEncrypted, setIsEncrypted] = useState(false)
+  const [passphrase, setPassphrase] = useState("")
+  const [validationSummary, setValidationSummary] = useState<{
+    projectsCount: number
+    issuesCount: number
+    screenshotsCount: number
+    createdAt: string
+  } | null>(null)
+  const [validatedData, setValidatedData] = useState<BackupData | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileSelect = (file: File) => {
+    setError(null)
+    setValidatedData(null)
+    setValidationSummary(null)
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string
+        const parsed = JSON.parse(text)
+        setFileContent(parsed)
+
+        const check = validateBackupStructure(parsed)
+        if (!check.isValid) {
+          setError(check.error || "Invalid backup file format.")
+          return
+        }
+
+        if (check.isEncrypted) {
+          setIsEncrypted(true)
+        } else if (check.data && check.summary) {
+          setIsEncrypted(false)
+          setValidatedData(check.data)
+          setValidationSummary(check.summary)
+        }
+      } catch (err) {
+        setError("Failed to parse JSON file.")
+      }
+    }
+    reader.readAsText(file)
+  }
+
+  const handleDecrypt = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!passphrase) {
+      setError("Please enter the passphrase.")
+      return
+    }
+
+    setIsProcessing(true)
+    setError(null)
+    try {
+      const decrypted = await decryptBackup(
+        fileContent as unknown as EncryptedBackupPayload,
+        passphrase,
+      )
+      const check = validateBackupStructure(decrypted)
+      if (!check.isValid || !check.data || !check.summary) {
+        setError(check.error || "Decrypted backup has an invalid structure.")
+        return
+      }
+
+      setValidatedData(check.data)
+      setValidationSummary(check.summary)
+    } catch (err) {
+      setError("Incorrect passphrase or corrupted backup file.")
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const handleConfirmRestore = async () => {
+    if (!validatedData) return
+    setIsProcessing(true)
+    setError(null)
+    try {
+      await onRestore(validatedData)
+      onRestoreDone()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Restore failed.")
+      onError("Restore failed.")
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
+      <div
+        className="absolute inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-xs"
+        onClick={onClose}
+      />
+      <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200/80 dark:border-slate-800 w-full max-w-md p-6 sm:p-7 flex flex-col gap-4 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Upload size={20} className="text-brand" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+              Restore backup
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {error && (
+          <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
+            <AlertCircle size={15} className="shrink-0 text-red-500 mt-0.5" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* Step 1: Select File */}
+        {!fileContent && (
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-8 flex flex-col items-center justify-center gap-2.5 cursor-pointer hover:border-brand transition-colors bg-slate-50/70 dark:bg-slate-800/40"
+          >
+            <Upload size={26} className="text-brand" />
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+              Click to select backup file
+            </p>
+            <p className="text-xs text-slate-400 dark:text-slate-500">
+              Supports .json or .enc.json backups
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) handleFileSelect(f)
+              }}
+            />
+          </div>
+        )}
+
+        {/* Step 2: Encrypted Passphrase Prompt */}
+        {fileContent !== null && isEncrypted && !validatedData && (
+          <form onSubmit={handleDecrypt} className="flex flex-col gap-3.5">
+            <div className="flex items-center gap-2.5 p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-lg text-xs text-blue-800 dark:text-blue-300">
+              <Lock size={16} className="text-blue-600 shrink-0" />
+              <span>
+                This backup is encrypted. Enter its passphrase to decrypt.
+              </span>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1 tracking-wide">
+                Passphrase
+              </label>
+              <input
+                autoFocus
+                type="password"
+                placeholder="Enter passphrase"
+                value={passphrase}
+                onChange={(e) => setPassphrase(e.target.value)}
+                className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-brand text-slate-900 dark:text-white"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isProcessing || !passphrase}
+              className="w-full py-2.5 text-sm font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg shadow-sm disabled:opacity-50"
+            >
+              {isProcessing ? "Decrypting..." : "Decrypt & Verify"}
+            </button>
+          </form>
+        )}
+
+        {/* Step 3: Confirmation Summary */}
+        {validatedData && validationSummary && (
+          <div className="flex flex-col gap-3.5">
+            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs text-emerald-900 dark:text-emerald-200">
+              <p className="font-semibold flex items-center gap-1.5 mb-2 text-sm text-emerald-800 dark:text-emerald-300">
+                <CheckCircle2 size={16} className="text-emerald-600" />
+                Valid Backup Detected
+              </p>
+              <div className="space-y-1 text-slate-700 dark:text-slate-300">
+                <p>• {validationSummary.projectsCount} Projects</p>
+                <p>• {validationSummary.issuesCount} Issues</p>
+                <p>• {validationSummary.screenshotsCount} Screenshots</p>
+                <p className="text-xs text-slate-400 pt-1">
+                  Exported on:{" "}
+                  {new Date(validationSummary.createdAt).toLocaleString()}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-lg text-xs text-amber-900 dark:text-amber-300 flex items-start gap-2">
+              <AlertTriangle
+                size={15}
+                className="shrink-0 text-amber-600 mt-0.5"
+              />
+              <span>
+                Restoring will replace all current issues and projects in this
+                browser with the backup contents.
+              </span>
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isProcessing}
+                className="flex-1 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRestore}
+                disabled={isProcessing}
+                className="flex-1 py-2.5 text-sm font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg shadow-sm disabled:opacity-50"
+              >
+                {isProcessing ? "Restoring..." : "Replace & Restore"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Clear Data Modal ──────────────────────────────────────────────────────
+
+function ClearDataModal({
+  onConfirm,
+  onClose,
+}: {
+  onConfirm: () => Promise<void>
+  onClose: () => void
+}) {
+  const [typed, setTyped] = useState("")
+  const [isClearing, setIsClearing] = useState(false)
+
+  const isMatch = typed.trim().toLowerCase() === "delete"
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
+      <div
+        className="absolute inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-xs"
+        onClick={onClose}
+      />
+      <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200/80 dark:border-slate-800 w-full max-w-sm p-6 sm:p-7 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100">
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+          Clear all local data?
+        </h3>
+        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">
+          This will permanently wipe all your projects, issues, and screenshots
+          stored in this browser. This cannot be undone without a backup file.
+        </p>
+
+        <div className="mb-5">
+          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1 tracking-wide">
+            Type{" "}
+            <span className="font-mono text-red-600 dark:text-red-400 font-semibold">
+              DELETE
+            </span>{" "}
+            to confirm:
+          </label>
+          <input
+            autoFocus
+            type="text"
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            placeholder="DELETE"
+            className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-red-500 text-slate-900 dark:text-white"
+          />
+        </div>
+
+        <div className="flex gap-2.5 justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isClearing}
+            className="px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!isMatch || isClearing}
+            onClick={async () => {
+              setIsClearing(true)
+              await onConfirm()
+            }}
+            className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-40 transition-colors shadow-sm"
+          >
+            {isClearing ? "Clearing..." : "Delete browser data"}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
