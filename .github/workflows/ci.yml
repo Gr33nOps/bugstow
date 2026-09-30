@@ -1,0 +1,171 @@
+name: CI
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    name: Typecheck, test & build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  server:
+    name: Team server — typecheck & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+  acceptance:
+    name: Two-client acceptance test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+
+      - name: Build frontend
+        run: npm ci && npm run build
+
+      - name: Install server
+        working-directory: server
+        run: npm ci
+
+      - name: Start a fresh team server
+        working-directory: server
+        run: |
+          TOKEN=$(openssl rand -hex 16)
+          echo "::add-mask::$TOKEN"
+          echo "BUGSTOW_SETUP_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          BUGSTOW_SETUP_TOKEN=$TOKEN \
+          BUGSTOW_AUTH_SECRET=$(openssl rand -hex 32) \
+          BUGSTOW_DATA_DIR="$RUNNER_TEMP/bugstow-data" \
+          BUGSTOW_PUBLIC_DIR="$GITHUB_WORKSPACE/dist" \
+          BUGSTOW_BASE_URL=http://localhost:8080 \
+          BUGSTOW_BACKUP_ENABLED=false \
+          nohup npx tsx src/index.ts > "$RUNNER_TEMP/server.log" 2>&1 &
+          for i in $(seq 1 30); do curl -fs http://localhost:8080/api/health && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/server.log"; exit 1
+
+      - name: Run acceptance test
+        run: node scripts/acceptance-test.mjs --url http://localhost:8080
+
+      - name: Server log (on failure)
+        if: failure()
+        run: cat "$RUNNER_TEMP/server.log"
+
+  installer:
+    name: Installer (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (to build the package)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build the app package
+        run: npm ci && node scripts/build-app-package.mjs
+
+      - name: Install, start, run the acceptance test, uninstall (macOS / Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export BUGSTOW_HOME="$RUNNER_TEMP/bugstow-home" BUGSTOW_NO_BROWSER=1 BUGSTOW_NO_SHORTCUTS=1
+          export BUGSTOW_PACKAGE="$(ls "$GITHUB_WORKSPACE"/release/bugstow-app-*.tar.gz)"
+          sh install.sh
+          BUGSTOW="$HOME/.local/bin/bugstow"
+          "$BUGSTOW" status
+          curl -fs http://localhost:5757/api/health | grep -q '"edition":"desktop"'
+          TOKEN="$(cat "$BUGSTOW_HOME/launcher/setup-token")"; echo "::add-mask::$TOKEN"
+          node scripts/acceptance-test.mjs --url http://localhost:5757 --setup-token "$TOKEN"
+          "$BUGSTOW" stop
+          "$BUGSTOW" start --no-open
+          test ! -e "$BUGSTOW_HOME/launcher/setup-token"
+          "$BUGSTOW" uninstall
+          test -f "$BUGSTOW_HOME/data/bugstow.sqlite"
+          test ! -e "$BUGSTOW_HOME/app"
+
+      - name: Install, start, run the acceptance test, uninstall (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:BUGSTOW_HOME = Join-Path $env:RUNNER_TEMP 'bugstow-home'
+          $env:BUGSTOW_NO_BROWSER = '1'; $env:BUGSTOW_NO_PATH = '1'
+          $env:BUGSTOW_SHORTCUT_DIR = Join-Path $env:RUNNER_TEMP 'shortcuts'
+          $env:BUGSTOW_PACKAGE = (Get-ChildItem release/bugstow-app-*.tar.gz | Select-Object -First 1).FullName
+          Get-Content -Raw install.ps1 | Invoke-Expression
+          $node = Join-Path $env:BUGSTOW_HOME 'node\node.exe'; $launcher = Join-Path $env:BUGSTOW_HOME 'app\bugstow.mjs'
+          if (-not (Test-Path (Join-Path $env:BUGSTOW_SHORTCUT_DIR 'BugsTow.lnk'))) { throw 'shortcut missing' }
+          if ((Invoke-RestMethod http://localhost:5757/api/health).edition -ne 'desktop') { throw 'not the desktop edition' }
+          # Exercise the real update path while the first installation is running.
+          Get-Content -Raw install.ps1 | Invoke-Expression
+          if ((Invoke-RestMethod http://localhost:5757/api/health).edition -ne 'desktop') { throw 'update did not restart BugsTow' }
+          $token = (Get-Content (Join-Path $env:BUGSTOW_HOME 'launcher\setup-token') -Raw).Trim(); Write-Output "::add-mask::$token"
+          node scripts/acceptance-test.mjs --url http://localhost:5757 --setup-token $token
+          if ($LASTEXITCODE -ne 0) { & $node $launcher stop; throw 'acceptance test failed' }
+          & $node $launcher stop
+          # The launcher's background server keeps this step's output open until stopped.
+          & (Join-Path $env:BUGSTOW_HOME 'bin\bugstow.cmd') status

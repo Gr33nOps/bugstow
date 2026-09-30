@@ -1,0 +1,7 @@
+# Preserve the inline-script CSP hash and executable shell-script line endings.
+index.html text eol=lf
+*.sh text eol=lf
+
+# Small product images are ordinary Git files, including in source downloads.
+*.png binary
+*.jpg binary

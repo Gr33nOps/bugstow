@@ -1,0 +1,315 @@
+import { useState, useEffect, useCallback, useRef } from 'react'
+import type { IssueType } from '../types'
+import type { Team, TeamMember, TeamInvite, TeamProject, TeamIssue } from '../types/team'
+import * as api from '../services/teamApi'
+
+const ACTIVE_TEAM_KEY = 'bugstow_active_team'
+
+export function useTeamData(signedIn: boolean) {
+  const [teams, setTeams] = useState<Team[]>([])
+  const [activeTeamId, setActiveTeamIdState] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(ACTIVE_TEAM_KEY)
+    } catch {
+      return null
+    }
+  })
+  const [projects, setProjects] = useState<TeamProject[]>([])
+  const [issues, setIssues] = useState<TeamIssue[]>([])
+  const [members, setMembers] = useState<TeamMember[]>([])
+  const [invites, setInvites] = useState<TeamInvite[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [screenshotUrls, setScreenshotUrls] = useState<Record<string, string>>({})
+  const urlsRef = useRef<Record<string, string>>({})
+  urlsRef.current = screenshotUrls
+  const issuesRef = useRef<TeamIssue[]>([])
+  issuesRef.current = issues
+
+  const setActiveTeamId = useCallback((id: string | null) => {
+    try {
+      if (id) localStorage.setItem(ACTIVE_TEAM_KEY, id)
+      else localStorage.removeItem(ACTIVE_TEAM_KEY)
+    } catch {
+      // ignore
+    }
+    setActiveTeamIdState(id)
+  }, [])
+
+  // Load teams once signed in.
+  const refreshTeams = useCallback(async () => {
+    const list = await api.listTeams()
+    setTeams(list)
+    setActiveTeamIdState(prev => {
+      if (prev && list.some(t => t.id === prev)) return prev
+      const first = list[0]?.id ?? null
+      try {
+        if (first) localStorage.setItem(ACTIVE_TEAM_KEY, first)
+      } catch {
+        // ignore
+      }
+      return first
+    })
+    return list
+  }, [])
+
+  useEffect(() => {
+    if (!signedIn) return
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    refreshTeams()
+      .catch(err => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load teams.')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [signedIn, refreshTeams])
+
+  // Load team contents when the active team changes.
+  const refreshTeamData = useCallback(async (teamId: string) => {
+    const [proj, iss, mem] = await Promise.all([
+      api.listProjects(teamId),
+      api.listIssues(teamId),
+      api.listMembers(teamId),
+    ])
+    setProjects(proj)
+    setIssues(iss)
+    setMembers(mem.members)
+    setInvites(mem.invites)
+  }, [])
+
+  useEffect(() => {
+    if (!signedIn || !activeTeamId) {
+      setProjects([])
+      setIssues([])
+      setMembers([])
+      setInvites([])
+      return
+    }
+    let cancelled = false
+    refreshTeamData(activeTeamId).catch(err => {
+      if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load team data.')
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [signedIn, activeTeamId, refreshTeamData])
+
+  // Clean up object URLs on unmount.
+  useEffect(() => {
+    return () => {
+      Object.values(urlsRef.current).forEach(u => URL.revokeObjectURL(u))
+    }
+  }, [])
+
+  const loadScreenshotUrl = useCallback(async (screenshotId: string): Promise<string | undefined> => {
+    if (urlsRef.current[screenshotId]) return urlsRef.current[screenshotId]
+    try {
+      const blob = await api.fetchScreenshotBlob(screenshotId)
+      const url = URL.createObjectURL(blob)
+      setScreenshotUrls(prev => ({ ...prev, [screenshotId]: url }))
+      return url
+    } catch {
+      return undefined
+    }
+  }, [])
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
+  const createTeam = useCallback(
+    async (name: string, opts: { activate?: boolean } = {}) => {
+      const team = await api.createTeam(name)
+      setTeams(prev => [...prev, team])
+      // Moving a project into a new workspace creates it first, then switches.
+      if (opts.activate !== false) setActiveTeamId(team.id)
+      return team
+    },
+    [setActiveTeamId]
+  )
+
+  const createIssue = useCallback(
+    async (
+      data: { title: string; description: string; type: IssueType; customType?: string; projectId: string | null; assigneeId: string | null },
+      screenshots: api.ScreenshotUpload[] = []
+    ) => {
+      if (!activeTeamId) throw new Error('No team selected.')
+      const issue = await api.createIssue(activeTeamId, data)
+      if (screenshots.length > 0) {
+        const ids = await api.syncIssueScreenshots(issue.id, [], [], screenshots)
+        issue.screenshot_count = ids.length
+        issue.screenshot_ids = ids
+      }
+      setIssues(prev => [issue, ...prev])
+      return issue
+    },
+    [activeTeamId]
+  )
+
+  const updateIssue = useCallback(
+    async (
+      id: string,
+      updates: Partial<{
+        title: string
+        description: string
+        type: IssueType
+        customType: string | null
+        status: 'open' | 'fixed'
+        projectId: string | null
+        assigneeId: string | null
+      }>
+    ) => {
+      // Send the version on screen so a teammate's newer save is never overwritten.
+      const expected = issuesRef.current.find(i => i.id === id)?.updated_at
+      const updated = await api.updateIssue(id, updates, expected)
+      setIssues(prev => prev.map(i => (i.id === id ? { ...i, ...updated } : i)))
+      return updated
+    },
+    []
+  )
+
+  /** Replace one issue with the server's latest version (after a conflict). */
+  const replaceIssue = useCallback((latest: TeamIssue) => {
+    setIssues(prev => prev.map(i => (i.id === latest.id ? latest : i)))
+  }, [])
+
+  const syncIssueScreenshots = useCallback(
+    async (id: string, keepIds: string[], additions: api.ScreenshotUpload[]) => {
+      const issue = issuesRef.current.find(i => i.id === id)
+      if (!issue) throw new Error('Issue not found.')
+      const finalIds = await api.syncIssueScreenshots(id, issue.screenshot_ids, keepIds, additions)
+      const removed = issue.screenshot_ids.filter(sid => !finalIds.includes(sid))
+      if (removed.length > 0) {
+        setScreenshotUrls(prev => {
+          const next = { ...prev }
+          for (const sid of removed) {
+            if (next[sid]) URL.revokeObjectURL(next[sid])
+            delete next[sid]
+          }
+          return next
+        })
+      }
+      setIssues(prev => prev.map(item => item.id === id
+        ? { ...item, screenshot_ids: finalIds, screenshot_count: finalIds.length }
+        : item))
+      return finalIds
+    },
+    [],
+  )
+
+  const deleteIssue = useCallback(async (id: string) => {
+    await api.deleteIssue(id)
+    setIssues(prev => prev.filter(i => i.id !== id))
+  }, [])
+
+  const createProject = useCallback(
+    async (name: string, color: string, description?: string) => {
+      if (!activeTeamId) throw new Error('No team selected.')
+      const project = await api.createProject(activeTeamId, name, color, description)
+      setProjects(prev => [...prev, project])
+      return project
+    },
+    [activeTeamId]
+  )
+
+  const deleteProject = useCallback(async (id: string) => {
+    await api.deleteProject(id)
+    setProjects(prev => prev.filter(p => p.id !== id))
+    setIssues(prev => prev.map(i => (i.project_id === id ? { ...i, project_id: null, project_name: null } : i)))
+  }, [])
+
+  /** Moves a project out of the active workspace; it disappears here. */
+  const moveProject = useCallback(
+    async (projectId: string, toTeamId: string) => {
+      const result = await api.moveProject(projectId, toTeamId)
+      setProjects(prev => prev.filter(p => p.id !== projectId))
+      setIssues(prev => prev.filter(i => i.project_id !== projectId))
+      return result
+    },
+    []
+  )
+
+  const inviteMember = useCallback(
+    async (email: string, role: 'admin' | 'member') => {
+      if (!activeTeamId) throw new Error('No team selected.')
+      await api.inviteMember(activeTeamId, email, role)
+      const mem = await api.listMembers(activeTeamId)
+      setMembers(mem.members)
+      setInvites(mem.invites)
+    },
+    [activeTeamId]
+  )
+
+  const cancelInvite = useCallback(
+    async (inviteId: string) => {
+      if (!activeTeamId) throw new Error('No team selected.')
+      await api.cancelInvite(activeTeamId, inviteId)
+      setInvites(prev => prev.filter(i => i.id !== inviteId))
+    },
+    [activeTeamId]
+  )
+
+  const removeMember = useCallback(
+    async (userId: string) => {
+      if (!activeTeamId) throw new Error('No team selected.')
+      await api.removeMember(activeTeamId, userId)
+      setMembers(prev => prev.filter(m => m.user_id !== userId))
+    },
+    [activeTeamId]
+  )
+
+  const importGithub = useCallback(
+    async (params: {
+      repo: string
+      token: string
+      projectId: string | null
+      newProjectName?: string
+      includeClosed: boolean
+    }) => {
+      if (!activeTeamId) throw new Error('No team selected.')
+      const result = await api.importGithubIssues({ teamId: activeTeamId, ...params })
+      await refreshTeamData(activeTeamId)
+      return result
+    },
+    [activeTeamId, refreshTeamData]
+  )
+
+  const reload = useCallback(async () => {
+    if (activeTeamId) await refreshTeamData(activeTeamId)
+  }, [activeTeamId, refreshTeamData])
+
+  const activeTeam = teams.find(t => t.id === activeTeamId) || null
+
+  return {
+    teams,
+    activeTeam,
+    activeTeamId,
+    setActiveTeamId,
+    reload,
+    projects,
+    issues,
+    members,
+    invites,
+    loading,
+    error,
+    screenshotUrls,
+    loadScreenshotUrl,
+    refreshTeams,
+    createTeam,
+    createIssue,
+    updateIssue,
+    syncIssueScreenshots,
+    replaceIssue,
+    deleteIssue,
+    createProject,
+    deleteProject,
+    moveProject,
+    inviteMember,
+    removeMember,
+    cancelInvite,
+    importGithub,
+  }
+}
