@@ -8,8 +8,6 @@ import {
 } from '../repositories/indexedDbRepositories'
 import { restoreBackupData, type BackupData } from '../services/backupService'
 import { clearAllData as clearAllDataStores } from '../storage/db'
-import { notifyLocalChange } from '../sync/events'
-import { syncStore } from '../sync/store'
 import {
   fetchGithubIssues,
   planImport,
@@ -142,7 +140,6 @@ export function useBugstowData() {
         })
       }
       setIssues(prev => [created, ...prev])
-      notifyLocalChange()
       return created
     } catch (err) {
       console.error('Failed to create issue:', err)
@@ -180,7 +177,6 @@ export function useBugstowData() {
       }
 
       setIssues(prev => prev.map(i => i.id === id ? updated : i))
-      notifyLocalChange()
       return updated
     } catch (err) {
       console.error('Failed to update issue:', err)
@@ -210,7 +206,6 @@ export function useBugstowData() {
       }
 
       setIssues(prev => prev.map(i => i.id === id ? updated : i))
-      notifyLocalChange()
       return updated
     } catch (err) {
       console.error('Failed to update issue screenshots:', err)
@@ -222,7 +217,6 @@ export function useBugstowData() {
   const markFixed = useCallback(async (id: string): Promise<Issue> => {
     const updated = await issueRepo.update(id, { status: 'fixed' })
     setIssues(prev => prev.map(i => i.id === id ? updated : i))
-    notifyLocalChange()
     return updated
   }, [issueRepo])
 
@@ -230,7 +224,6 @@ export function useBugstowData() {
   const reopenIssue = useCallback(async (id: string): Promise<Issue> => {
     const updated = await issueRepo.update(id, { status: 'open' })
     setIssues(prev => prev.map(i => i.id === id ? updated : i))
-    notifyLocalChange()
     return updated
   }, [issueRepo])
 
@@ -250,14 +243,12 @@ export function useBugstowData() {
       return copy
     })
     setIssues(prev => prev.filter(i => i.id !== id))
-    notifyLocalChange()
   }, [issueRepo, issues])
 
   // Create project
   const createProject = useCallback(async (name: string, color: string, description?: string): Promise<Project> => {
     const created = await projectRepo.create(name, color, description)
     setProjects(prev => [...prev, created])
-    notifyLocalChange()
     return created
   }, [projectRepo])
 
@@ -265,7 +256,6 @@ export function useBugstowData() {
   const updateProject = useCallback(async (id: string, updates: { name?: string; color?: string; description?: string }): Promise<Project> => {
     const updated = await projectRepo.update(id, updates)
     setProjects(prev => prev.map(p => p.id === id ? updated : p))
-    notifyLocalChange()
     return updated
   }, [projectRepo])
 
@@ -274,7 +264,6 @@ export function useBugstowData() {
     await projectRepo.delete(id)
     setProjects(prev => prev.filter(p => p.id !== id))
     setIssues(prev => prev.map(i => i.projectId === id ? { ...i, projectId: null } : i))
-    notifyLocalChange()
   }, [projectRepo])
 
   // Import issues from a GitHub repository, straight from the browser. The
@@ -306,17 +295,13 @@ export function useBugstowData() {
     }
     for (const change of plan.setStatus) await issueRepo.update(change.id, { status: change.status })
     await refreshData()
-    if (plan.create.length || plan.setStatus.length) notifyLocalChange()
     return { imported: plan.create.length, updated: plan.setStatus.length, unchanged: plan.unchanged, projectId }
   }, [issueRepo, projectRepo, refreshData])
 
   // Clear all data
   const clearAllData = useCallback(async (): Promise<void> => {
     // Wipe the underlying IndexedDB stores first, then reset local state.
-    // Cloud sync is disconnected so the cloud copy is neither deleted by the
-    // next sync nor downloaded straight back.
     await clearAllDataStores()
-    await syncStore.disconnect()
     Object.values(screenshotUrlsRef.current).forEach(url => URL.revokeObjectURL(url))
     setScreenshotUrls({})
     setIssues([])
@@ -327,9 +312,7 @@ export function useBugstowData() {
   // Restore backup
   const restoreBackup = useCallback(async (data: BackupData): Promise<void> => {
     await restoreBackupData(data)
-    await syncStore.resetBases()
     await refreshData()
-    notifyLocalChange()
   }, [refreshData])
 
   // Dismiss backup reminder

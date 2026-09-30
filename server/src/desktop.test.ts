@@ -23,8 +23,8 @@ process.env.BUGSTOW_BACKUP_ENABLED = 'false'
 process.env.BUGSTOW_DESKTOP = 'true'
 // Shared through Tailscale (bugstow share).
 process.env.BUGSTOW_SHARE_URL = 'https://my-pc.tail1234.ts.net:5757'
+// Left over from 2.5: must not reach the page any more.
 process.env.BUGSTOW_GOOGLE_CLIENT_ID = '123-abc.apps.googleusercontent.com'
-process.env.BUGSTOW_DROPBOX_APP_KEY = '"><script>alert(1)</script>'
 
 const { createApp } = await import('./app.ts')
 const { config } = await import('./config.ts')
@@ -66,19 +66,19 @@ test('requests for other host names are refused (DNS rebinding)', async () => {
   assert.equal((await get('/', `[::1]:${PORT}`)).status, 200)
 })
 
-test('the page may reach https: hosts (Personal sync to your own cloud)', async () => {
+test('the page may reach only itself and api.github.com (GitHub import); no cloud hosts', async () => {
   const res = await new Promise<http.IncomingMessage>((resolve, reject) => {
     http.get({ host: '127.0.0.1', port: PORT, path: '/', headers: { Host: `localhost:${PORT}` } }, resolve).on('error', reject)
   })
   res.resume()
   const csp = String(res.headers['content-security-policy'])
-  assert.match(csp, /connect-src 'self' https:/)
+  const connect = csp.split(';').map(d => d.trim()).find(d => d.startsWith('connect-src'))
+  assert.equal(connect, "connect-src 'self' https://api.github.com")
 })
 
-test('sync app IDs from the environment reach the page; malformed ones are ignored', async () => {
+test('no cloud sign-in IDs are handed to the page', async () => {
   const page = await get('/', `localhost:${PORT}`)
-  assert.match(page.body, /<meta name="bugstow-google-client-id" content="123-abc\.apps\.googleusercontent\.com" \/>/)
-  assert.doesNotMatch(page.body, /bugstow-dropbox-app-key|<script>alert/)
+  assert.doesNotMatch(page.body, /bugstow-google-client-id|bugstow-dropbox-app-key|googleusercontent/)
 })
 
 test('127.0.0.1 is a trusted origin as well as localhost', () => {

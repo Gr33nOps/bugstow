@@ -380,3 +380,29 @@ test('moving a project refuses to create a second copy of a GitHub issue', async
   assert.equal(back.data.code, 'GITHUB_DUPLICATE')
   globalThis.fetch = realFetch
 })
+
+test('copying Local issues in keeps completed status and GitHub links, and never copies a GitHub issue twice', async () => {
+  const url = 'https://github.com/acme/web/issues/77'
+  const first = await A(`/api/issues?teamId=${teamId}`, {
+    method: 'POST',
+    body: { title: 'Copied from Local', status: 'fixed', githubUrl: url, githubNumber: 77 },
+  })
+  assert.equal(first.status, 201)
+  assert.equal(first.data.issue.status, 'fixed')
+  assert.equal(first.data.issue.github_url, url)
+  assert.equal(first.data.issue.github_number, 77)
+
+  const again = await A(`/api/issues?teamId=${teamId}`, { method: 'POST', body: { title: 'Copied again', githubUrl: url } })
+  assert.equal(again.status, 200)
+  assert.equal(again.data.existing, true)
+  assert.equal(again.data.issue.id, first.data.issue.id)
+
+  // Not a GitHub issue address: ignored, and an unknown status means open.
+  const odd = await A(`/api/issues?teamId=${teamId}`, {
+    method: 'POST',
+    body: { title: 'Odd fields', status: 'deleted', githubUrl: 'javascript:alert(1)' },
+  })
+  assert.equal(odd.status, 201)
+  assert.equal(odd.data.issue.status, 'open')
+  assert.equal(odd.data.issue.github_url, null)
+})

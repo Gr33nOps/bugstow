@@ -14,12 +14,12 @@ import { config } from './config.ts'
 import { requireAuth, teamRole, asyncRoute } from './middleware.ts'
 import { saveScreenshot, resolveScreenshot, deleteScreenshotFile } from './storage.ts'
 import { runBackup, listBackups, listExternalBackups, getExternalBackupStatus } from './backup.ts'
-import { getCloudBackupStatus } from './cloudBackup.ts'
 import { getCurrentCert } from './tls.ts'
 import { resetUserPassword } from './passwords.ts'
 
 const TYPES = ['bug', 'uiux', 'idea']
 const STATUSES = ['open', 'fixed']
+const GITHUB_ISSUE_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(issues|pull)\/\d+$/
 
 function now(): string {
   return new Date().toISOString()
@@ -126,7 +126,6 @@ api.get(
       intervalHours: config.backupIntervalHours,
       retention: config.backupRetention,
       external: { ...getExternalBackupStatus(), backups: listExternalBackups() },
-      cloud: getCloudBackupStatus(),
     })
   })
 )
@@ -134,8 +133,8 @@ api.post(
   '/admin/backup',
   asyncRoute(async (req, res) => {
     if (!requireServerAdmin(req, res)) return
-    const { manifest, external, cloud } = await runBackup()
-    res.status(201).json({ ok: true, manifest, external, cloud })
+    const { manifest, external } = await runBackup()
+    res.status(201).json({ ok: true, manifest, external })
   })
 )
 
@@ -497,11 +496,26 @@ api.post(
       return
     }
     const type = TYPES.includes(req.body?.type) ? req.body.type : 'bug'
+    const status = STATUSES.includes(req.body?.status) ? req.body.status : 'open'
+    // Issues copied in from Local keep their GitHub link, so a later GitHub
+    // import recognises them and copying twice doesn't make a second one.
+    const githubUrl =
+      typeof req.body?.githubUrl === 'string' && GITHUB_ISSUE_URL.test(req.body.githubUrl) ? req.body.githubUrl : null
+    const githubNumber = githubUrl && Number.isInteger(req.body?.githubNumber) ? req.body.githubNumber : null
+    if (githubUrl) {
+      const existing = db.prepare('select id from issues where team_id = ? and github_url = ?').get(teamId, githubUrl) as
+        | { id: string }
+        | undefined
+      if (existing) {
+        res.status(200).json({ issue: selectIssue(existing.id), existing: true })
+        return
+      }
+    }
     const id = randomUUID()
     const ts = now()
     db.prepare(
-      `insert into issues (id, team_id, project_id, title, description, type, status, assignee_id, created_by, created_at, updated_at)
-       values (?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`
+      `insert into issues (id, team_id, project_id, title, description, type, status, assignee_id, created_by, github_url, github_number, created_at, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       teamId,
@@ -509,8 +523,11 @@ api.post(
       title,
       req.body?.description || '',
       type,
+      status,
       req.body?.assigneeId || null,
       req.user!.id,
+      githubUrl,
+      githubNumber,
       ts,
       ts
     )

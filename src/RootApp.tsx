@@ -7,7 +7,7 @@ import { ModePicker } from "./components/team/ModePicker"
 import { SelfHostInfo } from "./components/team/SelfHostInfo"
 
 // Team mode (auth client + shared workspace) is a separate chunk, fetched only
-// from a team server. The public Personal site never loads it.
+// from a BugsTow server. Local on a static site never loads it.
 function TeamLoadError() {
   return (
     <div className="h-full flex items-center justify-center p-6 bg-slate-50 dark:bg-slate-950">
@@ -49,7 +49,7 @@ function Loading() {
 }
 
 /**
- * Top-level router between Personal (local, in-browser) and Team (self-hosted)
+ * Top-level router between Local (just you, in this browser) and Team (a BugsTow server)
  * modes. A single build works on the public static site and on a team server;
  * it detects which one it is at runtime (see lib/teamServer.ts).
  */
@@ -57,8 +57,6 @@ export default function RootApp() {
   const { mode, setMode } = useAppMode()
   const [team, setTeam] = useState<TeamServerInfo | null>(null)
   const [showSelfHost, setShowSelfHost] = useState(false)
-  // Chosen "use my own cloud" on the welcome screen: open Settings → Sync once.
-  const [startInSync, setStartInSync] = useState(false)
 
   useEffect(() => {
     detectTeamServer().then(setTeam)
@@ -82,10 +80,6 @@ export default function RootApp() {
           desktop={team.edition === "desktop"}
           onChoose={setMode}
           onSelfHost={() => setShowSelfHost(true)}
-          onUseOwnCloud={() => {
-            setStartInSync(true)
-            setMode("local")
-          }}
         />
       </div>
     )
@@ -116,7 +110,7 @@ export default function RootApp() {
   // Local mode
   return (
     <App
-      startInSync={startInSync}
+      teamAvailable={team.available}
       onSwitchToTeam={
         team.available ? () => setMode("team") : () => setShowSelfHost(true)
       }

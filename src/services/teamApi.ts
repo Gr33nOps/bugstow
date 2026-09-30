@@ -132,6 +132,25 @@ export async function createIssue(
   ).issue
 }
 /**
+ * Copy an issue in from Local, keeping whether it's completed and its GitHub
+ * link. `existing` is true when that GitHub issue is already in the team; it
+ * is then left as it is and not copied a second time.
+ */
+export async function copyIssueIn(
+  teamId: string,
+  data: {
+    title: string
+    description: string
+    type: IssueType
+    status: 'open' | 'fixed'
+    projectId: string | null
+    githubUrl?: string
+    githubNumber?: number
+  }
+): Promise<{ issue: TeamIssue; existing?: boolean }> {
+  return api(`issues?teamId=${encodeURIComponent(teamId)}`, { method: 'POST', body: JSON.stringify(data) })
+}
+/**
  * Save changes to an issue. `expectedUpdatedAt` is the version you edited;
  * if a teammate saved in between, this throws IssueConflictError instead of
  * overwriting their change.
@@ -209,16 +228,6 @@ export interface BackupStatus {
     lastErrorAt: string | null
     backups: string[]
   }
-  /** Encrypted copies in your own cloud (synced folder and/or WebDAV). */
-  cloud: {
-    configured: boolean
-    targets: string[]
-    encrypted: boolean
-    lastSuccessAt: string | null
-    lastArchive: string | null
-    lastError: string | null
-    lastErrorAt: string | null
-  }
 }
 export async function listBackups(): Promise<BackupStatus> {
   return api<BackupStatus>('admin/backups')
@@ -226,7 +235,6 @@ export async function listBackups(): Promise<BackupStatus> {
 export async function runBackupNow(): Promise<{
   ok: true
   external: Omit<BackupStatus['external'], 'backups'>
-  cloud: BackupStatus['cloud']
 }> {
   return api('admin/backup', { method: 'POST' })
 }

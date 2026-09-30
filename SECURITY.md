@@ -14,8 +14,8 @@ to reproduce.
 
 ## Scope
 
-- **Browser storage** keeps data in IndexedDB, optionally synced to the user's own
-  cloud with encryption before upload.
+- **Local** keeps data in the browser's IndexedDB. Nothing is uploaded; BugsTow has
+  no cloud features.
 - **Installed desktop app** can keep data in a local SQLite database and screenshot
   folder. It binds to loopback by default; LAN access is an explicit option.
 - **Team mode** is self-hosted. The person running the server controls the data

@@ -1,10 +1,9 @@
 # Install BugsTow on your computer
 
 BugsTow runs on your own computer, like other open-source local web apps. You install it with
-one command and open it in your browser at **http://localhost:5757**. Issues and screenshots
-are saved in a data folder on your PC when you choose that storage option.
-Local work runs offline after installation. Installing, updating, GitHub import and optional
-cloud sync need internet access; BugsTow does not operate a hosted storage service.
+one command and open it in your browser at **http://localhost:5757**. It has no cloud
+features and no hosted service: your issues stay on your computer. Everything works offline
+after installation; only installing, updating and GitHub import use the internet.
 
 ## Install
 
@@ -30,8 +29,15 @@ It:
    applications menu on Linux, `~/Applications` on macOS) and a `bugstow` command
 4. starts BugsTow and opens it in your browser.
 
-The first time, BugsTow asks where to keep your issues. Choose **Save on this computer** and
-create your sign-in. The email is only a sign-in name; nothing is emailed to it.
+The first time, BugsTow asks: **just you, or with other people?**
+
+- **Local**: just you. Issues are saved in this browser. No account, nothing to set up.
+- **Team**: you and people you invite. Issues are saved in BugsTow's data folder on this PC
+  and backed up daily. You create a sign-in (the email is only a sign-in name; nothing is
+  emailed to it), then invite people on your Wi-Fi or through Tailscale (below).
+
+You can switch any time in **Settings** (Local) or the account menu (Team). Switching doesn't
+move anything; in Team, **Copy Local issues** brings your Local issues over.
 
 ## Everyday use
 
@@ -62,6 +68,9 @@ entirely, put `BUGSTOW_OFFLINE=true` in `bugstow.env` and run `bugstow restart`.
 
 ## Where your data is
 
+Local issues are in the browser you use for BugsTow. Download a backup from **Settings → Data &
+backups** now and then. Team data is in this folder:
+
 | System | Data folder |
 |---|---|
 | Windows | `%LOCALAPPDATA%\BugsTow\data` |
@@ -71,28 +80,23 @@ entirely, put `BUGSTOW_OFFLINE=true` in `bugstow.env` and run `bugstow restart`.
 It holds the database (`bugstow.sqlite`), the screenshots and daily backups (`backups/`,
 the last 7 are kept). Installing, updating or uninstalling never changes this folder.
 
-### Extra copies: a second drive or your own cloud
+### A second copy on another drive
 
 Backups in the data folder don't help if the disk dies. BugsTow can also copy every backup to a
-second drive, and send **encrypted** copies to a folder your Google Drive, Dropbox, OneDrive,
-Mega or Terabox app syncs (or to WebDAV). Create a text file named `bugstow.env` in the BugsTow
-folder (the one that contains `data`) with the lines you need, then run `bugstow restart`:
+second drive (a USB disk, another internal drive, a NAS). Create an empty file named
+`.bugstow-backup-target` in that folder, then create a text file named `bugstow.env` in the
+BugsTow folder (the one that contains `data`) and run `bugstow restart`:
 
 ```env
-# A second drive (create an empty file named .bugstow-backup-target in that folder first)
 BUGSTOW_BACKUP_EXTERNAL_DIR=D:/BugsTow backups
-
-# Encrypted copies to a folder your cloud app syncs (same marker file needed)
-BUGSTOW_BACKUP_ENCRYPTION_PASSPHRASE=a long passphrase you keep in a password manager
-BUGSTOW_BACKUP_CLOUD_DIR=C:/Users/you/Dropbox/BugsTow backups
 ```
 
-Without the passphrase nothing is sent to the cloud. Every option is explained in
-[CLOUD_SYNC.md](CLOUD_SYNC.md#team-backups-to-your-cloud); `bugstow logs` shows whether
-backups succeed. Copying the data folder while BugsTow is stopped also works.
+`bugstow logs` shows whether backups succeed. Copying the data folder while BugsTow is stopped
+also works.
 
-The two browser-only choices on the welcome screen ("Only in this browser", "Synced with my
-own cloud") keep issues in the browser instead of the data folder. See the README.
+Don't point this at a folder that Google Drive, Dropbox or OneDrive syncs: the copies there are
+not encrypted. (BugsTow 2.5 and earlier had cloud backups; they were removed in 2.6, and
+`BUGSTOW_BACKUP_CLOUD_DIR` and the WebDAV settings are now ignored.)
 
 ## Update
 
@@ -136,6 +140,8 @@ in the Tailscale admin console (a one-time click).
 
 ## Inviting people
 
+Inviting needs **Team**. Local is only ever you.
+
 BugsTow **doesn't send invitation emails**: it has no email service, on purpose. An invite is a name
 on a list, so you send the person the link yourself. Until you do, they see nothing.
 
@@ -154,13 +160,15 @@ You can cancel a pending invitation from the list.
 
 ## Keeping some projects to yourself
 
-People you invite see every project in that workspace. To keep a project private, move it to a
-workspace only you are in: in the sidebar, click **⋯** next to the project → **Move to
+Either keep them in Local, or keep them in Team in a workspace only you are in.
+
+People you invite see every project in that workspace. To make a Team project private, move it
+to a workspace only you are in: in the sidebar, click **⋯** next to the project → **Move to
 workspace** → **New workspace, only you** (or an existing one). Its issues and screenshots move
 with it. Switch between workspaces at the top left; each shows how many people are in it.
 
-(**Browser-only mode** in the account menu is something else: it switches this browser to a
-separate list of issues kept in the browser, without the server's workspaces.)
+(**Switch to Local** in the account menu opens your separate Local list in this browser. It
+doesn't move Team projects.)
 
 ## For a whole team
 

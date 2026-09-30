@@ -48,8 +48,10 @@ import { generateIssuePrompt } from "../../services/promptService"
 import {
   validateBackupStructure,
   decryptBackup,
+  createBackupData,
 } from "../../services/backupService"
-import { migrateBackupToTeam } from "../../services/teamMigration"
+import { migrateBackupToTeam, type MigrationResult } from "../../services/teamMigration"
+import { getDB } from "../../storage/db"
 import type { IssueType, BackupData, EncryptedBackupPayload } from "../../types"
 import type { TeamIssue, TeamMember, CurrentUser } from "../../types/team"
 
@@ -227,6 +229,23 @@ function Workspace({
   const [showMembers, setShowMembers] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showMigrate, setShowMigrate] = useState(false)
+  // Issues kept in Local in this same browser: offered for copying in when
+  // the workspace is still empty (typically right after switching to Team).
+  const [localIssueCount, setLocalIssueCount] = useState(0)
+  useEffect(() => {
+    let alive = true
+    getDB()
+      .then((db) => db.count("issues"))
+      .then((n) => {
+        if (alive) setLocalIssueCount(n)
+      })
+      .catch(() => {
+        // no Local data in this browser
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
   const [showTeamMenu, setShowTeamMenu] = useState(false)
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [showBackups, setShowBackups] = useState(false)
@@ -625,6 +644,16 @@ function Workspace({
                   >
                     <GithubMark size={15} /> Import from GitHub
                   </button>
+                  {issues.length === 0 && localIssueCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowMigrate(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    >
+                      <HardDrive size={15} /> Copy {localIssueCount} Local issue
+                      {localIssueCount === 1 ? "" : "s"}
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -770,11 +799,13 @@ function Workspace({
             teamId={activeTeamId}
             teamName={activeTeam?.name || "this team"}
             onClose={() => setShowMigrate(false)}
-            onDone={async (summary) => {
+            onDone={async (r) => {
               setShowMigrate(false)
               await data.reload()
               notify(
-                `Imported ${summary.projects} projects, ${summary.issues} issues`,
+                `Copied ${r.issues} issue${r.issues === 1 ? "" : "s"}` +
+                  (r.projects ? ` and ${r.projects} project${r.projects === 1 ? "" : "s"}` : "") +
+                  (r.alreadyThere ? `. ${r.alreadyThere} GitHub issue${r.alreadyThere === 1 ? " was" : "s were"} already here.` : ""),
               )
             }}
             onToast={notify}
@@ -875,7 +906,7 @@ function UserMenu({
             }}
             className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
           >
-            <Upload size={15} /> Import personal data
+            <Upload size={15} /> Copy Local issues
           </button>
           <button
             type="button"
@@ -902,10 +933,10 @@ function UserMenu({
           <button
             type="button"
             onClick={onUseLocal}
-            title="Switches this browser to its own separate list of issues. Nothing here is moved or deleted. To keep some projects to yourself, move them to a private workspace instead (⋯ next to a project)."
+            title="Opens Local: your own separate list in this browser, no account. Team issues stay where they are. To keep a Team project to yourself instead, use ⋯ next to it → Move to workspace."
             className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
           >
-            <HardDrive size={15} /> Browser-only mode
+            <HardDrive size={15} /> Switch to Local
           </button>
           <button
             type="button"
@@ -1206,9 +1237,7 @@ function CreateFirstTeam({
           onClick={onUseLocal}
           className="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
         >
-          {desktop
-            ? "Keep issues in this browser instead"
-            : "Use Personal mode instead"}
+          Use Local instead (just you, no account)
         </button>
       </form>
     </div>
@@ -2047,39 +2076,57 @@ function HowTheyJoin({
         >
           <p>
             <strong>Right now this link only opens on this computer.</strong>{" "}
-            To let a friend on another network in:
+            First let them reach it, one of two ways:
           </p>
-          <ol className="list-decimal pl-4 space-y-1">
-            <li>
-              Install{" "}
-              <a
-                href="https://tailscale.com/download"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline font-semibold"
-              >
-                Tailscale
-              </a>{" "}
-              on this PC (free) and sign in.
-            </li>
-            <li>
-              In a terminal, run{" "}
-              <button
-                type="button"
-                onClick={() => copy("bugstow share", "Command")}
-                title="Copy"
-                className="font-mono px-1 rounded bg-amber-100 dark:bg-amber-900/60 hover:underline"
-              >
-                bugstow share
-              </button>{" "}
-              and follow what it prints.
-            </li>
-            <li>Reopen this panel: the link switches to your Tailscale address.</li>
-          </ol>
-          <p>
-            Same Wi-Fi or office? <code>bugstow start --lan</code> is enough.
-          </p>
+          <dl className="grid gap-2">
+            <div>
+              <dt className="font-semibold">On the same Wi-Fi or office network</dt>
+              <dd>
+                In a terminal, run{" "}
+                <button
+                  type="button"
+                  onClick={() => copy("bugstow start --lan", "Command")}
+                  title="Copy"
+                  className="font-mono px-1 rounded bg-amber-100 dark:bg-amber-900/60 hover:underline"
+                >
+                  bugstow start --lan
+                </button>
+                , then open this panel from the address it prints.
+              </dd>
+            </div>
+            <div>
+              <dt className="font-semibold">Somewhere else</dt>
+              <dd>
+                Install{" "}
+                <a
+                  href="https://tailscale.com/download"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline font-semibold"
+                >
+                  Tailscale
+                </a>{" "}
+                (free) on this PC and theirs, run{" "}
+                <button
+                  type="button"
+                  onClick={() => copy("bugstow share", "Command")}
+                  title="Copy"
+                  className="font-mono px-1 rounded bg-amber-100 dark:bg-amber-900/60 hover:underline"
+                >
+                  bugstow share
+                </button>{" "}
+                and follow what it prints. Then reopen this panel.
+              </dd>
+            </div>
+          </dl>
         </div>
+      )}
+
+      {desktop && !shareUrl && !onlyThisComputer && (
+        <p className="text-xs text-slate-600 dark:text-slate-300">
+          This link works for people on the same network as this PC, while it’s on.
+          For someone elsewhere, run <code>bugstow share</code> (Tailscale).
+        </p>
       )}
 
       {onlyThisComputer && !desktop && (
@@ -2362,20 +2409,12 @@ function BackupsModal({ onClose }: { onClose: () => void }) {
     setDone(null)
     try {
       const res = await runBackupNow()
-      const failed = [
-        res.external.configured && res.external.lastError && "external copy",
-        res.cloud.configured && res.cloud.lastError && "cloud copy",
-      ].filter(Boolean)
-      const extra = [
-        res.external.configured && "the external location",
-        res.cloud.configured && "your cloud",
-      ].filter(Boolean)
       setDone(
-        failed.length
-          ? `Local backup saved. The ${failed.join(" and ")} failed (see below).`
-          : extra.length
-            ? `Backup saved locally and to ${extra.join(" and ")}.`
-            : "Backup saved locally.",
+        !res.external.configured
+          ? "Backup saved on this disk."
+          : res.external.lastError
+            ? "Backup saved on this disk. The copy to the second drive failed (see below)."
+            : "Backup saved on this disk and on the second drive.",
       )
       await load()
     } catch (e) {
@@ -2387,7 +2426,6 @@ function BackupsModal({ onClose }: { onClose: () => void }) {
 
   const latest = status?.backups[status.backups.length - 1]
   const ext = status?.external
-  const cloud = status?.cloud
 
   return (
     <ModalShell onClose={onClose}>
@@ -2435,12 +2473,14 @@ function BackupsModal({ onClose }: { onClose: () => void }) {
                 Same disk as the live data.
               </span>
             </dd>
-            <dt className="text-slate-500">External copy</dt>
+            <dt className="text-slate-500">Second drive</dt>
             <dd>
               {!ext?.configured ? (
                 <span className="text-amber-700 dark:text-amber-400">
                   Not set up. If this disk fails, the backups are lost with it.
-                  Set BUGSTOW_BACKUP_EXTERNAL_DIR (docs/RELEASE_OFFLINE.md §8).
+                  {isDesktopEdition()
+                    ? " Add BUGSTOW_BACKUP_EXTERNAL_DIR to bugstow.env (docs/INSTALL.md)."
+                    : " Set BUGSTOW_BACKUP_EXTERNAL_DIR (docs/RELEASE_OFFLINE.md §8)."}
                 </span>
               ) : ext.lastError ? (
                 <span className="text-red-700 dark:text-red-400">
@@ -2456,29 +2496,6 @@ function BackupsModal({ onClose }: { onClose: () => void }) {
                       .
                     </span>
                   )}
-                </>
-              )}
-            </dd>
-            <dt className="text-slate-500">Your cloud</dt>
-            <dd>
-              {!cloud?.configured ? (
-                <span className="text-slate-500">
-                  Not set up. Encrypted copies can go to a Google Drive,
-                  Dropbox, OneDrive, Mega or Terabox synced folder, or to WebDAV
-                  (docs/CLOUD_SYNC.md).
-                </span>
-              ) : cloud.lastError ? (
-                <span className="text-red-700 dark:text-red-400">
-                  Last attempt failed: {cloud.lastError}
-                </span>
-              ) : (
-                <>
-                  Encrypted copies to {cloud.targets.join(" and ")}
-                  <span className="block text-xs text-slate-500">
-                    {cloud.lastSuccessAt
-                      ? `Last sent ${new Date(cloud.lastSuccessAt).toLocaleString()}.`
-                      : "Nothing sent yet."}
-                  </span>
                 </>
               )}
             </dd>
@@ -2509,7 +2526,15 @@ function formatBackupName(name: string): string {
   return Number.isNaN(d.getTime()) ? name : d.toLocaleString()
 }
 
-// ── Migrate personal data into the team ──────────────────────────────────────
+// ── Copy Local issues into the team ──────────────────────────────────────────
+type CopySummary = { projects: number; issues: number; screenshots: number }
+
+function summarize(d: BackupData): CopySummary {
+  return { projects: d.projects.length, issues: d.issues.length, screenshots: d.screenshots.length }
+}
+
+const copiedKey = (teamId: string) => `bugstow_local_copied_${teamId}`
+
 function MigrateModal({
   teamId,
   teamName,
@@ -2520,30 +2545,45 @@ function MigrateModal({
   teamId: string
   teamName: string
   onClose: () => void
-  onDone: (summary: {
-    projects: number
-    issues: number
-    screenshots: number
-  }) => void
+  onDone: (result: MigrationResult) => void
   onToast: (m: string) => void
 }) {
+  // Local lives in this same browser (same address), so it can be read
+  // directly. A backup file covers Local from another device.
+  const [local, setLocal] = useState<BackupData | null | "loading">("loading")
+  const [useFile, setUseFile] = useState(false)
   const [raw, setRaw] = useState<Record<string, unknown> | null>(null)
   const [encrypted, setEncrypted] = useState(false)
   const [passphrase, setPassphrase] = useState("")
-  const [data, setData] = useState<BackupData | null>(null)
-  const [summary, setSummary] = useState<{
-    projects: number
-    issues: number
-    screenshots: number
-  } | null>(null)
+  const [fileData, setFileData] = useState<BackupData | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const copiedBefore = (() => {
+    try {
+      return localStorage.getItem(copiedKey(teamId))
+    } catch {
+      return null
+    }
+  })()
+
+  useEffect(() => {
+    let alive = true
+    createBackupData()
+      .then((d) => {
+        if (alive) setLocal(d.projects.length || d.issues.length ? d : null)
+      })
+      .catch(() => {
+        if (alive) setLocal(null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   const onFile = (file: File) => {
     setError(null)
-    setData(null)
-    setSummary(null)
+    setFileData(null)
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
@@ -2551,20 +2591,11 @@ function MigrateModal({
         setRaw(parsed)
         const check = validateBackupStructure(parsed)
         if (!check.isValid) {
-          setError(check.error || "Invalid backup file.")
+          setError(check.error || "That isn’t a BugsTow backup file.")
           return
         }
-        if (check.isEncrypted) {
-          setEncrypted(true)
-        } else if (check.data) {
-          setEncrypted(false)
-          setData(check.data)
-          setSummary({
-            projects: check.data.projects.length,
-            issues: check.data.issues.length,
-            screenshots: check.data.screenshots.length,
-          })
-        }
+        setEncrypted(Boolean(check.isEncrypted))
+        if (!check.isEncrypted && check.data) setFileData(check.data)
       } catch {
         setError("Could not read that file.")
       }
@@ -2576,39 +2607,42 @@ function MigrateModal({
     setBusy(true)
     setError(null)
     try {
-      const decrypted = await decryptBackup(
-        raw as unknown as EncryptedBackupPayload,
-        passphrase,
-      )
+      const decrypted = await decryptBackup(raw as unknown as EncryptedBackupPayload, passphrase)
       const check = validateBackupStructure(decrypted)
       if (!check.isValid || !check.data) {
-        setError(check.error || "Decrypted backup is invalid.")
+        setError(check.error || "The decrypted backup is damaged.")
         return
       }
-      setData(check.data)
-      setSummary({
-        projects: check.data.projects.length,
-        issues: check.data.issues.length,
-        screenshots: check.data.screenshots.length,
-      })
+      setFileData(check.data)
     } catch {
-      setError("Incorrect passphrase or corrupted file.")
+      setError("Wrong passphrase, or the file is damaged.")
     } finally {
       setBusy(false)
     }
   }
 
+  const fromLocal = !useFile && local !== null && local !== "loading"
+  const source = fromLocal ? (local as BackupData) : fileData
+  const summary = source ? summarize(source) : null
+
   const run = async () => {
-    if (!data) return
+    if (!source) return
     setBusy(true)
     setError(null)
     try {
-      const result = await migrateBackupToTeam(data, teamId, (msg) =>
-        onToast(msg),
-      )
+      const result = await migrateBackupToTeam(source, teamId, (msg) => onToast(msg))
+      if (fromLocal) {
+        try {
+          localStorage.setItem(copiedKey(teamId), new Date().toISOString())
+        } catch {
+          // only used for the "copied before" note
+        }
+      }
       onDone(result)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Import failed.")
+      setError(
+        (err instanceof Error ? err.message : "Copying stopped.") + " Issues copied so far are kept.",
+      )
     } finally {
       setBusy(false)
     }
@@ -2616,48 +2650,50 @@ function MigrateModal({
 
   return (
     <ModalShell onClose={onClose}>
-      <div className="flex flex-col gap-3.5">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <Upload size={18} /> Import personal data
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close dialog"
-            className="p-2 text-slate-400"
-          >
+      <div className="flex flex-col gap-4">
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="text-lg font-semibold">Copy Local issues into {teamName}</h3>
+          <button type="button" onClick={onClose} aria-label="Close dialog" className="p-2 -mt-1 text-slate-400">
             <X size={16} />
           </button>
         </div>
-        <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-          Copy the projects, issues, and screenshots from a personal backup file
-          into{" "}
-          <span className="font-semibold text-slate-700 dark:text-slate-200">
-            {teamName}
-          </span>
-          . This adds to the team — it never touches or deletes your local
-          browser data.
-        </p>
+
+        {local === "loading" && !useFile ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">Looking for Local issues in this browser…</p>
+        ) : fromLocal ? (
+          <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            Found in Local, in this browser. Your Local issues stay where they are; this adds copies here.
+          </p>
+        ) : (
+          <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            {local === null && !useFile
+              ? "Local in this browser is empty. To bring issues from another device, download a backup there (Settings → Data & backups) and choose it here."
+              : "Choose a backup file downloaded from Local (Settings → Data & backups)."}
+          </p>
+        )}
+
         {error && (
-          <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
-            <AlertCircle size={14} /> {error}
+          <div
+            role="alert"
+            className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg text-xs text-red-700 dark:text-red-300 flex items-center gap-2"
+          >
+            <AlertCircle size={14} className="shrink-0" /> {error}
           </div>
         )}
 
-        {!raw && (
+        {!fromLocal && local !== "loading" && !raw && (
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className="flex items-center justify-center gap-2 py-6 text-sm text-slate-500 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl hover:border-brand"
+            className="flex items-center justify-center gap-2 py-6 text-sm text-slate-600 dark:text-slate-300 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg hover:border-brand"
           >
-            <Upload size={18} /> Select a personal backup (.json)
+            <Upload size={18} /> Choose a backup file (.json)
           </button>
         )}
         <input
           ref={fileRef}
           type="file"
-          accept=".json"
+          accept=".json,application/json"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0]
@@ -2665,12 +2701,15 @@ function MigrateModal({
           }}
         />
 
-        {raw && encrypted && !data && (
+        {!fromLocal && raw && encrypted && !fileData && (
           <div className="flex flex-col gap-2.5">
+            <label className="text-sm font-medium" htmlFor="copy-passphrase">
+              This backup is encrypted. Its passphrase:
+            </label>
             <input
+              id="copy-passphrase"
               autoFocus
               type="password"
-              placeholder="Backup passphrase"
               value={passphrase}
               onChange={(e) => setPassphrase(e.target.value)}
               className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-brand"
@@ -2681,27 +2720,55 @@ function MigrateModal({
               onClick={decrypt}
               className="w-full py-2.5 text-sm font-semibold text-white bg-brand rounded-lg disabled:opacity-50"
             >
-              {busy ? "Decrypting…" : "Decrypt"}
+              {busy ? "Opening…" : "Open backup"}
             </button>
           </div>
         )}
 
         {summary && (
           <>
-            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs text-slate-700 dark:text-slate-200 space-y-1">
-              <p>• {summary.projects} projects</p>
-              <p>• {summary.issues} issues</p>
-              <p>• {summary.screenshots} screenshots</p>
-            </div>
+            <dl className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-200 dark:bg-slate-700 text-center">
+              {(
+                [
+                  ["Projects", summary.projects],
+                  ["Issues", summary.issues],
+                  ["Screenshots", summary.screenshots],
+                ] as const
+              ).map(([label, n]) => (
+                <div key={label} className="bg-white dark:bg-slate-900 py-3">
+                  <dt className="text-xs text-slate-500 dark:text-slate-400">{label}</dt>
+                  <dd className="text-lg font-semibold tabular-nums">{n}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+              Completed issues stay completed. Projects with the same name are reused, and GitHub issues already here
+              aren’t copied twice.
+              {fromLocal &&
+                copiedBefore &&
+                ` You copied Local here on ${new Date(copiedBefore).toLocaleDateString()}; copying again adds its other issues again.`}
+            </p>
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || summary.issues + summary.projects === 0}
               onClick={run}
               className="w-full py-2.5 text-sm font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg disabled:opacity-50"
             >
-              {busy ? "Importing…" : `Import into ${teamName}`}
+              {busy
+                ? "Copying…"
+                : `Copy ${summary.issues} issue${summary.issues === 1 ? "" : "s"} into ${teamName}`}
             </button>
           </>
+        )}
+
+        {fromLocal && (
+          <button
+            type="button"
+            onClick={() => setUseFile(true)}
+            className="self-start text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 underline underline-offset-2"
+          >
+            Use a backup file from another device instead
+          </button>
         )}
       </div>
     </ModalShell>

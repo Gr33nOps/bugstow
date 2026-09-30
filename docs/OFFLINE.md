@@ -1,7 +1,7 @@
 # Running BugsTow offline
 
-BugsTow can operate entirely offline after installation. It only reaches the
-internet for GitHub import and cloud sync, and only when you use them:
+BugsTow can operate entirely offline after installation. It has no cloud
+features; the only time it reaches the internet is a GitHub import you start:
 
 - **Installed app:** GitHub import works out of the box and contacts GitHub
   only at the moment you click **Import**. `BUGSTOW_OFFLINE=true` in
@@ -19,24 +19,25 @@ version: what "offline" means and how to check it yourself.
 
 | Component | Connects to |
 |---|---|
-| Personal app (browser) | Only the site it was loaded from, for its own files. No API, analytics, fonts or CDNs. Data stays in IndexedDB. If you turn on sync: also the cloud you connected (encrypted files only). When you import from GitHub: `api.github.com`, for that import. |
-| Team app (browser) | Only its own team server. |
-| Team server / installed app | Nothing, except `api.github.com` when someone runs a GitHub import (installed app: allowed unless `BUGSTOW_OFFLINE=true`; team server: only with `BUGSTOW_OFFLINE=false`), and your WebDAV server if you configure encrypted cloud backups to it. |
+| Local (browser) | Only the site it was loaded from, for its own files. No API, analytics, fonts or CDNs. Data stays in IndexedDB. When you import from GitHub: `api.github.com`, for that import. |
+| Team (browser) | Only its own BugsTow server. |
+| Team server / installed app | Nothing, except `api.github.com` when someone runs a GitHub import (installed app: allowed unless `BUGSTOW_OFFLINE=true`; team server: only with `BUGSTOW_OFFLINE=false`). |
 | Authentication (better-auth) | Nothing. Local SQLite; its optional telemetry is forced off. |
 | Updates | Nothing. There is no update check. |
 
-Browsers enforce this as well on a Team server: it sends a
-Content-Security-Policy with `connect-src 'self'`, so pages it serves cannot
-open connections to other hosts. (The installed desktop app allows HTTPS
-connections too, so Personal sync can reach the cloud you choose; see
-[`CLOUD_SYNC.md`](CLOUD_SYNC.md).) The full audit is in
+Browsers enforce this as well: a Team server sends a Content-Security-Policy
+with `connect-src 'self'`, so pages it serves cannot open connections to other
+hosts. The installed desktop app adds exactly one host, `https://api.github.com`,
+for Local's GitHub import (and drops it with `BUGSTOW_OFFLINE=true`). The full audit is in
 [`RELEASE_OFFLINE.md` §11](RELEASE_OFFLINE.md#11-network-connections-audited).
 
 ## Where data is stored
 
-- **Personal:** the browser's IndexedDB for that site. Not encrypted on disk.
-  Keep copies with **Settings → Export Backup** (optionally passphrase-encrypted).
-- **Team:** the Docker volume mounted at `/data` on the server computer:
+- **Local:** the browser's IndexedDB for that site. Not encrypted on disk.
+  Keep copies with **Settings → Data & backups → Download backup** (optionally
+  passphrase-encrypted).
+- **Team (installed app):** the BugsTow data folder on that PC (see INSTALL.md).
+- **Team (Docker):** the volume mounted at `/data` on the server computer:
   `bugstow.sqlite` (database), `screenshots/`, `backups/`, `certs/`. Not
   encrypted at rest and readable by whoever controls the server. Add an external
   backup location on separate hardware ([§8](RELEASE_OFFLINE.md#8-backups-and-restore)).
@@ -62,9 +63,9 @@ acceptance test passing shows normal operation doesn't need it.
 Clean up afterwards: `docker rm -f bugstow-isolated-test`,
 `docker volume rm bugstow-isolated-data`, `docker network rm bugstow-isolated`.
 
-## Check it yourself: Personal mode
+## Check it yourself: Local
 
-Open the app, choose **Just me · Local**, then disconnect the network. Capture
+Open the app, choose **Local**, then disconnect the network. Capture
 issues, paste screenshots and export a backup. In the browser's developer tools,
 the Network tab shows only the site's own files.
 

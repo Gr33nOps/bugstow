@@ -27,9 +27,18 @@ export function SelfHostInfo({ onBack }: { onBack: () => void }) {
 
         <div className="mt-8 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-900 p-6">
           <h2 className="text-lg font-semibold">Already installed the desktop app?</h2>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Run this on the computer that holds your workspace:</p>
-          <pre className="mt-3 rounded-lg bg-slate-950 p-4 text-sm text-white overflow-x-auto">bugstow start --lan</pre>
-          <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Open the network address it prints. Choose Invite people, add a teammate's email and share their join link. Keep this computer on and use the same network. Each device needs to trust the server certificate once.</p>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Open it, choose Team, then on that computer run one of these:</p>
+          <dl className="mt-3 grid gap-3 text-sm">
+            <div>
+              <dt className="font-medium">People on the same Wi-Fi or office network</dt>
+              <dd><pre className="mt-1.5 rounded-lg bg-slate-950 px-4 py-3 text-white overflow-x-auto">bugstow start --lan</pre></dd>
+            </div>
+            <div>
+              <dt className="font-medium">People somewhere else (both of you install Tailscale, free)</dt>
+              <dd><pre className="mt-1.5 rounded-lg bg-slate-950 px-4 py-3 text-white overflow-x-auto">bugstow share</pre></dd>
+            </div>
+          </dl>
+          <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Then open People &amp; invitations, add their email and send them the join link yourself. Keep that computer on while they use it.</p>
           <a className="inline-block mt-3 text-sm font-semibold text-indigo-600 dark:text-indigo-300" href={`${REPO_URL}/blob/main/docs/INSTALL.md`} target="_blank" rel="noreferrer">Desktop installation guide</a>
         </div>
         <h2 className="mt-8 text-lg font-semibold">For a dedicated server</h2>

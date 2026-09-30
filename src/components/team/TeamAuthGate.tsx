@@ -253,7 +253,7 @@ export function TeamAuthGate({
             onClick={onUseLocal}
             className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
           >
-            {desktop ? 'Keep issues in this browser instead' : 'Use Personal mode'}
+            Use Local instead (just you, no account)
           </button>
         </div>
       </form>

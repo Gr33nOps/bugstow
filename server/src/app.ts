@@ -42,12 +42,7 @@ export async function createApp(): Promise<express.Express> {
           .replace(
             '<head>',
             '<head>\n    <meta name="bugstow-server" content="team" />' +
-              (config.desktop ? '\n    <meta name="bugstow-edition" content="desktop" />' : '') +
-              // Checked against a strict pattern in config.ts, so safe in an attribute.
-              (config.googleClientId
-                ? `\n    <meta name="bugstow-google-client-id" content="${config.googleClientId}" />`
-                : '') +
-              (config.dropboxAppKey ? `\n    <meta name="bugstow-dropbox-app-key" content="${config.dropboxAppKey}" />` : '')
+              (config.desktop ? '\n    <meta name="bugstow-edition" content="desktop" />' : '')
           )
       : null
 
@@ -93,9 +88,9 @@ export async function createApp(): Promise<express.Express> {
           styleSrc: ["'self'", "'unsafe-inline'"], // Tailwind inline styles
           imgSrc: ["'self'", 'data:', 'blob:'], // screenshots via object/data URLs
           // Team server: no external network from the browser. The desktop app
-          // (one person, this computer only) also allows https: so its Personal
-          // sync can reach the user's own Google Drive, Dropbox or WebDAV.
-          connectSrc: config.desktop ? ["'self'", 'https:'] : ["'self'"],
+          // also allows api.github.com, the one host Local's GitHub import
+          // reads from (unless BUGSTOW_OFFLINE=true forbids it).
+          connectSrc: config.desktop && !config.offline ? ["'self'", 'https://api.github.com'] : ["'self'"],
           fontSrc: ["'self'", 'data:'],
           objectSrc: ["'none'"],
           baseUri: ["'self'"],

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import type { Tab, Issue, Project, IssueType } from './types'
 import { useBugstowData } from './hooks/useBugstowData'
-import { useCloudSync } from './hooks/useCloudSync'
 import { useStorageEstimate } from './hooks/useStorageEstimate'
 import { useTheme } from './hooks/useTheme'
 import { formatBytes } from './services/storageService'
@@ -33,8 +32,8 @@ import { Shield, X, Download } from 'lucide-react'
 
 export default function App({
   onSwitchToTeam,
-  startInSync = false,
-}: { onSwitchToTeam?: () => void; startInSync?: boolean } = {}) {
+  teamAvailable = false,
+}: { onSwitchToTeam?: () => void; teamAvailable?: boolean } = {}) {
   const {
     issues,
     projects,
@@ -67,8 +66,8 @@ export default function App({
   const { theme, setTheme, toggleTheme } = useTheme()
 
   // Navigation & View States
-  const [settingsSection, setSettingsSection] = useState<'general' | 'sync' | 'data'>(startInSync ? 'sync' : 'general')
-  const [currentTab, setCurrentTab] = useState<Tab>(startInSync ? 'settings' : 'inbox')
+  const [settingsSection, setSettingsSection] = useState<'general' | 'data'>('general')
+  const [currentTab, setCurrentTab] = useState<Tab>('inbox')
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
   const [projectFilterId, setProjectFilterId] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -100,16 +99,6 @@ export default function App({
       setToasts(prev => prev.filter(t => t.id !== id))
     }, 3500)
   }, [])
-
-  // Personal cloud sync (only active once the user connects a cloud).
-  const cloudSync = useCloudSync({ onDataChanged: refreshData, onToast: showToast })
-  useEffect(() => {
-    if (cloudSync.needsAttention) {
-      setSettingsSection('sync')
-      setCurrentTab('settings')
-      cloudSync.clearAttention()
-    }
-  }, [cloudSync])
 
   const handleToggleSidebar = () => {
     setSidebarCollapsed(prev => {
@@ -459,9 +448,7 @@ export default function App({
             onOpenKeyboardShortcuts={() => setShowKeyboardShortcuts(true)}
             onOpenAbout={() => setShowAbout(true)}
             onSwitchToTeam={onSwitchToTeam}
-            cloudSync={cloudSync}
-            onDataChanged={refreshData}
-            focusSync={startInSync}
+            teamAvailable={teamAvailable}
             initialSection={settingsSection}
           />
         )
