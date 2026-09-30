@@ -36,8 +36,8 @@ The first time, BugsTow asks: **just you, or with other people?**
   and backed up daily. You create a sign-in (the email is only a sign-in name; nothing is
   emailed to it), then invite people on your Wi-Fi or through Tailscale (below).
 
-You can switch any time in **Settings** (Local) or the account menu (Team). Switching doesn't
-move anything; in Team, **Copy Local issues** brings your Local issues over.
+Switch any time with the **Local | Team** switch at the bottom of the sidebar (in Team on a phone,
+use the account menu). Switching doesn't move anything; in Team, **Copy Local issues** brings your Local issues over.
 
 ## Everyday use
 

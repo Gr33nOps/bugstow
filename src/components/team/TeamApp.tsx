@@ -43,6 +43,7 @@ import {
 import { connectionKind } from "../../lib/connection"
 import { GithubImportModal } from "../features/github/GithubImportModal"
 import { BugstowLogoIcon, BRAND_PRIMARY, GithubMark } from "../common/Icon"
+import { ModeSwitch } from "../common/ModeSwitch"
 import { isDesktopEdition } from "../../lib/teamServer"
 import { generateIssuePrompt } from "../../services/promptService"
 import {
@@ -400,11 +401,7 @@ function Workspace({
               Backups
             </button>
           )}
-          <p className="px-3 pt-4 pb-2 text-xs text-slate-500 dark:text-slate-400">
-            {isDesktopEdition()
-              ? "Saved on this computer"
-              : "Saved on your team server"}
-          </p>
+          <ModeSwitch mode="team" onSwitch={onUseLocal} />
         </div>
       </aside>
       <div className="flex-1 min-w-0 flex flex-col">
