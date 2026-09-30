@@ -63,4 +63,9 @@ export interface CurrentUser {
   isServerAdmin: boolean
   /** Set after an admin password reset until the user picks a new password. */
   mustChangePassword: boolean
+  /**
+   * Desktop app shared through Tailscale (`bugstow share`): the address people
+   * on other networks open. Join links use it instead of localhost.
+   */
+  shareUrl?: string | null
 }

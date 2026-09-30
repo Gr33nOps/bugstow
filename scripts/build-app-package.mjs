@@ -46,6 +46,8 @@ const copy = (src, dest = src) => fs.cpSync(path.join(root, src), path.join(stag
 
 copy('desktop/bugstow.mjs', 'bugstow.mjs')
 copy('desktop/bugstow.png', 'bugstow.png')
+copy('desktop/tailscale.mjs', 'tailscale.mjs')
+copy('desktop/net.mjs', 'net.mjs')
 copy('dist')
 copy('server/package.json')
 copy('server/package-lock.json')

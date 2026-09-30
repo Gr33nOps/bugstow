@@ -1,6 +1,6 @@
 {
   "name": "bugstow-server",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "private": true,
   "type": "module",
   "description": "Bugstow self-hosted team server (Node + Express + SQLite + better-auth).",
@@ -10,7 +10,7 @@
     "reset-password": "tsx src/reset-password.ts",
     "setup-token": "tsx src/setup-token.ts",
     "decrypt-backup": "tsx src/decrypt-backup.ts",
-    "test": "node --import tsx --test src/storage.test.ts src/backup.test.ts src/passwords.test.ts src/tls.test.ts src/http.test.ts src/cloudBackup.test.ts src/desktop.test.ts",
+    "test": "node --import tsx --test src/storage.test.ts src/backup.test.ts src/passwords.test.ts src/tls.test.ts src/http.test.ts src/cloudBackup.test.ts src/desktop.test.ts ../desktop/tailscale.test.mjs ../desktop/net.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -93,6 +93,9 @@ api.get('/me', (req, res) => {
     name: u.name,
     isServerAdmin: isServerAdmin(u.id),
     mustChangePassword: mustChangePassword(u.id),
+    // Where people on other networks reach this desktop app (bugstow share),
+    // so join links point there instead of at localhost.
+    shareUrl: config.shareUrl || null,
   })
 })
 
@@ -375,6 +378,68 @@ api.delete(
     }
     db.prepare('delete from projects where id = ?').run(id)
     res.json({ removed: true })
+  })
+)
+
+// Move a project, with its issues and screenshots, to another workspace (for
+// example out of a shared one into one only you are in). Taking a project out
+// of a workspace removes it for everyone there, so it needs an owner or admin
+// of that workspace; the destination only needs you to be a member.
+api.post(
+  '/projects/move',
+  asyncRoute(async (req, res) => {
+    const projectId = String(req.body?.projectId || '')
+    const toTeamId = String(req.body?.toTeamId || '')
+    const fromTeamId = projectId ? teamIdForProject(projectId) : null
+    const fromRole = fromTeamId ? teamRole(req.user!.id, fromTeamId) : null
+    if (!fromTeamId || !fromRole) {
+      res.status(404).json({ error: 'Project not found.' })
+      return
+    }
+    if (fromRole !== 'owner' && fromRole !== 'admin') {
+      res.status(403).json({ error: 'Only owners and admins can move a project out of this workspace.' })
+      return
+    }
+    if (!toTeamId || !teamRole(req.user!.id, toTeamId)) {
+      res.status(403).json({ error: 'You are not a member of that workspace.' })
+      return
+    }
+    if (toTeamId === fromTeamId) {
+      res.json({ moved: 0 })
+      return
+    }
+    // A GitHub issue exists once per workspace; refuse rather than drop any.
+    const clash = db
+      .prepare(
+        `select count(*) as n from issues a join issues b
+           on b.team_id = ? and b.github_url = a.github_url
+         where a.project_id = ? and a.github_url is not null`
+      )
+      .get(toTeamId, projectId) as { n: number }
+    if (clash.n > 0) {
+      res.status(409).json({
+        code: 'GITHUB_DUPLICATE',
+        error: `The other workspace already has ${clash.n} of these GitHub issues. Delete them there first, or import the repository there instead.`,
+      })
+      return
+    }
+    const moved = db.transaction(() => {
+      const ts = now()
+      db.prepare('update projects set team_id = ?, updated_at = ? where id = ?').run(toTeamId, ts, projectId)
+      db.prepare(
+        `update screenshots set team_id = ? where issue_id in (select id from issues where project_id = ?)`
+      ).run(toTeamId, projectId)
+      // Assignees who aren't in the destination workspace are unassigned.
+      db.prepare(
+        `update issues set assignee_id = null
+         where project_id = ? and assignee_id is not null
+           and assignee_id not in (select user_id from team_members where team_id = ?)`
+      ).run(projectId, toTeamId)
+      return db
+        .prepare('update issues set team_id = ?, updated_at = ? where project_id = ?')
+        .run(toTeamId, ts, projectId).changes
+    })()
+    res.json({ moved })
   })
 )
 

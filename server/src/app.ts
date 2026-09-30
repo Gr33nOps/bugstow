@@ -61,6 +61,9 @@ export async function createApp(): Promise<express.Express> {
     const allowedHosts = new Set(['localhost', '127.0.0.1', '[::1]'])
     try {
       allowedHosts.add(new URL(config.baseURL).hostname)
+      // Shared through Tailscale: requests arrive via tailscale serve, which
+      // may pass the machine's ts.net name as the Host.
+      if (config.shareUrl) allowedHosts.add(new URL(config.shareUrl).hostname)
     } catch {
       // an invalid baseURL fails elsewhere
     }

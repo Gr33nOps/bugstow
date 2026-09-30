@@ -47,6 +47,8 @@ isn't running yet) and opens it in your browser. You can also bookmark http://lo
 | `bugstow start --port 5858` | Use another port (remembered) |
 | `bugstow start --lan` | Let phones and other computers on your network connect (see below) |
 | `bugstow start --local` | This PC only again (the default) |
+| `bugstow share` | Let people on other networks connect through Tailscale (see below) |
+| `bugstow unshare` | Stop sharing through Tailscale |
 | `bugstow reset-password you@example.com` | Forgot your password: sets a temporary one |
 | `bugstow logs` | Show the log |
 | `bugstow uninstall` | Remove BugsTow; your data folder is kept |
@@ -111,24 +113,55 @@ network connect over HTTPS, at the address the command prints (for example
 
 `bugstow start --local` switches back.
 
-### Inviting people
+## People on other networks (`bugstow share`)
+
+A `localhost` address only ever opens on your own PC, and `--lan` only reaches your own
+network. For a friend somewhere else, BugsTow uses [Tailscale](https://tailscale.com), a free
+private-network app. Your PC and your friend's devices join it; nobody else can reach BugsTow,
+and it is not published on the open internet.
+
+1. Install Tailscale on your PC and sign in.
+2. Run `bugstow share`. It prints an address like `https://my-pc.tail1234.ts.net:5757` with a
+   real certificate (no browser warning). BugsTow keeps listening on this PC only; Tailscale
+   forwards to it. It uses BugsTow's own port and refuses if something else already uses that
+   port in Tailscale, so it never replaces other things you share.
+3. Share your PC with your friend: [Tailscale admin console](https://login.tailscale.com/admin/machines)
+   → **Machines** → your PC → **⋯** → **Share**, and send them the share link Tailscale gives you.
+4. Your friend installs Tailscale, signs in and accepts the share.
+5. Invite them (below). The join link BugsTow shows now uses the Tailscale address.
+
+Your PC must be on and BugsTow running while they use it. `bugstow unshare` stops sharing;
+`bugstow start --lan` also turns it off. The first run can ask you to enable HTTPS certificates
+in the Tailscale admin console (a one-time click).
+
+## Inviting people
 
 BugsTow **doesn't send invitation emails**: it has no email service, on purpose. An invite is a name
-on a list, so you send the person the address yourself.
+on a list, so you send the person the link yourself. Until you do, they see nothing.
 
-1. Run `bugstow start --lan` and open the address it prints (not `localhost`).
-2. Choose **Invite people**, enter their email and click **Create invitation**. Choose Member
-   for everyday work; Admin can also manage people. Existing accounts are added immediately.
+1. Make BugsTow reachable for them first: `bugstow share` for people elsewhere, or
+   `bugstow start --lan` for people on your network (then open the address it prints, not
+   `localhost`).
+2. Open **People & invitations**, enter their email and click **Create invitation**. Choose
+   Member for everyday work; Admin can also manage people. Existing accounts are added immediately.
 3. Copy the join link and send it in your own chat or email. Use **Share link** beside a pending
-   invitation to find its link again.
+   invitation to find its link again. The panel warns you when the link would only work on your PC.
 4. The link opens account creation with their email already filled in. They choose a password
    and join automatically. Existing users choose **I already have an account** and sign in.
 
 Invitations expire after 7 days. Create the invitation again to renew it or change its role.
 You can cancel a pending invitation from the list.
 
-The address only works for people on the same network as your PC, and only while your PC is on.
-For people elsewhere you need a server they can reach; see below.
+## Keeping some projects to yourself
+
+People you invite see every project in that workspace. To keep a project private, move it to a
+workspace only you are in: in the sidebar, click **⋯** next to the project → **Move to
+workspace** → **New workspace, only you** (or an existing one). Its issues and screenshots move
+with it. Switch between workspaces at the top left; each shows how many people are in it.
+
+(**Browser-only mode** in the account menu is something else: it switches this browser to a
+separate list of issues kept in the browser, without the server's workspaces.)
+
 ## For a whole team
 
 To run BugsTow on a server for many people, use the Docker setup in

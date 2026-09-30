@@ -60,6 +60,25 @@ function requireSecretInProd(value: string | undefined): string {
 const DESKTOP = boolEnv('BUGSTOW_DESKTOP', false)
 const PORT = parseInt(process.env.PORT || '8080', 10)
 
+/**
+ * The address people on other networks use to reach this desktop app, when
+ * `bugstow share` has published it through Tailscale (tailscale serve):
+ * https://<machine>.<tailnet>.ts.net. Only an https:// origin is accepted.
+ */
+function shareOrigin(value: string | undefined): string {
+  const v = (value || '').trim()
+  if (!v) return ''
+  try {
+    const u = new URL(v)
+    if (u.protocol === 'https:' && !u.username && !u.password && (u.pathname === '/' || u.pathname === '')) return u.origin
+  } catch {
+    // fall through
+  }
+  console.warn(`  Ignoring BUGSTOW_SHARE_URL (needs an https:// address): ${v.slice(0, 60)}`)
+  return ''
+}
+const SHARE_URL = DESKTOP ? shareOrigin(process.env.BUGSTOW_SHARE_URL) : ''
+
 export const config = {
   port: PORT,
   /**
@@ -160,7 +179,14 @@ export const config = {
       DESKTOP
         ? ['localhost', '127.0.0.1'].map(h => `${boolEnv('BUGSTOW_TLS', false) ? 'https' : 'http'}://${h}:${PORT}`)
         : []
-    ),
+    )
+    // ...and at its Tailscale address while it's shared.
+    .concat(SHARE_URL ? [SHARE_URL] : []),
+  /**
+   * Desktop app shared through Tailscale (`bugstow share`): the address
+   * teammates on other networks open. Join links use it. Empty when not shared.
+   */
+  shareUrl: SHARE_URL,
   /**
    * OAuth app IDs for Personal sync to Google Drive / Dropbox (public values,
    * not secrets). When set, they are handed to the page and override the IDs

@@ -111,6 +111,11 @@ export async function deleteProject(id: string): Promise<void> {
   await api(`projects?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
+/** Moves a project, with its issues, to another workspace you are in. */
+export async function moveProject(projectId: string, toTeamId: string): Promise<{ moved: number }> {
+  return api('projects/move', { method: 'POST', body: JSON.stringify({ projectId, toTeamId }) })
+}
+
 // ── Issues ──────────────────────────────────────────────────────────────────
 export async function listIssues(teamId: string): Promise<TeamIssue[]> {
   return (await api<{ issues: TeamIssue[] }>(`issues?teamId=${encodeURIComponent(teamId)}`)).issues

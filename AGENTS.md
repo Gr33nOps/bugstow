@@ -36,7 +36,10 @@ No user/team data touches the maintainer's infrastructure.
   - `server/src/backup.ts` - Verified local backups + optional external copy (`BUGSTOW_BACKUP_EXTERNAL_DIR`)
   - `server/src/tls.ts` - Local self-signed certificate (covers BASE_URL host; regenerates on change/expiry)
   - `server/src/db.ts`, `storage.ts` (upload signature checks), `middleware.ts`, `config.ts`
-- `desktop/bugstow.mjs` - Launcher of the installed app (start/stop/status/--lan/reset-password/uninstall; reads optional `<home>/bugstow.env` for BUGSTOW_BACKUP_*)
+- `desktop/bugstow.mjs` - Launcher of the installed app (start/stop/status/--lan/share/unshare/reset-password/uninstall; reads optional `<home>/bugstow.env` for BUGSTOW_BACKUP_*)
+- `desktop/tailscale.mjs` - `bugstow share`: `tailscale serve --https=<BugsTow port>` → 127.0.0.1 (tailnet only, never Funnel, never 443; refuses a port already served by something else; `BUGSTOW_TAILSCALE_BIN` is the only candidate when set, so tests never reach a real Tailscale). Sets `BUGSTOW_SHARE_URL` (desktop only: trusted origin, Host allowlist, join-link base via `/api/me`)
+- `desktop/net.mjs` - Picks the real LAN address for `--lan` (skips WSL/Hyper-V/VPN/Tailscale adapters)
+- `POST /api/projects/move` - Move a project (issues, screenshots) to another workspace the caller belongs to; owner/admin of the source only; clears assignees who aren't in the destination
 - `install.ps1`, `install.sh` - One-command installers (download release package + checksum-verified private Node.js, `npm ci`, shortcuts)
 - `scripts/build-app-package.mjs` - Builds `release/bugstow-app-<version>.tar.gz` (+ .sha256), the asset the installers download
 - `server/src/desktop.test.ts` - Desktop edition: Host-header allowlist (DNS rebinding), edition marker, CSP

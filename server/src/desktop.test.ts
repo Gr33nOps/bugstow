@@ -21,6 +21,8 @@ process.env.BUGSTOW_BASE_URL = `http://localhost:${PORT}`
 process.env.BUGSTOW_PUBLIC_DIR = publicDir
 process.env.BUGSTOW_BACKUP_ENABLED = 'false'
 process.env.BUGSTOW_DESKTOP = 'true'
+// Shared through Tailscale (bugstow share).
+process.env.BUGSTOW_SHARE_URL = 'https://my-pc.tail1234.ts.net:5757'
 process.env.BUGSTOW_GOOGLE_CLIENT_ID = '123-abc.apps.googleusercontent.com'
 process.env.BUGSTOW_DROPBOX_APP_KEY = '"><script>alert(1)</script>'
 
@@ -81,4 +83,34 @@ test('sync app IDs from the environment reach the page; malformed ones are ignor
 
 test('127.0.0.1 is a trusted origin as well as localhost', () => {
   assert.ok(config.trustedOrigins.includes(`http://127.0.0.1:${PORT}`))
+})
+
+function post(p: string, host: string, origin: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        host: '127.0.0.1',
+        port: PORT,
+        path: p,
+        method: 'POST',
+        headers: { Host: host, Origin: origin, 'Content-Type': 'application/json' },
+      },
+      res => {
+        res.resume()
+        res.on('end', () => resolve(res.statusCode ?? 0))
+      }
+    )
+    req.on('error', reject)
+    req.end('{"name":"x"}')
+  })
+}
+
+test('shared through Tailscale: its ts.net address is answered and trusted, other names are not', async () => {
+  assert.equal(config.shareUrl, 'https://my-pc.tail1234.ts.net:5757')
+  assert.equal((await get('/api/health', 'my-pc.tail1234.ts.net:5757')).status, 200)
+  assert.equal((await get('/api/health', 'other-pc.tail1234.ts.net')).status, 421)
+  // A write from the shared address passes the cross-site check (then needs sign-in: 401)...
+  assert.equal(await post('/api/teams', 'my-pc.tail1234.ts.net:5757', 'https://my-pc.tail1234.ts.net:5757'), 401)
+  // ...one from any other site is refused before that.
+  assert.equal(await post('/api/teams', 'my-pc.tail1234.ts.net', 'https://evil.tail1234.ts.net'), 403)
 })

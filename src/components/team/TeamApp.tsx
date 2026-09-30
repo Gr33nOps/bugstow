@@ -26,6 +26,8 @@ import {
   RefreshCw,
   AlertTriangle,
   Archive,
+  MoreHorizontal,
+  FolderInput,
 } from "lucide-react"
 import { filterTeamIssues } from "../../lib/teamFilters"
 import { useTeamData } from "../../hooks/useTeamData"
@@ -228,6 +230,8 @@ function Workspace({
   const [showTeamMenu, setShowTeamMenu] = useState(false)
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [showBackups, setShowBackups] = useState(false)
+  const [moving, setMoving] = useState<{ id: string; name: string } | null>(null)
+  const canMoveProjects = activeTeam?.role === "owner" || activeTeam?.role === "admin"
   const [toast, setToast] = useState<string | null>(null)
 
   const notify = (msg: string) => {
@@ -325,22 +329,29 @@ function Workspace({
             All projects
           </button>
           {projects.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              className="nav-item"
-              aria-current={projectFilter === p.id ? "page" : undefined}
-              onClick={() => {
-                setProjectFilter(p.id)
-                setSelectedId(null)
-              }}
-            >
-              <span
-                className="w-2 h-2 rounded-sm shrink-0"
-                style={{ backgroundColor: p.color }}
-              />
-              <span className="truncate">{p.name}</span>
-            </button>
+            <div key={p.id} className="group relative">
+              <button
+                type="button"
+                className="nav-item pr-9"
+                aria-current={projectFilter === p.id ? "page" : undefined}
+                onClick={() => {
+                  setProjectFilter(p.id)
+                  setSelectedId(null)
+                }}
+              >
+                <span
+                  className="w-2 h-2 rounded-sm shrink-0"
+                  style={{ backgroundColor: p.color }}
+                />
+                <span className="truncate">{p.name}</span>
+              </button>
+              {canMoveProjects && (
+                <ProjectMenu
+                  name={p.name}
+                  onMove={() => setMoving({ id: p.id, name: p.name })}
+                />
+              )}
+            </div>
           ))}
         </div>
         <div className="p-3 space-y-1 border-t border-slate-200 dark:border-slate-800">
@@ -379,7 +390,8 @@ function Workspace({
       </aside>
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Top bar */}
-        <header className="flex items-center gap-2 px-3 sm:px-5 h-16 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 backdrop-blur-sm shrink-0">
+        {/* relative z-20: its menus (workspace switcher) must open above the page below. */}
+        <header className="relative z-20 flex items-center gap-2 px-3 sm:px-5 h-16 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 backdrop-blur-sm shrink-0">
           <div className="relative">
             <button
               type="button"
@@ -411,7 +423,12 @@ function Workspace({
                     }}
                     className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
                   >
-                    <span className="truncate">{t.name}</span>
+                    <span className="min-w-0 text-left">
+                      <span className="block truncate">{t.name}</span>
+                      <span className="block text-xs font-normal text-slate-500 dark:text-slate-400">
+                        {peopleLabel(t.member_count)}
+                      </span>
+                    </span>
                     {t.id === activeTeamId && (
                       <Check size={14} className="text-brand" />
                     )}
@@ -708,6 +725,26 @@ function Workspace({
             onToast={notify}
           />
         )}
+        {moving && activeTeam && (
+          <MoveProjectModal
+            project={moving}
+            from={activeTeam}
+            teams={teams}
+            onClose={() => setMoving(null)}
+            onMove={async (toTeamId, newName) => {
+              let dest = teams.find((t) => t.id === toTeamId)
+              if (newName) dest = await data.createTeam(newName, { activate: false })
+              if (!dest) throw new Error("Pick a workspace.")
+              const r = await data.moveProject(moving.id, dest.id)
+              // Stay where you are; the toast says where it went.
+              if (projectFilter === moving.id) setProjectFilter("all")
+              notify(
+                `Moved “${moving.name}” and ${r.moved} issue${r.moved === 1 ? "" : "s"} to ${dest.name}`,
+              )
+              setMoving(null)
+            }}
+          />
+        )}
         {showImport && (
           <GithubImportModal
             projects={projects}
@@ -865,9 +902,10 @@ function UserMenu({
           <button
             type="button"
             onClick={onUseLocal}
+            title="Switches this browser to its own separate list of issues. Nothing here is moved or deleted. To keep some projects to yourself, move them to a private workspace instead (⋯ next to a project)."
             className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
           >
-            <HardDrive size={15} /> Switch to local
+            <HardDrive size={15} /> Browser-only mode
           </button>
           <button
             type="button"
@@ -879,6 +917,178 @@ function UserMenu({
         </div>
       )}
     </div>
+  )
+}
+
+/** The ⋯ next to a project in the sidebar. */
+function ProjectMenu({ name, onMove }: { name: string; onMove: () => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="absolute right-1 top-1/2 -translate-y-1/2">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label={`More for ${name}`}
+        aria-expanded={open}
+        className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-700 opacity-0 group-hover:opacity-100 focus:opacity-100 aria-expanded:opacity-100"
+      >
+        <MoreHorizontal size={15} />
+      </button>
+      {open && (
+        <div
+          className="absolute right-0 z-30 mt-1 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg py-1"
+          onMouseLeave={() => setOpen(false)}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false)
+              onMove()
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            <FolderInput size={15} /> Move to workspace…
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** "Only you" or "3 people": whether a workspace is private or shared. */
+function peopleLabel(count: number): string {
+  return count <= 1 ? "Only you" : `${count} people`
+}
+
+/**
+ * Move a project (with its issues and screenshots) to another workspace,
+ * typically out of a shared one into one only you are in.
+ */
+function MoveProjectModal({
+  project,
+  from,
+  teams,
+  onMove,
+  onClose,
+}: {
+  project: { id: string; name: string }
+  from: { id: string; name: string; member_count: number }
+  teams: Array<{ id: string; name: string; member_count: number }>
+  onMove: (toTeamId: string | null, newWorkspaceName?: string) => Promise<void>
+  onClose: () => void
+}) {
+  const others = teams.filter((t) => t.id !== from.id)
+  const [choice, setChoice] = useState<string>(others[0]?.id ?? "new")
+  const [newName, setNewName] = useState("Private")
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const othersHere = from.member_count - 1
+  return (
+    <ModalShell onClose={onClose}>
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={async (e) => {
+          e.preventDefault()
+          if (choice === "new" && !newName.trim()) {
+            setErr("Give the new workspace a name.")
+            return
+          }
+          setBusy(true)
+          setErr(null)
+          try {
+            await onMove(
+              choice === "new" ? null : choice,
+              choice === "new" ? newName.trim() : undefined,
+            )
+          } catch (e2) {
+            setErr(e2 instanceof Error ? e2.message : "Could not move the project.")
+            setBusy(false)
+          }
+        }}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="text-lg font-bold">Move “{project.name}”</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="text-slate-400"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          Its issues and screenshots move with it.
+          {othersHere > 0 &&
+            ` The other ${othersHere} ${othersHere === 1 ? "person" : "people"} in ${from.name} won’t see it any more.`}
+        </p>
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-sm font-semibold mb-1">Move it to</legend>
+          {others.map((t) => (
+            <label
+              key={t.id}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer has-[:checked]:border-brand"
+            >
+              <input
+                type="radio"
+                name="dest"
+                value={t.id}
+                checked={choice === t.id}
+                onChange={() => setChoice(t.id)}
+                className="accent-brand"
+              />
+              <span className="flex-1 min-w-0 truncate text-sm font-medium">
+                {t.name}
+              </span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                {peopleLabel(t.member_count)}
+              </span>
+            </label>
+          ))}
+          <label className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer has-[:checked]:border-brand">
+            <input
+              type="radio"
+              name="dest"
+              value="new"
+              checked={choice === "new"}
+              onChange={() => setChoice("new")}
+              className="accent-brand"
+            />
+            <span className="text-sm font-medium">New workspace, only you</span>
+            <input
+              value={newName}
+              onChange={(e) => {
+                setNewName(e.target.value)
+                setChoice("new")
+              }}
+              aria-label="New workspace name"
+              className="flex-1 min-w-32 px-2 py-1 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md"
+            />
+          </label>
+        </fieldset>
+        {err && (
+          <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
+            {err}
+          </p>
+        )}
+        <div className="flex gap-2 justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-200 dark:border-slate-700"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={busy}
+            className="px-4 py-2 text-sm font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg disabled:opacity-50"
+          >
+            {busy ? "Moving…" : "Move project"}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
   )
 }
 
@@ -907,7 +1117,7 @@ function CreateTeamInline({
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder="New team name"
+        placeholder={isDesktopEdition() ? "New workspace name" : "New team name"}
         className="flex-1 px-2 py-1.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-brand"
       />
       <button
@@ -1736,7 +1946,9 @@ function MembersModal({
             {inviteError}
           </p>
         )}
-        {canManage && <HowTheyJoin email={lastInvited} onToast={onToast} />}
+        {canManage && (
+          <HowTheyJoin email={lastInvited} shareUrl={me.shareUrl ?? null} onToast={onToast} />
+        )}
       </div>
     </ModalShell>
   )
@@ -1744,34 +1956,41 @@ function MembersModal({
 
 /**
  * BugsTow never sends email (no internet service is involved), so an invite is
- * only a name on a list. This says so, and gives the admin the address to send
- * people themselves: the one thing they otherwise have no way to find.
+ * only a name on a list. This says so, gives the join link to send yourself,
+ * and, when that link can't be opened by anyone else, says how to fix that:
+ * `bugstow share` (Tailscale) for people on other networks.
  */
 function HowTheyJoin({
   email,
+  shareUrl,
   onToast,
 }: {
   email: string
+  /** Set while the desktop app is shared through Tailscale. */
+  shareUrl: string | null
   onToast: (m: string) => void
 }) {
-  const address = `${window.location.origin}/#join=${encodeURIComponent(email)}`
-  const onlyThisComputer = connectionKind() === "localhost"
+  const base = shareUrl || window.location.origin
+  const address = email ? `${base}/#join=${encodeURIComponent(email)}` : base
   const desktop = isDesktopEdition()
+  const onlyThisComputer = !shareUrl && connectionKind() === "localhost"
+  const copy = async (text: string, what: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      onToast(`${what} copied`)
+    } catch {
+      onToast("Select it and copy it yourself")
+    }
+  }
   return (
     <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3.5 flex flex-col gap-2.5 text-sm">
       <p className="font-semibold">
-        {email ? `Share with ${email}` : "Invite in two easy steps"}
+        {email ? `Send ${email} this link` : "How people join"}
       </p>
-      <ol className="list-decimal pl-5 space-y-1 text-slate-600 dark:text-slate-300">
-        <li>Add their email above. Choose Member for everyday work.</li>
-        <li>
-          Send the join link in your own chat or email. New people create an
-          account; existing users sign in.
-        </li>
-      </ol>
-      <p className="text-xs text-slate-500 dark:text-slate-400">
-        No email is sent automatically. Invitations expire after 7 days. Admins
-        can invite and remove people.
+      <p className="text-slate-600 dark:text-slate-300">
+        BugsTow doesn't send emails. Invite their email above, then send them
+        the link in your own chat or email. They open it and create an account
+        with that same email. Invitations last 7 days.
       </p>
       <div className="flex items-center gap-2">
         <input
@@ -1783,41 +2002,99 @@ function HowTheyJoin({
         />
         <button
           type="button"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(address)
-              onToast("Address copied")
-            } catch {
-              onToast("Copy it from the box")
-            }
-          }}
+          onClick={() => copy(address, "Link")}
           className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
         >
           Copy
         </button>
       </div>
-      {onlyThisComputer && (
+
+      {shareUrl && (
+        <div
+          role="note"
+          className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-200 flex flex-col gap-1.5"
+        >
+          <p>
+            <strong>Shared through Tailscale.</strong> For this link to open for
+            them, your friend also needs:
+          </p>
+          <ol className="list-decimal pl-4 space-y-0.5">
+            <li>
+              This PC shared with them in Tailscale:{" "}
+              <a
+                href="https://login.tailscale.com/admin/machines"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline font-semibold"
+              >
+                Machines
+              </a>{" "}
+              → this PC → ⋯ → Share.
+            </li>
+            <li>The free Tailscale app, signed in, with your share accepted.</li>
+          </ol>
+          <p>Keep this computer on while they use BugsTow.</p>
+        </div>
+      )}
+
+      {onlyThisComputer && desktop && (
+        <div
+          role="note"
+          className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 flex flex-col gap-1.5"
+        >
+          <p>
+            <strong>Right now this link only opens on this computer.</strong>{" "}
+            To let a friend on another network in:
+          </p>
+          <ol className="list-decimal pl-4 space-y-1">
+            <li>
+              Install{" "}
+              <a
+                href="https://tailscale.com/download"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline font-semibold"
+              >
+                Tailscale
+              </a>{" "}
+              on this PC (free) and sign in.
+            </li>
+            <li>
+              In a terminal, run{" "}
+              <button
+                type="button"
+                onClick={() => copy("bugstow share", "Command")}
+                title="Copy"
+                className="font-mono px-1 rounded bg-amber-100 dark:bg-amber-900/60 hover:underline"
+              >
+                bugstow share
+              </button>{" "}
+              and follow what it prints.
+            </li>
+            <li>Reopen this panel: the link switches to your Tailscale address.</li>
+          </ol>
+          <p>
+            Same Wi-Fi or office? <code>bugstow start --lan</code> is enough.
+          </p>
+        </div>
+      )}
+
+      {onlyThisComputer && !desktop && (
         <div
           role="note"
           className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200"
         >
-          <strong>Nobody else can open this address.</strong> It only works on
-          this computer.{" "}
-          {desktop ? (
-            <>
-              To let people on your Wi-Fi or office network join, run{" "}
-              <code>bugstow start --lan</code> in a terminal, use the address it
-              prints instead, and keep this computer on. People on other
-              networks can't reach it.
-            </>
-          ) : (
-            <>
-              Set <code>BUGSTOW_BASE_URL</code> to the server's network address
-              (see docs/SELF_HOSTING.md), so teammates can open it.
-            </>
-          )}
+          <strong>Nobody else can open this address.</strong> Set{" "}
+          <code>BUGSTOW_BASE_URL</code> to the server's network address (see
+          docs/SELF_HOSTING.md), so teammates can open it.
         </div>
       )}
+
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        Want some projects to stay yours only? Keep them in a workspace nobody
+        else is in: next to a project in the sidebar, choose ⋯ → Move to
+        workspace.
+      </p>
     </div>
   )
 }

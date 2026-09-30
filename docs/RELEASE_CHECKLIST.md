@@ -25,6 +25,10 @@ browser or computer for the teammate.
 | D7 | Run the install command again (update) | Finishes; data and sign-in unchanged | |
 | D8 | `bugstow start --lan`, open the printed address on a phone on the same Wi-Fi | Certificate warning once; after accepting, sign in and see the issues | |
 | D8b | With `--lan` running, invite a second person's email; open the address on their device, choose *I was invited: create my account* | They sign up with that email and see the team. An uninvited email is refused | |
+| D8c | On localhost, People & invitations → create an invitation | Amber note: the link only works on this PC, with the `bugstow share` steps. No `#join=` link without an email | |
+| D8d | With Tailscale signed in: `bugstow share`, then invite someone on another network whose device has Tailscale and accepted the machine share | Join link is `https://<pc>.<tailnet>.ts.net:<port>/#join=…`, green note; they sign up and see the workspace. `tailscale serve status` shows only BugsTow's port; anything already on 443 is untouched | |
+| D8e | `bugstow unshare` | The ts.net address stops working; other `tailscale serve` entries remain | |
+| D8f | Sidebar ⋯ next to a project → Move to workspace → New workspace, only you | Project and its issues leave the shared workspace; the invited person no longer sees them; the switcher says “Only you” | |
 | D9 | `bugstow uninstall` | Shortcuts and the command are gone; the data folder is still there | |
 
 ## GitHub import

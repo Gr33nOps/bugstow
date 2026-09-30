@@ -74,9 +74,13 @@ For people on the same network, start the installed app with:
 bugstow start --lan
 ```
 
+For people somewhere else, install [Tailscale](https://tailscale.com) (a free private-network app) on your PC and theirs, then run `bugstow share` and share your PC with them in Tailscale. Only people you share with can reach it; it is not put on the open internet. [Step by step](docs/INSTALL.md#people-on-other-networks-bugstow-share).
+
 1. Open **People & invitations** and add your teammate's email.
 2. Copy the join link and send it through your usual chat or email. BugsTow does not send invitation emails.
 3. Your teammate opens the link and creates an account using that email, or signs in if they already have one.
+
+Invited people see every project in that workspace. To keep a project to yourself, use **⋯ → Move to workspace → New workspace, only you** next to it in the sidebar.
 
 The host must stay running and reachable. LAN mode uses a local HTTPS certificate; follow the [connection and certificate instructions](docs/INSTALL.md#phones-and-other-computers---lan). Invitations expire after seven days and can be renewed.
 

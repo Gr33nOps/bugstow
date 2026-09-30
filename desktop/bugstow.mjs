@@ -11,6 +11,7 @@
  *   bugstow start [--lan] [--local] [--port N] [--no-open]
  *   bugstow stop | restart | status | logs | data | setup-token
  *   bugstow reset-password <email>
+ *   bugstow share | unshare   let people on other networks join (via Tailscale)
  *   bugstow run             run in this terminal (Ctrl+C stops it)
  *   bugstow uninstall       remove the app; your data folder is kept
  *   bugstow version | help
@@ -29,6 +30,17 @@ import https from 'node:https'
 import { spawn, spawnSync, execSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
+import {
+  findTailscale,
+  runTailscale,
+  parseStatus,
+  shareUrlFor,
+  serveOnArgs,
+  serveOffArgs,
+  serveStatusArgs,
+  portUse,
+} from './tailscale.mjs'
+import { pickLanAddress } from './net.mjs'
 
 const APP_DIR = path.dirname(fileURLToPath(import.meta.url))
 const VERSION = readVersion()
@@ -86,27 +98,21 @@ function readText(file) {
 
 function readSettings() {
   try {
-    return { port: DEFAULT_PORT, lan: false, setupDone: false, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) }
+    return { port: DEFAULT_PORT, lan: false, setupDone: false, shareUrl: '', ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) }
   } catch {
     const envPort = parseInt(process.env.BUGSTOW_PORT || '', 10)
-    return { port: Number.isFinite(envPort) ? envPort : DEFAULT_PORT, lan: false, setupDone: false }
+    return { port: Number.isFinite(envPort) ? envPort : DEFAULT_PORT, lan: false, setupDone: false, shareUrl: '' }
   }
 }
 function saveSettings(s) {
-  writePrivate(SETTINGS_FILE, JSON.stringify({ port: s.port, lan: s.lan, setupDone: s.setupDone }, null, 2))
+  writePrivate(
+    SETTINGS_FILE,
+    JSON.stringify({ port: s.port, lan: s.lan, setupDone: s.setupDone, shareUrl: s.shareUrl || '' }, null, 2)
+  )
 }
 
-/** First private IPv4 address of this computer (for phones on the same Wi-Fi). */
-function lanAddress() {
-  const candidates = []
-  for (const list of Object.values(os.networkInterfaces())) {
-    for (const a of list || []) {
-      if (a.family === 'IPv4' && !a.internal) candidates.push(a.address)
-    }
-  }
-  const isPrivate = ip => /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip)
-  return candidates.find(isPrivate) || candidates[0] || null
-}
+/** This computer's address on the Wi-Fi / office network (see net.mjs). */
+const lanAddress = () => pickLanAddress(os.networkInterfaces())
 
 function urls(s) {
   if (s.lan) {
@@ -296,6 +302,12 @@ function serverEnv(s) {
     BUGSTOW_HOST: s.lan ? '0.0.0.0' : '127.0.0.1',
     BUGSTOW_TLS: s.lan ? 'true' : 'false',
   }
+  // Shared through Tailscale (bugstow share): trust its address, and the
+  // X-Forwarded-For that tailscale serve adds, so sign-in limits are per person.
+  if (s.shareUrl && !s.lan) {
+    env.BUGSTOW_SHARE_URL = s.shareUrl
+    env.BUGSTOW_TRUST_PROXY = '1'
+  }
   // First run only: a one-time token the launcher hands to the browser, so the
   // person who installed BugsTow creates the first sign-in without copying it.
   const token = readText(TOKEN_FILE)
@@ -382,6 +394,7 @@ async function start({ open = true } = {}) {
   }
 
   say(`  BugsTow is running: ${u.base}`)
+  if (s.shareUrl && !s.lan) say(`  Shared with your tailnet at: ${s.shareUrl}`)
   say(`  Your data: ${DATA_DIR}`)
   if (s.lan) {
     say('')
@@ -437,6 +450,7 @@ async function status() {
   say(`  BugsTow ${VERSION}`)
   say(`  Status:  ${isBugstow(h) ? `running at ${u.base}` : 'stopped'}`)
   say(`  Mode:    ${s.lan ? 'phones and other computers on this network can connect (HTTPS)' : 'this PC only'}`)
+  if (s.shareUrl && !s.lan) say(`  Shared:  ${s.shareUrl} (people you share this PC with in Tailscale)`)
   say(`  Data:    ${DATA_DIR}`)
   say(`  Backups: ${path.join(DATA_DIR, 'backups')}`)
   say(`  Log:     ${LOG_FILE}`)
@@ -498,6 +512,78 @@ function uninstall() {
   say('  Installing again later picks them up. Delete that folder yourself to erase them.')
 }
 
+/** Stops tailscale serve for BugsTow's port; quiet if Tailscale is gone. */
+/** Stops BugsTow's own tailscale serve entry, and only that one. */
+function turnOffServe(port) {
+  const bin = findTailscale()
+  if (!bin) return
+  const use = portUse(runTailscale(bin, serveStatusArgs).stdout || '', port)
+  if (use.ours) runTailscale(bin, serveOffArgs(port), { stdio: 'ignore' })
+}
+
+async function share() {
+  const bin = findTailscale()
+  if (!bin) {
+    fail(`Tailscale isn't installed on this computer.
+
+  People on other networks reach BugsTow through Tailscale, a free app that
+  connects your devices privately:
+    1. Install it from https://tailscale.com/download and sign in.
+    2. Run: bugstow share`)
+  }
+  const st = parseStatus(runTailscale(bin, ['status', '--json']).stdout || '')
+  if (!st.running) {
+    fail(`Tailscale is installed but not connected (${st.state}). Open the Tailscale app, sign in, then run: bugstow share`)
+  }
+  if (!st.dnsName) {
+    fail('Turn on MagicDNS for your tailnet (https://login.tailscale.com/admin/dns), then run: bugstow share')
+  }
+  const s = readSettings()
+  // Never replace something else this computer already publishes on that port.
+  const use = portUse(runTailscale(bin, serveStatusArgs).stdout || '', s.port)
+  if (use.taken && !use.ours) {
+    fail(`Tailscale already publishes something else on port ${s.port} of this computer,
+  and BugsTow won't replace it. See it with: tailscale serve status
+  Then pick a free port for BugsTow and try again:
+    bugstow start --port ${s.port + 1}
+    bugstow share`)
+  }
+  const url = shareUrlFor(st.dnsName, s.port)
+  say(`  Publishing BugsTow in your tailnet at ${url} ...`)
+  say('  (The first time, Tailscale may ask you to allow HTTPS certificates: open the link it prints.)')
+  const r = runTailscale(bin, serveOnArgs(s.port), { stdio: 'inherit' })
+  if (r.status !== 0) {
+    fail(`Tailscale couldn't publish BugsTow (tailscale serve exited with ${r.status}).
+  On Linux you may first need: sudo tailscale set --operator=$USER`)
+  }
+  await stop({ quiet: true })
+  saveSettings({ ...s, lan: false, shareUrl: url })
+  await start({ open: false })
+  say('')
+  say(`  BugsTow is shared at ${url}`)
+  say('')
+  say('  To let a friend join:')
+  say('    1. In Tailscale, share this computer with them:')
+  say('       https://login.tailscale.com/admin/machines → this PC → ⋯ → Share')
+  say('    2. They install Tailscale (free), sign in, and accept your share.')
+  say('    3. In BugsTow, People & invitations → invite their email → Copy the join link')
+  say('       (it now uses the address above) and send it to them.')
+  say('')
+  say('  Only people in your tailnet or that you share this PC with can open it.')
+  say('  Keep this computer on and BugsTow running while they use it. Stop with: bugstow unshare')
+}
+
+async function unshare() {
+  const s = readSettings()
+  turnOffServe(s.port)
+  if (s.shareUrl) {
+    await stop({ quiet: true })
+    saveSettings({ ...s, shareUrl: '' })
+    await start({ open: false })
+  }
+  say('  BugsTow is no longer shared through Tailscale. Only this PC can open it.')
+}
+
 function help() {
   say(`BugsTow ${VERSION}: your issue tracker, running on this computer.
 
@@ -512,6 +598,8 @@ function help() {
   bugstow data             Open the data folder
   bugstow setup-token      Show the one-time token for creating the first sign-in
   bugstow reset-password E Forgot your password? Sets a temporary one for sign-in E
+  bugstow share            Let people on other networks join, through Tailscale
+  bugstow unshare          Stop that
   bugstow run              Run in this terminal instead of the background
   bugstow uninstall        Remove BugsTow (your data folder is kept)
 
@@ -527,6 +615,11 @@ async function applyFlags() {
   const s = readSettings()
   let changed = false
   if (flag('--lan') && !s.lan) {
+    if (s.shareUrl) {
+      say('  Turning off Tailscale sharing first (it needs BugsTow on this PC only).')
+      turnOffServe(s.port)
+      s.shareUrl = ''
+    }
     s.lan = true
     changed = true
   }
@@ -540,6 +633,12 @@ async function applyFlags() {
     if (p !== s.port) {
       // Stop the copy on the old port before moving.
       await stop({ quiet: true })
+      if (s.shareUrl) {
+        // The Tailscale address includes the port.
+        turnOffServe(s.port)
+        s.shareUrl = ''
+        say('  Tailscale sharing was turned off for the old port. Run bugstow share again to share the new one.')
+      }
       s.port = p
       changed = true
     }
@@ -579,6 +678,12 @@ switch (cmd) {
     say(t ? `  Setup token: ${t}` : '  No setup token: a sign-in already exists. Forgot the password? bugstow reset-password <email>')
     break
   }
+  case 'share':
+    await share()
+    break
+  case 'unshare':
+    await unshare()
+    break
   case 'reset-password':
     resetPassword(rest[0])
     break

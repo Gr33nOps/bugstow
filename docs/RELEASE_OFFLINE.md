@@ -514,7 +514,7 @@ Write PASS or FAIL in each box. Stop at the first FAIL and note what you saw.
 
 | # | Do this | Expected | PASS/FAIL |
 |---|---|---|---|
-| 35 | On B: user menu → **Switch to local** (or **Use Personal mode** on the sign-in page). Create an issue with a pasted screenshot | Saved | |
+| 35 | On B: user menu → **Browser-only mode** (or **Use Personal mode** on the sign-in page). Create an issue with a pasted screenshot | Saved | |
 | 36 | Close the browser completely, reopen the same address | Issue and screenshot still there | |
 
 **No internet dependency**
