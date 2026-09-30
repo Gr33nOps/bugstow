@@ -1259,11 +1259,14 @@ function IssueDetail({
 
   useEffect(() => {
     let alive = true
-    Promise.all(issue.screenshot_ids.map((id) => loadScreenshotUrl(id))).then(
-      (urls) => {
+    Promise.all(issue.screenshot_ids.map((id) => loadScreenshotUrl(id)))
+      .then((urls) => {
         if (alive) setShots(urls.filter((u): u is string => Boolean(u)))
-      },
-    )
+      })
+      .catch(() => {
+        // Screenshots are optional; the issue still opens without them.
+        if (alive) setShots([])
+      })
     return () => {
       alive = false
     }
@@ -2350,7 +2353,7 @@ function BackupsModal({ onClose }: { onClose: () => void }) {
         setErr(e instanceof Error ? e.message : "Could not load backups."),
       )
   useEffect(() => {
-    load()
+    void load()
   }, [])
 
   const backupNow = async () => {
