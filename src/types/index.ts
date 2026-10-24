@@ -1,6 +1,17 @@
 export type IssueType = 'bug' | 'uiux' | 'idea'
-export type IssueStatus = 'open' | 'fixed'
-export type Tab = 'inbox' | 'projects' | 'fixed' | 'settings'
+export type IssueStatus = 'open' | 'in_progress' | 'blocked' | 'fixed'
+export type IssuePriority = 'critical' | 'high' | 'medium' | 'low'
+export type IssueSeverity = 'critical' | 'major' | 'minor'
+export interface IssueDetails {
+  stepsToReproduce?: string
+  expectedBehavior?: string
+  actualBehavior?: string
+  environment?: string
+  browserOs?: string
+  appVersion?: string
+  additionalNotes?: string
+}
+export type Tab = 'inbox' | 'projects' | 'fixed' | 'trash' | 'settings'
 
 export interface Project {
   id: string
@@ -20,12 +31,17 @@ export interface Issue {
   /** Optional user-defined badge. `type` remains for backwards-compatible grouping. */
   customType?: string
   status: IssueStatus
+  priority?: IssuePriority
+  severity?: IssueSeverity | null
+  details?: IssueDetails
   screenshotId: string | null // Legacy single ID for backwards compatibility
   screenshotIds?: string[] // Multiple screenshots support
   githubUrl?: string // Set when imported from GitHub (also how re-imports find it)
   githubNumber?: number
+  fixReferences?: string[] // GitHub repository, pull request, or commit links
   createdAt: string // ISO timestamp
   updatedAt: string // ISO timestamp
+  deletedAt?: string
 }
 
 export interface Screenshot {

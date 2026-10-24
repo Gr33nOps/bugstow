@@ -21,6 +21,8 @@ process.env.BUGSTOW_BASE_URL = `http://localhost:${PORT}`
 process.env.BUGSTOW_PUBLIC_DIR = publicDir
 process.env.BUGSTOW_BACKUP_ENABLED = 'false'
 process.env.BUGSTOW_DESKTOP = 'true'
+const launcherSettings = path.join(tmp, 'launcher', 'settings.json')
+process.env.BUGSTOW_LAUNCHER_SETTINGS = launcherSettings
 // Shared through Tailscale (bugstow share).
 process.env.BUGSTOW_SHARE_URL = 'https://my-pc.tail1234.ts.net:5757'
 // Left over from 2.5: must not reach the page any more.
@@ -32,6 +34,26 @@ const app = await createApp()
 const server = http.createServer(app)
 await new Promise<void>(resolve => server.listen(PORT, '127.0.0.1', resolve))
 after(() => server.close())
+
+test('local desktop remembers a shared workspace for browser and shortcut without erasing settings', async () => {
+  fs.mkdirSync(path.dirname(launcherSettings), { recursive: true })
+  fs.writeFileSync(launcherSettings, JSON.stringify({ port: 5757, lan: true }))
+  const base = `http://localhost:${PORT}`
+  const save = await fetch(`${base}/api/desktop/workspace`, { method: 'PUT', headers: { Origin: base, 'Content-Type': 'application/json' }, body: JSON.stringify({ url: 'https://team.example:5757/#invite=secret' }) })
+  assert.equal(save.status, 200)
+  assert.deepEqual(JSON.parse(fs.readFileSync(launcherSettings, 'utf8')), { port: 5757, lan: true, remoteWorkspaceUrl: 'https://team.example:5757' })
+  assert.equal(((await (await fetch(`${base}/api/desktop/workspace`)).json()) as { url: string }).url, 'https://team.example:5757')
+  const bad = await fetch(`${base}/api/desktop/workspace`, { method: 'PUT', headers: { Origin: base, 'Content-Type': 'application/json' }, body: JSON.stringify({ url: 'javascript:alert(1)' }) })
+  assert.equal(bad.status, 400)
+  const cross = await fetch(`${base}/api/desktop/workspace`, { method: 'PUT', headers: { Origin: 'https://evil.example', 'Content-Type': 'application/json' }, body: JSON.stringify({ url: '' }) })
+  assert.equal(cross.status, 403)
+  const missingOrigin = await fetch(`${base}/api/desktop/workspace`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: '' }) })
+  assert.equal(missingOrigin.status, 403)
+  const remote = await get('/api/desktop/workspace', 'my-pc.tail1234.ts.net:5757')
+  assert.equal(remote.status, 403)
+  const clear = await fetch(`${base}/api/desktop/workspace`, { method: 'PUT', headers: { Origin: base, 'Content-Type': 'application/json' }, body: JSON.stringify({ url: '' }) })
+  assert.equal(clear.status, 200)
+})
 
 function get(p: string, host: string, headers: Record<string, string> = {}): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {

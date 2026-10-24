@@ -11,6 +11,8 @@ import {
   mustChangePassword,
 } from './db.ts'
 import { config } from './config.ts'
+import { exportGithubIssues, type ExportIssue } from './githubExport.ts'
+import { parseFixReferences } from './fixReferences.ts'
 import { requireAuth, teamRole, asyncRoute } from './middleware.ts'
 import { saveScreenshot, resolveScreenshot, deleteScreenshotFile } from './storage.ts'
 import { runBackup, listBackups, listExternalBackups, getExternalBackupStatus } from './backup.ts'
@@ -25,7 +27,20 @@ import {
 } from './inviteLinks.ts'
 
 const TYPES = ['bug', 'uiux', 'idea']
-const STATUSES = ['open', 'fixed']
+const STATUSES = ['open', 'in_progress', 'blocked', 'fixed']
+const PRIORITIES = ['critical', 'high', 'medium', 'low']
+const SEVERITIES = ['critical', 'major', 'minor']
+const DETAIL_KEYS = ['stepsToReproduce', 'expectedBehavior', 'actualBehavior', 'environment', 'browserOs', 'appVersion', 'additionalNotes']
+function parseDetails(value: unknown): Record<string, string> | null {
+  if (value === undefined || value === null) return {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const details: Record<string, string> = {}
+  for (const [key, field] of Object.entries(value)) {
+    if (!DETAIL_KEYS.includes(key) || typeof field !== 'string' || field.length > 4000) return null
+    if (field.trim()) details[key] = field.trim()
+  }
+  return details
+}
 const GITHUB_ISSUE_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(issues|pull)\/\d+$/
 const CUSTOM_TYPE_MAX = 24
 
@@ -50,16 +65,20 @@ interface IssueRow {
   [k: string]: unknown
 }
 function mapIssue(row: IssueRow) {
+  const { details_json, fix_references_json, ...rest } = row
   return {
-    ...row,
+    ...rest,
+    details: JSON.parse(String(details_json || '{}')) as Record<string, string>,
+    fix_references: JSON.parse(String(fix_references_json || '[]')) as string[],
     screenshot_ids: row.screenshot_ids ? String(row.screenshot_ids).split(',') : [],
   }
 }
 
 const ISSUE_SELECT = `
-  select i.id, i.team_id, i.project_id, i.title, i.description, i.type, i.custom_type, i.status,
+  select i.id, i.team_id, i.project_id, i.title, i.description, i.type, i.custom_type,
+         coalesce(i.workflow_status, i.status) as status, i.priority, i.severity, i.details_json, i.fix_references_json,
          i.assignee_id, i.created_by, i.github_url, i.github_number,
-         i.created_at, i.updated_at,
+         i.created_at, i.updated_at, i.deleted_at,
          p.name as project_name,
          a.name as assignee_name, a.email as assignee_email,
          (select count(*) from screenshots s where s.issue_id = i.id) as screenshot_count,
@@ -456,8 +475,13 @@ api.delete(
   asyncRoute(async (req, res) => {
     const id = qp(req, 'id')
     const teamId = id ? teamIdForProject(id) : null
-    if (!id || !teamId || !teamRole(req.user!.id, teamId)) {
+    const role = teamId ? teamRole(req.user!.id, teamId) : null
+    if (!id || !teamId || !role) {
       res.status(403).json({ error: 'Not allowed.' })
+      return
+    }
+    if (role !== 'owner' && role !== 'admin') {
+      res.status(403).json({ error: 'Only owners and admins can delete projects.' })
       return
     }
     db.prepare('delete from projects where id = ?').run(id)
@@ -536,11 +560,11 @@ function teamIdForIssue(id: string): string | null {
 }
 /** A project/assignee referenced by an issue must belong to the issue's team. */
 function projectInTeam(projectId: unknown, teamId: string): boolean {
-  if (!projectId) return true
+  if (projectId == null || projectId === '') return true
   return typeof projectId === 'string' && teamIdForProject(projectId) === teamId
 }
 function assigneeInTeam(assigneeId: unknown, teamId: string): boolean {
-  if (!assigneeId) return true
+  if (assigneeId == null || assigneeId === '') return true
   return typeof assigneeId === 'string' && teamRole(assigneeId, teamId) !== null
 }
 function selectIssue(id: string) {
@@ -557,7 +581,7 @@ api.get(
       return
     }
     const rows = db
-      .prepare(`${ISSUE_SELECT} where i.team_id = ? order by i.created_at desc`)
+      .prepare(`${ISSUE_SELECT} where i.team_id = ? and i.deleted_at is null order by i.created_at desc`)
       .all(teamId) as IssueRow[]
     res.json({ issues: rows.map(mapIssue) })
   })
@@ -583,6 +607,14 @@ api.post(
     const type = TYPES.includes(req.body?.type) ? req.body.type : 'bug'
     const customType = normalizeCustomType(req.body?.customType)
     const status = STATUSES.includes(req.body?.status) ? req.body.status : 'open'
+    if (req.body?.priority !== undefined && !PRIORITIES.includes(req.body.priority) ||
+        req.body?.severity != null && !SEVERITIES.includes(req.body.severity)) {
+      res.status(400).json({ error: 'Invalid status, priority or severity.' }); return
+    }
+    const details = parseDetails(req.body?.details)
+    if (!details) { res.status(400).json({ error: 'Invalid report details.' }); return }
+    const fixReferences = req.body?.fixReferences === undefined ? [] : parseFixReferences(req.body.fixReferences)
+    if (!fixReferences) { res.status(400).json({ error: 'Invalid GitHub fix references.' }); return }
     // Issues copied in from Local keep their GitHub link, so a later GitHub
     // import recognises them and copying twice doesn't make a second one.
     const githubUrl =
@@ -600,8 +632,8 @@ api.post(
     const id = randomUUID()
     const ts = now()
     db.prepare(
-      `insert into issues (id, team_id, project_id, title, description, type, custom_type, status, assignee_id, created_by, github_url, github_number, created_at, updated_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `insert into issues (id, team_id, project_id, title, description, type, custom_type, status, workflow_status, priority, severity, details_json, fix_references_json, assignee_id, created_by, github_url, github_number, created_at, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       teamId,
@@ -610,7 +642,12 @@ api.post(
       req.body?.description || '',
       type,
       customType,
+      status === 'fixed' ? 'fixed' : 'open',
       status,
+      req.body?.priority || 'medium',
+      req.body?.severity || null,
+      JSON.stringify(details),
+      JSON.stringify(fixReferences),
       req.body?.assigneeId || null,
       req.user!.id,
       githubUrl,
@@ -632,7 +669,17 @@ api.patch(
       return
     }
     const b = req.body || {}
-    const current = db.prepare('select updated_at from issues where id = ?').get(id) as { updated_at: string }
+    if (b.status !== undefined && !STATUSES.includes(b.status) ||
+        b.priority !== undefined && !PRIORITIES.includes(b.priority) ||
+        b.severity !== undefined && b.severity !== null && !SEVERITIES.includes(b.severity)) {
+      res.status(400).json({ error: 'Invalid status, priority or severity.' }); return
+    }
+    const details = b.details === undefined ? undefined : parseDetails(b.details)
+    if (details === null) { res.status(400).json({ error: 'Invalid report details.' }); return }
+    const fixReferences = b.fixReferences === undefined ? undefined : parseFixReferences(b.fixReferences)
+    if (fixReferences === null) { res.status(400).json({ error: 'Invalid GitHub fix references.' }); return }
+    const current = db.prepare('select * from issues where id = ? and deleted_at is null').get(id) as Record<string, unknown> | undefined
+    if (!current) { res.status(404).json({ error: 'Issue not found.' }); return }
     // Optimistic concurrency: the client says which version it edited. If
     // someone saved in between, refuse instead of silently overwriting.
     if (b.expectedUpdatedAt !== undefined && b.expectedUpdatedAt !== current.updated_at) {
@@ -666,9 +713,13 @@ api.patch(
       vals.push(normalizeCustomType(b.customType))
     }
     if (STATUSES.includes(b.status)) {
-      sets.push('status = ?')
-      vals.push(b.status)
+      sets.push('status = ?', 'workflow_status = ?')
+      vals.push(b.status === 'fixed' ? 'fixed' : 'open', b.status)
     }
+    if (b.priority !== undefined) { sets.push('priority = ?'); vals.push(b.priority) }
+    if (b.severity !== undefined) { sets.push('severity = ?'); vals.push(b.severity) }
+    if (details !== undefined) { sets.push('details_json = ?'); vals.push(JSON.stringify(details)) }
+    if (fixReferences !== undefined) { sets.push('fix_references_json = ?'); vals.push(JSON.stringify(fixReferences)) }
     if (b.projectId !== undefined) {
       sets.push('project_id = ?')
       vals.push(b.projectId || null)
@@ -682,7 +733,7 @@ api.patch(
       return
     }
     // Every save gets a strictly newer version stamp, even within one millisecond.
-    const stamp = new Date(Math.max(Date.now(), Date.parse(current.updated_at) + 1)).toISOString()
+    const stamp = new Date(Math.max(Date.now(), Date.parse(String(current.updated_at)) + 1)).toISOString()
     sets.push('updated_at = ?')
     vals.push(stamp)
     // The version check is repeated inside the UPDATE so two saves racing past
@@ -698,6 +749,16 @@ api.patch(
       })
       return
     }
+    for (const [key, column] of [['status', 'workflow_status'], ['priority', 'priority'], ['assigneeId', 'assignee_id'], ['projectId', 'project_id'], ['title', 'title'], ['description', 'description'], ['type', 'type']] as const) {
+      if (b[key] !== undefined && b[key] !== current[column]) {
+        db.prepare('insert into issue_events (id, issue_id, team_id, author_id, kind, body, created_at) values (?, ?, ?, ?, ?, ?, ?)')
+          .run(randomUUID(), id, teamId, req.user!.id, key === 'assigneeId' ? 'assignment' : key === 'projectId' ? 'project' : key, String(b[key] ?? 'Unassigned').slice(0, 4000), now())
+      }
+    }
+    if (fixReferences !== undefined && JSON.stringify(fixReferences) !== String(current.fix_references_json || '[]')) {
+      db.prepare('insert into issue_events (id, issue_id, team_id, author_id, kind, body, created_at) values (?, ?, ?, ?, ?, ?, ?)')
+        .run(randomUUID(), id, teamId, req.user!.id, 'fix references', fixReferences.join(', ').slice(0, 4000) || 'Removed', now())
+    }
     res.json({ issue: selectIssue(id) })
   })
 )
@@ -711,14 +772,90 @@ api.delete(
       res.status(403).json({ error: 'Not allowed.' })
       return
     }
-    const shots = db.prepare('select storage_path from screenshots where issue_id = ?').all(id) as Array<{
-      storage_path: string
-    }>
-    db.prepare('delete from issues where id = ?').run(id)
-    shots.forEach(s => deleteScreenshotFile(s.storage_path))
+    db.prepare('update issues set deleted_at = ?, updated_at = ? where id = ? and deleted_at is null').run(now(), now(), id)
     res.json({ removed: true })
   })
 )
+
+api.get('/issues/trash', (req, res) => {
+  const teamId = qp(req, 'teamId')
+  if (!teamId || !teamRole(req.user!.id, teamId)) { res.status(403).json({ error: 'Not a member of this team.' }); return }
+  const rows = db.prepare(`${ISSUE_SELECT} where i.team_id = ? and i.deleted_at is not null order by i.deleted_at desc`).all(teamId) as IssueRow[]
+  res.json({ issues: rows.map(mapIssue) })
+})
+api.get('/issues/link', (req, res) => {
+  const id = qp(req, 'id'), teamId = id ? teamIdForIssue(id) : null
+  if (!teamId || !teamRole(req.user!.id, teamId)) { res.status(403).json({ error: 'Not allowed.' }); return }
+  const row = db.prepare(`${ISSUE_SELECT} where i.id = ? and i.deleted_at is null`).get(id) as IssueRow | undefined
+  if (!row) { res.status(404).json({ error: 'Issue not found or moved to Trash.' }); return }
+  res.json({ issue: mapIssue(row) })
+})
+api.post('/issues/restore', (req, res) => {
+  const id = qp(req, 'id'), teamId = id ? teamIdForIssue(id) : null
+  if (!teamId || !teamRole(req.user!.id, teamId)) { res.status(403).json({ error: 'Not allowed.' }); return }
+  const changed = db.prepare('update issues set deleted_at = null, updated_at = ? where id = ? and deleted_at is not null').run(now(), id).changes
+  if (!changed) { res.status(404).json({ error: 'Issue is not in Trash.' }); return }
+  res.json({ issue: selectIssue(id!) })
+})
+api.delete('/issues/purge', (req, res) => {
+  const id = qp(req, 'id'), teamId = id ? teamIdForIssue(id) : null
+  if (!teamId || !teamRole(req.user!.id, teamId)) { res.status(403).json({ error: 'Not allowed.' }); return }
+  if (req.body?.confirm !== true) { res.status(400).json({ error: 'Confirm permanent deletion.' }); return }
+  const trashed = db.prepare('select 1 from issues where id = ? and deleted_at is not null').get(id)
+  if (!trashed) { res.status(400).json({ error: 'Move the issue to Trash first.' }); return }
+  const shots = db.prepare('select storage_path from screenshots where issue_id = ?').all(id) as Array<{ storage_path: string }>
+  db.prepare('delete from issues where id = ?').run(id)
+  shots.forEach(shot => deleteScreenshotFile(shot.storage_path))
+  res.json({ removed: true })
+})
+api.get('/issues/activity', (req, res) => {
+  const id = qp(req, 'id'), teamId = id ? teamIdForIssue(id) : null
+  if (!teamId || !teamRole(req.user!.id, teamId)) { res.status(403).json({ error: 'Not allowed.' }); return }
+  const events = db.prepare('select e.id, e.author_id, e.kind, e.body, e.created_at, u.name as author_name from issue_events e left join user u on u.id = e.author_id where e.issue_id = ? order by e.created_at asc, e.rowid asc').all(id)
+  res.json({ events })
+})
+api.post('/issues/comments', (req, res) => {
+  const id = qp(req, 'id'), teamId = id ? teamIdForIssue(id) : null
+  if (!teamId || !teamRole(req.user!.id, teamId)) { res.status(403).json({ error: 'Not allowed.' }); return }
+  const body = typeof req.body?.body === 'string' ? req.body.body.trim() : ''
+  if (!body || body.length > 4000) { res.status(400).json({ error: 'Enter a comment up to 4,000 characters.' }); return }
+  const event = { id: randomUUID(), author_id: req.user!.id, author_name: req.user!.name || null, kind: 'comment', body, created_at: now() }
+  db.prepare('insert into issue_events (id, issue_id, team_id, author_id, kind, body, created_at) values (?, ?, ?, ?, ?, ?, ?)').run(event.id, id, teamId, event.author_id, event.kind, body, event.created_at)
+  res.status(201).json({ comment: event })
+})
+api.delete('/issues/comments', (req, res) => {
+  const id = qp(req, 'id'), commentId = qp(req, 'commentId'), teamId = id ? teamIdForIssue(id) : null
+  if (!teamId || !teamRole(req.user!.id, teamId)) { res.status(403).json({ error: 'Not allowed.' }); return }
+  const event = db.prepare('select author_id from issue_events where id = ? and issue_id = ? and kind = ?').get(commentId, id, 'comment') as { author_id: string } | undefined
+  if (!event) { res.status(404).json({ error: 'Comment not found.' }); return }
+  if (event.author_id !== req.user!.id) { res.status(403).json({ error: 'Only the author can delete this comment.' }); return }
+  db.prepare('delete from issue_events where id = ?').run(commentId)
+  res.json({ removed: true })
+})
+api.post('/issues/bulk', (req, res) => {
+  const teamId = String(req.body?.teamId || ''), ids = req.body?.ids, changes = req.body?.changes
+  if (!teamRole(req.user!.id, teamId)) { res.status(403).json({ error: 'Not a member of this team.' }); return }
+  if (!Array.isArray(ids) || ids.length < 1 || ids.length > 200 || new Set(ids).size !== ids.length || !ids.every(id => typeof id === 'string')) { res.status(400).json({ error: 'Select 1 to 200 distinct issues.' }); return }
+  if (!changes || typeof changes !== 'object' || Array.isArray(changes) || Object.keys(changes).length < 1 || Object.keys(changes).length > 4) { res.status(400).json({ error: 'Choose a bulk action.' }); return }
+  const entries = Object.entries(changes) as Array<[string, unknown]>
+  const valid = entries.every(([key, value]) => key === 'priority' ? typeof value === 'string' && PRIORITIES.includes(value) : key === 'status' ? typeof value === 'string' && STATUSES.includes(value) : key === 'projectId' ? projectInTeam(value, teamId) : key === 'assigneeId' ? assigneeInTeam(value, teamId) : key === 'trash' ? value === true && entries.length === 1 : false)
+  if (!valid) { res.status(400).json({ error: 'Invalid bulk action.' }); return }
+  const rows = db.prepare(`select id from issues where team_id = ? and deleted_at is null and id in (${ids.map(() => '?').join(',')})`).all(teamId, ...ids)
+  if (rows.length !== ids.length) { res.status(400).json({ error: 'An issue is not in this workspace.' }); return }
+  const ts = now()
+  const tx = db.transaction(() => {
+    for (const id of ids) {
+      for (const [key, value] of entries) {
+        if (key === 'trash') db.prepare('update issues set deleted_at = ?, updated_at = ? where id = ?').run(ts, ts, id)
+        else if (key === 'status') db.prepare('update issues set status = ?, workflow_status = ?, updated_at = ? where id = ?').run(value === 'fixed' ? 'fixed' : 'open', value, ts, id)
+        else db.prepare(`update issues set ${key === 'projectId' ? 'project_id' : key === 'assigneeId' ? 'assignee_id' : 'priority'} = ?, updated_at = ? where id = ?`).run(value, ts, id)
+        db.prepare('insert into issue_events (id, issue_id, team_id, author_id, kind, body, created_at) values (?, ?, ?, ?, ?, ?, ?)').run(randomUUID(), id, teamId, req.user!.id, key, String(value), ts)
+      }
+    }
+  })
+  tx()
+  res.json({ updated: ids.length })
+})
 
 // ── Screenshots ─────────────────────────────────────────────────────────────────
 api.get(
@@ -844,6 +981,29 @@ const GITHUB_ERROR_TEXT: Record<string, string> = {
 }
 const GITHUB_MAX_PAGES = 10
 
+const exportingIssues = new Set<string>()
+api.post('/github-export', asyncRoute(async (req, res) => {
+  if (config.offline) { res.status(403).json({ code: 'OFFLINE', error: 'Internet features are turned off on this BugsTow server.' }); return }
+  const teamId = String(req.body?.teamId || '')
+  if (!teamRole(req.user!.id, teamId)) { res.status(403).json({ error: 'Not a member of this team.' }); return }
+  const ids = req.body?.issueIds
+  if (!Array.isArray(ids) || !ids.length || ids.some(id => typeof id !== 'string')) { res.status(400).json({ error: 'Select issues to export.' }); return }
+  const uniqueIds = [...new Set<string>(ids)]
+  const find = db.prepare('select id, title, description, type, status, github_url as githubUrl from issues where id = ? and team_id = ? and deleted_at is null')
+  const issues = uniqueIds.map(id => find.get(id, teamId) as ExportIssue | undefined)
+  if (issues.some(i => !i)) { res.status(400).json({ error: 'Some issues are no longer in this workspace. Refresh and try again.' }); return }
+  if (uniqueIds.some(id => exportingIssues.has(id))) { res.status(409).json({ error: 'These issues are already being exported. Wait and refresh.' }); return }
+  uniqueIds.forEach(id => exportingIssues.add(id))
+  try {
+    const result = await exportGithubIssues(String(req.body?.repo || ''), String(req.body?.token || ''), issues as ExportIssue[], async (id, url, number) => {
+      const saved = db.prepare("update issues set github_url = ?, github_number = ?, updated_at = ? where id = ? and team_id = ? and github_url is null").run(url, number, now(), id, teamId)
+      if (saved.changes !== 1) throw new Error('Issue changed during export.')
+    })
+    res.json(result)
+  } catch (err) { res.status(400).json({ error: err instanceof Error ? err.message : 'Export failed.' }) }
+  finally { uniqueIds.forEach(id => exportingIssues.delete(id)) }
+}))
+
 api.post(
   '/github-import',
   asyncRoute(async (req, res) => {
@@ -907,12 +1067,12 @@ api.post(
 
     // New issues are added; ones imported before only follow GitHub's
     // open/closed state (titles and notes edited here are kept).
-    const findExisting = db.prepare('select id, status from issues where team_id = ? and github_url = ?')
+    const findExisting = db.prepare('select id, coalesce(workflow_status, status) as status from issues where team_id = ? and github_url = ?')
     const insert = db.prepare(
-      `insert into issues (id, team_id, project_id, title, description, type, status, created_by, github_url, github_number, created_at, updated_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `insert into issues (id, team_id, project_id, title, description, type, status, workflow_status, created_by, github_url, github_number, created_at, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    const setStatus = db.prepare('update issues set status = ?, updated_at = ? where id = ?')
+    const setStatus = db.prepare('update issues set status = ?, workflow_status = ?, updated_at = ? where id = ?')
     const result = db.transaction(() => {
       let target = projectId as string | null
       let imported = 0
@@ -931,8 +1091,8 @@ api.post(
         const status = gh.state === 'closed' ? 'fixed' : 'open'
         const existing = findExisting.get(teamId, gh.html_url) as { id: string; status: string } | undefined
         if (existing) {
-          if (existing.status !== status) {
-            setStatus.run(status, now(), existing.id)
+          if (existing.status === 'fixed' && status === 'open' || existing.status !== 'fixed' && status === 'fixed') {
+            setStatus.run(status, status, now(), existing.id)
             updated++
           } else unchanged++
           continue
@@ -945,6 +1105,7 @@ api.post(
           gh.title || `#${gh.number}`,
           gh.body || '',
           mapType(gh.labels || []),
+          status,
           status,
           req.user!.id,
           gh.html_url,

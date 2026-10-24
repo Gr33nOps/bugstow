@@ -26,6 +26,17 @@ export function generateIssuePrompt(issue: Issue, project?: Project | null): str
   const isIdea = issue.type === 'idea' && !issue.customType
   const projectName = project ? project.name : (issue.projectId ? 'Unknown' : 'None (Unassigned)')
   const typeLabel = issue.customType || (issue.type === 'uiux' ? 'UI/UX' : issue.type === 'bug' ? 'Bug' : 'Idea')
+  const report = `Priority: ${issue.priority || 'medium'}\nStatus: ${issue.status}\n` +
+    (issue.severity ? `Severity: ${issue.severity}\n` : '') +
+    (Object.entries({
+      'Steps to reproduce': issue.details?.stepsToReproduce,
+      'Expected behavior': issue.details?.expectedBehavior,
+      'Actual behavior': issue.details?.actualBehavior,
+      'Environment': issue.details?.environment,
+      'Browser and operating system': issue.details?.browserOs,
+      'Application version': issue.details?.appVersion,
+      'Additional notes': issue.details?.additionalNotes,
+    }).filter(([, value]) => value?.trim()).map(([label, value]) => `${label}:\n${value}\n`).join(''))
 
   if (isIdea) {
     let prompt = `Please implement the following idea in my project.\n\n`
@@ -33,6 +44,7 @@ export function generateIssuePrompt(issue: Issue, project?: Project | null): str
       prompt += `Project: ${projectName}\n`
     }
     prompt += `Issue type: Idea\n`
+    prompt += report
     prompt += `Feature: ${issue.title}\n`
     if (issue.githubUrl) prompt += `GitHub issue: ${issue.githubUrl}\n`
 
@@ -53,6 +65,7 @@ export function generateIssuePrompt(issue: Issue, project?: Project | null): str
     prompt += `Project: ${projectName}\n`
   }
   prompt += `Issue type: ${typeLabel}\n`
+  prompt += report
   prompt += `Problem: ${issue.title}\n`
   if (issue.githubUrl) prompt += `GitHub issue: ${issue.githubUrl}\n`
 

@@ -5,6 +5,7 @@ import {
   Settings,
   Plus,
   ChevronRight,
+  Trash2,
 } from "lucide-react"
 import type { Tab, Project } from "../../types"
 import { BugstowLogoIcon, BRAND_PRIMARY, GithubMark } from "../common/Icon"
@@ -16,11 +17,13 @@ interface SidebarProps {
   onSelectTab: (tab: Tab) => void
   inboxCount: number
   fixedCount: number
+  trashCount?: number
   projects: Project[]
   activeProjectFilterId?: string | null
   onSelectProjectFilter: (projectId: string | null) => void
   onNewIssue: () => void
   onImportGithub?: () => void
+  onExportGithub?: () => void
   onCreateProject?: () => void
   collapsed?: boolean
   onToggleCollapse?: () => void
@@ -34,11 +37,13 @@ export function Sidebar({
   onSelectTab,
   inboxCount,
   fixedCount,
+  trashCount = 0,
   projects,
   activeProjectFilterId,
   onSelectProjectFilter,
   onNewIssue,
   onImportGithub,
+  onExportGithub,
   onCreateProject,
   collapsed = false,
   storageEstimateText,
@@ -60,6 +65,12 @@ export function Sidebar({
       label: "Completed",
       icon: CheckCircle2,
       count: fixedCount,
+    },
+    {
+      id: 'trash' as const,
+      label: 'Trash',
+      icon: Trash2,
+      count: trashCount,
     },
     {
       id: "projects" as const,
@@ -184,6 +195,7 @@ export function Sidebar({
       )}
       {collapsed && <div className="flex-1" />}
       <div className="p-3 border-t border-slate-200 dark:border-slate-800 space-y-1">
+        {onExportGithub && <button type="button" onClick={onExportGithub} className={`nav-item ${collapsed ? 'justify-center' : ''}`} title="Export to GitHub" aria-label="Export to GitHub"><GithubMark size={18} />{!collapsed && 'Export to GitHub'}</button>}
         {onImportGithub && (
           <button
             type="button"

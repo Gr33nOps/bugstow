@@ -10,6 +10,7 @@ import { auth, authOptions } from './auth.ts'
 import { migrateAppSchema } from './db.ts'
 import { api } from './api.ts'
 import { config } from './config.ts'
+import { desktopWorkspace } from './desktopWorkspace.ts'
 
 /** CSP hashes for the inline <script> blocks in the built index.html. */
 function inlineScriptHashes(html: string): string[] {
@@ -143,6 +144,7 @@ export async function createApp(): Promise<express.Express> {
     next()
   })
 
+  app.use('/api/desktop/workspace', desktopWorkspace)
   app.use('/api', api)
 
   // Serve the built frontend. index.html is also served for /index.html

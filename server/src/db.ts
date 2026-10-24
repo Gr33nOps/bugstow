@@ -92,6 +92,17 @@ export function migrateAppSchema(): void {
     );
     create index if not exists screenshots_issue_idx on screenshots(issue_id);
 
+    create table if not exists issue_events (
+      id text primary key,
+      issue_id text not null references issues(id) on delete cascade,
+      team_id text not null references teams(id) on delete cascade,
+      author_id text not null,
+      kind text not null,
+      body text not null,
+      created_at text not null
+    );
+    create index if not exists issue_events_issue_idx on issue_events(issue_id, created_at);
+
     create table if not exists server_settings (
       key text primary key,
       value text not null
@@ -124,6 +135,17 @@ export function migrateAppSchema(): void {
   const issueColumns = db.pragma('table_info(issues)') as Array<{ name: string }>
   if (!issueColumns.some(column => column.name === 'custom_type')) {
     db.exec('alter table issues add column custom_type text')
+  }
+  // Additive Phase 1 columns. Keep the original status CHECK for old installs.
+  for (const [name, definition] of [
+    ['workflow_status', 'text'],
+    ['priority', "text not null default 'medium'"],
+    ['severity', 'text'],
+    ['details_json', "text not null default '{}'"],
+    ['fix_references_json', "text not null default '[]'"],
+    ['deleted_at', 'text'],
+  ]) {
+    if (!issueColumns.some(column => column.name === name)) db.exec(`alter table issues add column ${name} ${definition}`)
   }
 }
 

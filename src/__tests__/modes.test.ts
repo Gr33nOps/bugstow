@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { readMode } from '../hooks/useAppMode'
 import { connectionKind, offersInviteSignUp } from '../lib/connection'
 
@@ -17,6 +17,20 @@ globalThis.localStorage = {
 
 describe('saved app mode', () => {
   beforeEach(() => store.clear())
+
+  it('a remembered shared workspace opens Team even after Local was previously selected', () => {
+    store.set('bugstow_app_mode', 'local')
+    vi.stubGlobal('location', { hash: '#team' })
+    try {
+      expect(readMode()).toBe('team')
+      expect(store.get('bugstow_app_mode')).toBe('team')
+    } finally { vi.unstubAllGlobals() }
+  })
+  it('an issue link opens Team even if this browser last used Local', () => {
+    store.set('bugstow_app_mode', 'local')
+    vi.stubGlobal('location', { hash: '', search: '?team=workspace-1&issue=issue-1' })
+    try { expect(readMode()).toBe('team') } finally { vi.unstubAllGlobals() }
+  })
 
   it('keeps users who chose team mode before 2.1 ("cloud") in team mode', () => {
     store.set('bugstow_app_mode', 'cloud')

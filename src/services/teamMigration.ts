@@ -73,6 +73,9 @@ export async function migrateBackupToTeam(
   let alreadyThere = 0
 
   for (const issue of backup.issues) {
+    // Trash is a recovery area, not an active list. Keep it in the Local
+    // backup but do not turn deleted issues into live Team issues.
+    if (issue.deletedAt) continue
     onProgress?.(`Copying “${issue.title}”…`)
     const projectId = issue.projectId ? projectMap.get(issue.projectId) ?? null : null
     const { issue: created, existing } = await copyIssueIn(teamId, {
@@ -80,10 +83,14 @@ export async function migrateBackupToTeam(
       description: issue.description,
       type: issue.type,
       customType: issue.customType,
-      status: issue.status === 'fixed' ? 'fixed' : 'open',
+      status: issue.status,
+      priority: issue.priority || 'medium',
+      severity: issue.severity || null,
+      details: issue.details || {},
       projectId,
       githubUrl: issue.githubUrl,
       githubNumber: issue.githubNumber,
+      fixReferences: issue.fixReferences,
     })
     if (existing) {
       alreadyThere++

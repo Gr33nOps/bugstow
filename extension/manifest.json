@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "BugsTow Capture",
+  "version": "2.9.0",
+  "description": "Create a BugsTow issue draft from the page you choose.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "optional_host_permissions": ["http://localhost/*", "http://127.0.0.1/*", "https://*/*"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "Capture in BugsTow" }
+}

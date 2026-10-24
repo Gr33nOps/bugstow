@@ -64,7 +64,7 @@ curl http://localhost:8080/api/health
 | `BUGSTOW_OPEN_SIGNUP` | No | `true` lets anyone who can reach the server register. Default `false` = invite-only after the first admin. |
 | `BUGSTOW_MAX_UPLOAD_BYTES` | No | Max screenshot size in bytes (default `10485760` = 10 MB). |
 | `BUGSTOW_TRUSTED_ORIGINS` | No | Extra allowed origins for auth (comma-separated). Rarely needed. |
-| `BUGSTOW_OFFLINE` | No | `true` (default) disables the only internet feature (GitHub import). Set `false` to allow it. |
+| `BUGSTOW_OFFLINE` | No | `true` (default) disables internet features (GitHub import/export). Set `false` to allow it. |
 | `BUGSTOW_TLS` | **Recommended for LAN** | `true` serves HTTPS with a certificate BugsTow generates locally. |
 | `BUGSTOW_TLS_HOSTS` | No | Extra hostnames/IPs for the generated certificate (comma-separated). The `BUGSTOW_BASE_URL` host is always included. |
 | `BUGSTOW_TLS_CERT` / `BUGSTOW_TLS_KEY` | No | Paths to your own cert/key (e.g. from mkcert) instead of the generated one. |

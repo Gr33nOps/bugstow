@@ -16,7 +16,7 @@ browser or computer for the teammate.
 | # | Check | Expected | PASS/FAIL |
 |---|---|---|---|
 | D1 | Run the install command in a new terminal | Node.js and BugsTow download with "Checksum OK"; the browser opens http://localhost:5757 | |
-| D2 | Choose **Save on this computer** | The sign-in form opens without asking for a setup token | |
+| D2 | Choose **Team** on the installed desktop app | The sign-in form opens without asking for a setup token | |
 | D3 | Create the sign-in, capture an issue with a screenshot | Saved; `bugstow status` shows the data folder, which contains `bugstow.sqlite` | |
 | D4 | Close the browser, run `bugstow stop`, then click the **BugsTow** shortcut | BugsTow starts and opens; you are still signed in; the issue is there | |
 | D5 | Restart the computer and click the shortcut | Same as D4 | |
@@ -88,6 +88,19 @@ browser or computer for the teammate.
 | T21 | Create and edit an issue using **Fix writing**, **Voice**, and a custom badge; reload in the teammate's browser | The cleaned text and custom badge persist for both people; voice stays on device or reports that the browser does not support it | |
 | T22 | Open a Team issue with a screenshot, choose **Copy for AI**, and paste into a rich editor | Prompt text and screenshot arrive together when the destination supports rich paste | |
 | T23 | On the invited computer run `bugstow connect <shared HTTPS address>`, close BugsTow, then use the normal shortcut | The shared Team workspace opens without reusing the invite link; `bugstow disconnect` restores the local destination | |
+
+## 2.9 issue workflow and portability
+
+| # | Check | Expected | PASS/FAIL |
+|---|---|---|---|
+| N1 | In Local and Team, create a structured bug report with priority, severity, and two screenshots | All fields and both images survive refresh; copied prompt includes the entered details | |
+| N2 | Move an issue to Trash, use Undo, then Trash → Restore; finally permanently delete a separate test issue | Undo and Restore preserve screenshots; permanent delete asks for confirmation | |
+| N3 | In Team, add a comment and change status, priority, and assignment; open the issue link as a teammate | Timeline shows author and changes; exact link opens after refresh; a non-member sees no issue data | |
+| N4 | Select several filtered issues in Local and Team, change status or priority, then move a test batch to Trash | All selected issues update; others stay unchanged; Trash action asks for confirmation | |
+| N5 | Choose Board view and move a card by drag and by its status menu | Status and column update, persist after reload; list view remains available | |
+| N6 | Save a custom prompt template; create a similar issue; add a GitHub pull-request link | Template persists in this browser; similar issue is suggested without blocking creation; fix link persists | |
+| N7 | Download CSV and Markdown in Local and Team | Issue text and links appear; screenshots are omitted; backup still preserves screenshots | |
+| N8 | Load the optional Capture extension, approve one BugsTow origin, capture a page with selected text and screenshot | Preview shows what will be handed off; BugsTow opens a populated draft; nothing is saved until Create issue | |
 
 Record who did the checks and when:
 

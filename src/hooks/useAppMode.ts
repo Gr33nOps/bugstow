@@ -12,7 +12,7 @@ const STORAGE_KEY = 'bugstow_app_mode'
 export function readMode(): AppMode | null {
   // Opened a team invite (link or older email invitation): straight to Team,
   // and remembered, so opening the plain address later goes there too.
-  if (typeof location !== 'undefined' && /^#(join|invite)=/.test(location.hash)) {
+  if (typeof location !== 'undefined' && (location.hash === '#team' || /^#(join|invite)=/.test(location.hash) || (() => { const params = new URLSearchParams(location.search || ''); return Boolean(params.get('team') && params.get('issue')) })())) {
     try {
       localStorage.setItem(STORAGE_KEY, 'team')
     } catch {
@@ -40,7 +40,7 @@ export function useAppMode() {
   const [mode, setModeState] = useState<AppMode | null>(() => readMode())
 
   const setMode = useCallback((next: AppMode) => {
-    if (location.hash.startsWith('#join=') || (next === 'local' && location.hash.startsWith('#invite='))) {
+    if (location.hash === '#team' || location.hash.startsWith('#join=') || (next === 'local' && location.hash.startsWith('#invite='))) {
       history.replaceState(null, '', location.pathname + location.search)
     }
     try {

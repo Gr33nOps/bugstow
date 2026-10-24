@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { IssueType } from '../types'
+import type { IssueType, IssuePriority, IssueSeverity, IssueDetails, IssueStatus } from '../types'
 import type { Team, TeamMember, TeamInvite, TeamProject, TeamIssue } from '../types/team'
 import * as api from '../services/teamApi'
 
@@ -16,6 +16,7 @@ export function useTeamData(signedIn: boolean) {
   })
   const [projects, setProjects] = useState<TeamProject[]>([])
   const [issues, setIssues] = useState<TeamIssue[]>([])
+  const [trashIssues, setTrashIssues] = useState<TeamIssue[]>([])
   const [members, setMembers] = useState<TeamMember[]>([])
   const [invites, setInvites] = useState<TeamInvite[]>([])
   const [loading, setLoading] = useState(true)
@@ -72,13 +73,15 @@ export function useTeamData(signedIn: boolean) {
 
   // Load team contents when the active team changes.
   const refreshTeamData = useCallback(async (teamId: string) => {
-    const [proj, iss, mem] = await Promise.all([
+    const [proj, iss, trash, mem] = await Promise.all([
       api.listProjects(teamId),
       api.listIssues(teamId),
+      api.listTrash(teamId),
       api.listMembers(teamId),
     ])
     setProjects(proj)
     setIssues(iss)
+    setTrashIssues(trash)
     setMembers(mem.members)
     setInvites(mem.invites)
   }, [])
@@ -87,6 +90,7 @@ export function useTeamData(signedIn: boolean) {
     if (!signedIn || !activeTeamId) {
       setProjects([])
       setIssues([])
+      setTrashIssues([])
       setMembers([])
       setInvites([])
       return
@@ -133,7 +137,7 @@ export function useTeamData(signedIn: boolean) {
 
   const createIssue = useCallback(
     async (
-      data: { title: string; description: string; type: IssueType; customType?: string; projectId: string | null; assigneeId: string | null },
+      data: { title: string; description: string; type: IssueType; customType?: string; projectId: string | null; assigneeId: string | null; priority?: IssuePriority; severity?: IssueSeverity | null; details?: IssueDetails },
       screenshots: api.ScreenshotUpload[] = []
     ) => {
       if (!activeTeamId) throw new Error('No team selected.')
@@ -157,9 +161,13 @@ export function useTeamData(signedIn: boolean) {
         description: string
         type: IssueType
         customType: string | null
-        status: 'open' | 'fixed'
+        status: IssueStatus
+        priority: IssuePriority
+        severity: IssueSeverity | null
+        details: IssueDetails
         projectId: string | null
         assigneeId: string | null
+        fixReferences: string[]
       }>
     ) => {
       // Send the version on screen so a teammate's newer save is never overwritten.
@@ -202,8 +210,25 @@ export function useTeamData(signedIn: boolean) {
 
   const deleteIssue = useCallback(async (id: string) => {
     await api.deleteIssue(id)
+    const issue = issuesRef.current.find(i => i.id === id)
+    if (issue) setTrashIssues(prev => [{ ...issue, deleted_at: new Date().toISOString() }, ...prev])
     setIssues(prev => prev.filter(i => i.id !== id))
   }, [])
+  const restoreIssue = useCallback(async (id: string) => {
+    const issue = await api.restoreIssue(id)
+    setTrashIssues(prev => prev.filter(item => item.id !== id))
+    setIssues(prev => [issue, ...prev])
+  }, [])
+  const purgeIssue = useCallback(async (id: string) => {
+    await api.purgeIssue(id)
+    setTrashIssues(prev => prev.filter(item => item.id !== id))
+  }, [])
+  const bulkUpdate = useCallback(async (ids: string[], changes: Record<string, unknown>) => {
+    if (!activeTeamId) throw new Error('No workspace selected.')
+    const count = await api.bulkUpdateIssues(activeTeamId, ids, changes)
+    await refreshTeamData(activeTeamId)
+    return count
+  }, [activeTeamId, refreshTeamData])
 
   const createProject = useCallback(
     async (name: string, color: string, description?: string) => {
@@ -291,6 +316,7 @@ export function useTeamData(signedIn: boolean) {
     reload,
     projects,
     issues,
+    trashIssues,
     members,
     invites,
     loading,
@@ -304,6 +330,9 @@ export function useTeamData(signedIn: boolean) {
     syncIssueScreenshots,
     replaceIssue,
     deleteIssue,
+    restoreIssue,
+    purgeIssue,
+    bulkUpdate,
     createProject,
     deleteProject,
     moveProject,

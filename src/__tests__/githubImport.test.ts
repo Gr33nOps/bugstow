@@ -104,6 +104,16 @@ describe('planImport: importing the same repository again', () => {
     expect(plan.setStatus).toEqual([{ id: 'b', status: 'fixed' }])
     expect(plan.unchanged).toBe(1)
   })
+  it('preserves local In Progress and Blocked states when GitHub remains open', () => {
+    const existing = [
+      { id: 'a', status: 'in_progress' as const, githubUrl: gh(1).url },
+      { id: 'b', status: 'blocked' as const, githubUrl: gh(2).url },
+      { id: 'c', status: 'fixed' as const, githubUrl: gh(3).url },
+    ]
+    const plan = planImport(existing, [gh(1), gh(2), gh(3)])
+    expect(plan.setStatus).toEqual([{ id: 'c', status: 'open' }])
+    expect(plan.unchanged).toBe(2)
+  })
 })
 
 describe('tokenCreateUrl', () => {

@@ -369,9 +369,9 @@ found these intentional connections:
 |---|---|---|
 | Local | the site it was loaded from, for its own files | loading the app (then cached for offline use) |
 | Local | **no API, no other host** | Checked in a browser: only the page, its script, stylesheet and `registerSW.js` are requested |
-| Local | `api.github.com` | only when someone runs a GitHub import |
+| Local | `api.github.com` | only when someone runs a GitHub import or export |
 | Team (browser) | only its own BugsTow server | always |
-| Team server | `api.github.com` | only when GitHub import is enabled (`BUGSTOW_OFFLINE=false`) **and** someone runs an import |
+| Team server | `api.github.com` | only when GitHub import/export is enabled (`BUGSTOW_OFFLINE=false`) **and** someone runs an import or export |
 | better-auth | nothing | its optional telemetry is off by default and has no built-in endpoint; BugsTow also removes the environment switch that could enable it |
 | Update checks, fonts, CDNs, analytics | none | never |
 

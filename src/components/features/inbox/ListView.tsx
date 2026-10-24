@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from "react"
 import { Search } from "lucide-react"
-import type { Issue, Project, IssueType } from "../../../types"
+import type { Issue, Project, IssueType, IssuePriority, IssueStatus } from "../../../types"
 import { IssueRow } from "./IssueRow"
 import { EmptyState } from "./EmptyState"
+import { filterAndSortIssues, type WorkflowFilters } from '../../../lib/issueWorkflow'
 
 interface ListViewProps {
   title: string
@@ -17,6 +18,7 @@ interface ListViewProps {
   onToggleFixed: (issue: Issue) => void
   onCopyPrompt: (issue: Issue) => void
   onDeleteIssue: (issue: Issue) => void
+  onBulkUpdate?: (ids: string[], changes: Partial<Pick<Issue, 'priority' | 'status' | 'projectId'>> & { trash?: boolean }) => Promise<void>
   emptyHeading?: string
   emptySub?: string
   showCaptureOnEmpty?: boolean
@@ -41,6 +43,7 @@ export function ListView({
   onToggleFixed,
   onCopyPrompt,
   onDeleteIssue,
+  onBulkUpdate,
   emptyHeading = "Nothing to fix. Yet.",
   emptySub = "Capture bugs, feedback or ideas while you build.",
   showCaptureOnEmpty = true,
@@ -58,6 +61,18 @@ export function ListView({
   const [projectFilter, setProjectFilter] = useState<string>(
     activeProjectFilter || "all",
   )
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [priorityFilter, setPriorityFilter] = useState('all')
+  const [severityFilter, setSeverityFilter] = useState('all')
+  const [sort, setSort] = useState<WorkflowFilters['sort']>('created')
+  const [direction, setDirection] = useState<'asc' | 'desc'>('desc')
+  const [createdFrom, setCreatedFrom] = useState('')
+  const [createdTo, setCreatedTo] = useState('')
+  const [updatedFrom, setUpdatedFrom] = useState('')
+  const [updatedTo, setUpdatedTo] = useState('')
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [bulkAction, setBulkAction] = useState('status')
+  const [bulkValue, setBulkValue] = useState('fixed')
 
   const search = externalSearch !== undefined ? externalSearch : internalSearch
   const setSearch = externalOnSearchChange || setInternalSearch
@@ -71,33 +86,10 @@ export function ListView({
     }
   }, [activeProjectFilter])
 
-  const filteredIssues = useMemo(() => {
-    return issues.filter((issue) => {
-      // Search by title or description
-      if (search.trim()) {
-        const query = search.toLowerCase()
-        const matchTitle = issue.title.toLowerCase().includes(query)
-        const matchDesc = issue.description.toLowerCase().includes(query)
-        if (!matchTitle && !matchDesc) return false
-      }
-
-      // Filter by type
-      if (typeFilter !== "all" && issue.type !== typeFilter) {
-        return false
-      }
-
-      // Filter by project
-      if (projectFilter !== "all") {
-        if (projectFilter === "unassigned") {
-          if (issue.projectId !== null) return false
-        } else if (issue.projectId !== projectFilter) {
-          return false
-        }
-      }
-
-      return true
-    })
-  }, [issues, search, typeFilter, projectFilter])
+  const filteredIssues = useMemo(() => filterAndSortIssues(issues, {
+    query: search, type: typeFilter, project: projectFilter, status: statusFilter,
+    priority: priorityFilter, severity: severityFilter, sort, direction, createdFrom, createdTo, updatedFrom, updatedTo,
+  }), [issues, search, typeFilter, projectFilter, statusFilter, priorityFilter, severityFilter, sort, direction, createdFrom, createdTo, updatedFrom, updatedTo])
 
   const typePills: Array<{ value: IssueType | "all"; label: string }> = [
     { value: "all", label: "All" },
@@ -152,6 +144,20 @@ export function ListView({
             </option>
           ))}
         </select>
+        {title !== 'Completed' && <select aria-label="Filter by status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-3 py-2 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200">
+          <option value="all">All active statuses</option><option value="open">Open</option><option value="in_progress">In Progress</option><option value="blocked">Blocked</option>
+        </select>}
+        <details className="w-full text-sm"><summary className="cursor-pointer text-slate-600 dark:text-slate-300">More filters and sorting</summary><div className="mt-3 flex flex-wrap gap-2">
+        <select aria-label="Filter by priority" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)} className="px-3 py-2 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200">
+          <option value="all">All priorities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+        </select>
+        <select aria-label="Filter by severity" value={severityFilter} onChange={e => setSeverityFilter(e.target.value)} className="px-3 py-2 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200">
+          <option value="all">All severities</option><option value="critical">Critical</option><option value="major">Major</option><option value="minor">Minor</option>
+        </select>
+        <select aria-label="Sort issues" value={sort} onChange={e => setSort(e.target.value as WorkflowFilters['sort'])} className="px-3 py-2 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200">
+          <option value="created">Created</option><option value="updated">Updated</option><option value="priority">Priority</option><option value="severity">Severity</option><option value="status">Status</option><option value="type">Type</option><option value="project">Project</option><option value="title">Title</option>
+        </select>
+        <button type="button" aria-label="Reverse sort order" onClick={() => setDirection(value => value === 'asc' ? 'desc' : 'asc')} className="px-3 py-2 rounded-lg text-sm border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200">{direction === 'desc' ? 'Descending' : 'Ascending'}</button>
         <select
           aria-label="Filter by type"
           value={typeFilter}
@@ -164,7 +170,22 @@ export function ListView({
             </option>
           ))}
         </select>
+        <label>Created from<input type="date" value={createdFrom} onChange={event => setCreatedFrom(event.target.value)} className="ml-2 rounded border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-900" /></label>
+        <label>Created to<input type="date" value={createdTo} onChange={event => setCreatedTo(event.target.value)} className="ml-2 rounded border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-900" /></label>
+        <label>Updated from<input type="date" value={updatedFrom} onChange={event => setUpdatedFrom(event.target.value)} className="ml-2 rounded border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-900" /></label>
+        <label>Updated to<input type="date" value={updatedTo} onChange={event => setUpdatedTo(event.target.value)} className="ml-2 rounded border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-900" /></label>
+        </div></details>
       </div>
+      {onBulkUpdate && filteredIssues.length > 0 && <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-5 py-2 text-sm dark:border-slate-700">
+        <button type="button" onClick={() => setSelectedIds(filteredIssues.map(issue => issue.id))} className="underline">Select all {filteredIssues.length} filtered</button>
+        {selectedIds.length > 0 && <><strong>{selectedIds.length} selected</strong><button type="button" onClick={() => setSelectedIds([])} className="underline">Clear</button>
+          <select aria-label="Bulk action" value={bulkAction} onChange={event => { setBulkAction(event.target.value); setBulkValue(event.target.value === 'priority' ? 'medium' : event.target.value === 'status' ? 'fixed' : '') }} className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"><option value="status">Change status</option><option value="priority">Change priority</option><option value="projectId">Move to project</option><option value="trash">Move to Trash</option></select>
+          {bulkAction === 'status' && <select aria-label="New status" value={bulkValue} onChange={event => setBulkValue(event.target.value)} className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"><option value="open">Open</option><option value="in_progress">In Progress</option><option value="blocked">Blocked</option><option value="fixed">Fixed</option></select>}
+          {bulkAction === 'priority' && <select aria-label="New priority" value={bulkValue} onChange={event => setBulkValue(event.target.value)} className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>}
+          {bulkAction === 'projectId' && <select aria-label="Destination project" value={bulkValue} onChange={event => setBulkValue(event.target.value)} className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"><option value="">Unassigned</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select>}
+          <button type="button" className="rounded bg-brand px-3 py-1.5 font-semibold text-white" onClick={async () => { if (bulkAction === 'trash' && !window.confirm(`Move ${selectedIds.length} issues to Trash?`)) return; try { await onBulkUpdate(selectedIds, bulkAction === 'trash' ? { trash: true } : bulkAction === 'priority' ? { priority: bulkValue as IssuePriority } : bulkAction === 'status' ? { status: bulkValue as IssueStatus } : { projectId: bulkValue || null }); setSelectedIds([]) } catch { /* parent shows the error */ } }}>Apply</button>
+        </>}
+      </div>}
       <div className="flex-1 min-h-0 overflow-y-auto @container flex flex-col">
         {issues.length === 0 ? (
           <EmptyState
@@ -185,6 +206,10 @@ export function ListView({
                 setSearch("")
                 setTypeFilter("all")
                 setProjectFilter("all")
+                setStatusFilter('all')
+                setPriorityFilter('all')
+                setSeverityFilter('all')
+                setCreatedFrom(''); setCreatedTo(''); setUpdatedFrom(''); setUpdatedTo('')
                 onClearProjectFilter?.()
               }}
               className="mt-3 text-sm font-medium text-brand dark:text-brand-light"
@@ -194,8 +219,9 @@ export function ListView({
           </div>
         ) : (
           filteredIssues.map((issue) => (
+            <div key={issue.id} className="flex items-center">
+              {onBulkUpdate && <input type="checkbox" aria-label={`Select ${issue.title}`} checked={selectedIds.includes(issue.id)} onChange={event => setSelectedIds(current => event.target.checked ? [...current, issue.id] : current.filter(id => id !== issue.id))} className="ml-3" />}
             <IssueRow
-              key={issue.id}
               issue={issue}
               project={projects.find((p) => p.id === issue.projectId)}
               screenshotUrl={
@@ -218,6 +244,7 @@ export function ListView({
                 onDeleteIssue(issue)
               }}
             />
+            </div>
           ))
         )}
       </div>

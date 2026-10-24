@@ -309,6 +309,7 @@ function serverEnv(s) {
     NODE_ENV: 'production',
     PORT: String(s.port),
     BUGSTOW_DESKTOP: 'true',
+    BUGSTOW_LAUNCHER_SETTINGS: SETTINGS_FILE,
     BUGSTOW_DATA_DIR: DATA_DIR,
     BUGSTOW_PUBLIC_DIR: path.join(APP_DIR, 'dist'),
     BUGSTOW_AUTH_SECRET: secret,
@@ -492,7 +493,7 @@ function connectRemote(input) {
   saveSettings({ ...s, remoteWorkspaceUrl: url })
   say(`  BugsTow will now open your shared Team workspace: ${url}`)
   say('  Your own Local data on this computer is unchanged.')
-  openBrowser(url)
+  openBrowser(url + '/#team')
 }
 
 function disconnectRemote() {
@@ -719,7 +720,7 @@ switch (cmd) {
     const remote = remoteWorkspaceTarget(readSettings())
     if (remote && rest.length === 0) {
       say(`  Opening your shared Team workspace: ${remote}`)
-      openBrowser(remote)
+      openBrowser(remote + '/#team')
       break
     }
     await applyFlags()

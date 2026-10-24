@@ -12,23 +12,31 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import type { IssueType } from '../../types'
-import type { TeamIssue, TeamMember } from '../../types/team'
-import { IssueConflictError, fetchScreenshotBlob, type ScreenshotUpload } from '../../services/teamApi'
-import { copyTextAndImageToClipboard, generateIssuePrompt } from '../../services/promptService'
+import type { IssueType, IssuePriority, IssueSeverity, IssueDetails, IssueStatus } from '../../types'
+import type { TeamIssue, TeamMember, TeamIssueEvent } from '../../types/team'
+import { IssueConflictError, fetchScreenshotBlob, listIssueActivity, addIssueComment, deleteIssueComment, type ScreenshotUpload } from '../../services/teamApi'
+import { copyTextAndImageToClipboard } from '../../services/promptService'
+import { generatePromptWithTemplate } from '../../services/promptTemplates'
+import { usePromptTemplateSelection } from '../common/PromptTemplateControls'
+import { FixReferences } from '../common/FixReferences'
 import { normalizeCustomBadge } from '../../lib/writingAssist'
 import { displayLogin } from '../../lib/login'
 import { GithubMark, timeAgo, TypeBadge } from '../common/Icon'
 import { WritingTools } from '../common/WritingTools'
+import { IssueReportFields, IssueReportSummary, PriorityBadge, STATUS_LABELS } from '../common/IssueReportFields'
 
 type IssueUpdates = Partial<{
   title: string
   description: string
   type: IssueType
   customType: string | null
-  status: 'open' | 'fixed'
+  status: IssueStatus
+  priority: IssuePriority
+  severity: IssueSeverity | null
+  details: IssueDetails
   projectId: string | null
   assigneeId: string | null
+  fixReferences: string[]
 }>
 
 interface PendingImage {
@@ -47,6 +55,8 @@ interface TeamIssueDetailProps {
   onDelete: (id: string) => Promise<void>
   onClose: () => void
   onToast: (message: string) => void
+  currentUserId: string
+  onCopyLink: () => Promise<void>
 }
 
 function fileToUpload(file: File): Promise<ScreenshotUpload> {
@@ -76,6 +86,8 @@ export function TeamIssueDetail({
   onDelete,
   onClose,
   onToast,
+  currentUserId,
+  onCopyLink,
 }: TeamIssueDetailProps) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -88,10 +100,17 @@ export function TeamIssueDetail({
   const [assigneeId, setAssigneeId] = useState(issue.assignee_id || '')
   const [typeChoice, setTypeChoice] = useState<IssueType | 'custom'>(issue.custom_type ? 'custom' : issue.type)
   const [customType, setCustomType] = useState(issue.custom_type || '')
+  const [priority, setPriority] = useState<IssuePriority>(issue.priority || 'medium')
+  const [severity, setSeverity] = useState<IssueSeverity | null>(issue.severity || null)
+  const [details, setDetails] = useState<IssueDetails>(issue.details || {})
+  const promptTemplate = usePromptTemplateSelection()
   const [keepIds, setKeepIds] = useState(issue.screenshot_ids)
   const [newImages, setNewImages] = useState<PendingImage[]>([])
   const newImagesRef = useRef<PendingImage[]>([])
   const [shotUrls, setShotUrls] = useState<Record<string, string>>({})
+  const [events, setEvents] = useState<TeamIssueEvent[]>([])
+  const [comment, setComment] = useState('')
+  const [posting, setPosting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -112,6 +131,9 @@ export function TeamIssueDetail({
     setAssigneeId(issue.assignee_id || '')
     setTypeChoice(issue.custom_type ? 'custom' : issue.type)
     setCustomType(issue.custom_type || '')
+    setPriority(issue.priority || 'medium')
+    setSeverity(issue.severity || null)
+    setDetails(issue.details || {})
     setKeepIds(issue.screenshot_ids)
     clearNewImages()
     setConflict(null)
@@ -123,6 +145,9 @@ export function TeamIssueDetail({
     // The selected issue is the reset boundary; later prop updates are the result of this editor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [issue.id])
+  useEffect(() => {
+    listIssueActivity(issue.id).then(setEvents).catch(() => setEvents([]))
+  }, [issue.id, issue.updated_at])
 
   useEffect(() => {
     let alive = true
@@ -183,7 +208,7 @@ export function TeamIssueDetail({
     }
   }
 
-  const promptText = () => generateIssuePrompt(
+  const promptText = () => generatePromptWithTemplate(
     {
       id: issue.id,
       projectId: issue.project_id,
@@ -192,6 +217,9 @@ export function TeamIssueDetail({
       type: issue.type,
       customType: issue.custom_type || undefined,
       status: issue.status,
+      priority: issue.priority,
+      severity: issue.severity,
+      details: issue.details,
       screenshotId: null,
       createdAt: issue.created_at,
       updatedAt: issue.updated_at,
@@ -199,6 +227,8 @@ export function TeamIssueDetail({
     issue.project_id
       ? { id: issue.project_id, name: issue.project_name || 'Project', color: '#0f766e', createdAt: '', updatedAt: '' }
       : null,
+    promptTemplate.templateId,
+    promptTemplate.customTemplate,
   )
 
   const copyPrompt = async () => {
@@ -231,6 +261,9 @@ export function TeamIssueDetail({
       assigneeId: assigneeId || null,
       type: typeChoice === 'custom' ? 'idea' : typeChoice,
       customType: badge,
+      priority,
+      severity: typeChoice === 'bug' ? severity : null,
+      details,
     })
     if (updated) {
       try {
@@ -296,6 +329,7 @@ export function TeamIssueDetail({
               <FieldSelect label="Assignee" value={assigneeId} onChange={setAssigneeId} options={[{ value: '', label: 'Unassigned' }, ...members.map((member) => ({ value: member.user_id, label: member.name || displayLogin(member.email) || 'Member' }))]} />
             </div>
             {typeChoice === 'custom' && <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Custom badge<input name="customType" autoComplete="off" value={customType} maxLength={24} onChange={(event) => setCustomType(event.target.value)} placeholder="For example: Performance" className="mt-1.5 block w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-normal text-slate-900 focus:border-brand focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></label>}
+            <IssueReportFields priority={priority} onPriorityChange={setPriority} severity={severity} onSeverityChange={setSeverity} details={details} onDetailsChange={setDetails} bug={typeChoice === 'bug'} />
             <div>
               <div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400">Screenshots and attachments</h3><span className="text-xs text-slate-400">{keepIds.length + newImages.length} image{keepIds.length + newImages.length === 1 ? '' : 's'}</span></div>
               <div className="grid grid-cols-2 gap-3">
@@ -316,23 +350,33 @@ export function TeamIssueDetail({
             <div>
               <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                 <TypeBadge type={issue.type} customLabel={issue.custom_type} />
+                <PriorityBadge priority={issue.priority} />
                 {issue.project_name && <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{issue.project_name}</span>}
                 {issue.assignee_id && <span className="rounded-full bg-slate-100 px-2.5 py-1 dark:bg-slate-800">Assigned to {issue.assignee_name || displayLogin(issue.assignee_email) || 'member'}</span>}
                 <span className="ml-auto">{timeAgo(issue.created_at)}</span>
               </div>
               <h1 className="break-words text-2xl font-semibold leading-tight text-slate-950 dark:text-white">{issue.title}</h1>
             </div>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Status<select aria-label="Issue status" className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800" value={issue.status} onChange={event => void saveUpdate({ status: event.target.value as IssueStatus })}>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <IssueReportSummary severity={issue.severity} details={issue.details} />
             <section><h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Description</h2>{issue.description ? <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-200">{issue.description}</p> : <p className="text-sm italic text-slate-400">No description yet.</p>}</section>
             {issue.github_url && <a href={issue.github_url} target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-brand hover:underline"><GithubMark size={15} /> View on GitHub #{issue.github_number} <ExternalLink size={12} /></a>}
+            <FixReferences links={issue.fix_references || []} onChange={async links => { const saved = await saveUpdate({ fixReferences: links }); if (!saved) throw new Error('Could not save fix references') }} />
+            <button type="button" onClick={() => void onCopyLink()} className="w-fit rounded-lg border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700">Copy issue link</button>
             <section className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-700 dark:bg-slate-800/40">
               <div className="mb-3 flex items-center justify-between gap-3"><h2 className="flex items-center gap-2 text-sm font-semibold"><Copy size={15} className="text-brand" /> Copy for your AI assistant</h2><span className="text-xs text-slate-500">Paste into the tool you use</span></div>
+              {promptTemplate.controls}
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto]">
                 <button type="button" onClick={copyPrompt} className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold hover:bg-white dark:border-slate-600 dark:hover:bg-slate-800"><Copy size={16} /> Copy with prompt</button>
                 <button type="button" onClick={copyText} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold hover:bg-white dark:border-slate-600 dark:hover:bg-slate-800">Copy text</button>
-                <button type="button" onClick={() => saveUpdate({ status: issue.status === 'open' ? 'fixed' : 'open' })} className="flex items-center justify-center gap-2 rounded-lg border border-emerald-300 px-4 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/30"><Check size={16} /> {issue.status === 'open' ? 'Mark completed' : 'Reopen'}</button>
+                <button type="button" onClick={() => saveUpdate({ status: issue.status === 'fixed' ? 'open' : 'fixed' })} className="flex items-center justify-center gap-2 rounded-lg border border-emerald-300 px-4 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/30"><Check size={16} /> {issue.status === 'fixed' ? 'Reopen' : 'Mark completed'}</button>
               </div>
             </section>
             {issue.screenshot_ids.length > 0 && <section><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold text-slate-600 dark:text-slate-300">Screenshots ({issue.screenshot_ids.length})</h2><span className="text-xs text-slate-400">Click an image to enlarge it</span></div><div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{issue.screenshot_ids.map((id, index) => shotUrls[id] && <a key={id} href={shotUrls[id]} target="_blank" rel="noreferrer" className="overflow-hidden rounded-lg border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800"><img src={shotUrls[id]} alt={`Screenshot ${index + 1}`} width="800" height="450" loading="lazy" className="h-auto w-full object-contain" /></a>)}</div></section>}
+            <section className="space-y-3 border-t border-slate-200 pt-5 dark:border-slate-700"><h2 className="text-sm font-semibold">Activity and comments</h2>
+              <ol className="space-y-2">{events.map(event => <li key={event.id} className="rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-800"><div className="flex items-center gap-2 text-xs text-slate-500"><strong>{event.author_name || 'Teammate'}</strong><span>{event.kind}</span><time dateTime={event.created_at}>{timeAgo(event.created_at)}</time>{event.kind === 'comment' && event.author_id === currentUserId && <button type="button" className="ml-auto underline" onClick={async () => { await deleteIssueComment(issue.id, event.id); setEvents(current => current.filter(item => item.id !== event.id)) }}>Delete</button>}</div><p className="mt-1 whitespace-pre-wrap">{event.body}</p></li>)}</ol>
+              <form onSubmit={async event => { event.preventDefault(); if (!comment.trim() || posting) return; setPosting(true); try { const added = await addIssueComment(issue.id, comment); setEvents(current => [...current, added]); setComment('') } catch (error) { onToast(error instanceof Error ? error.message : 'Could not post comment') } finally { setPosting(false) } }} className="flex flex-col gap-2"><label htmlFor="team-comment" className="text-xs font-semibold">Add a comment</label><textarea id="team-comment" value={comment} onChange={event => setComment(event.target.value)} maxLength={4000} rows={3} className="rounded-lg border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900" /><button type="submit" disabled={posting || !comment.trim()} className="w-fit rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Post comment</button></form>
+            </section>
           </div>
         )}
       </div>
@@ -340,10 +384,10 @@ export function TeamIssueDetail({
         <div role="dialog" aria-modal="true" aria-labelledby="team-delete-title" className="fixed inset-0 z-[140] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
             <h2 id="team-delete-title" className="text-lg font-semibold">Delete this issue?</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">The issue and all of its screenshots will be removed for everyone in this workspace.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">The issue and its screenshots will move to Trash. Anyone in this workspace can restore it.</p>
             <div className="mt-6 flex justify-end gap-3">
               <button type="button" onClick={() => setConfirmDelete(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Cancel</button>
-              <button type="button" onClick={() => onDelete(issue.id)} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">Delete issue</button>
+              <button type="button" onClick={() => onDelete(issue.id)} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">Move to Trash</button>
             </div>
           </div>
         </div>

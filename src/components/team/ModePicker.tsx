@@ -102,10 +102,10 @@ export function ModePicker({ teamAvailable, desktop = false, onChoose, onSelfHos
         <div className="grid md:grid-cols-2 gap-4">{teamFirst ? [team, local] : [local, team]}</div>
         <p className="mt-6 text-sm text-slate-500 dark:text-slate-400">
           {desktop
-            ? 'Either way, your issues stay on this computer. BugsTow doesn’t upload them anywhere.'
+            ? 'Either way, your issues stay on this computer. Issue text is sent to GitHub only when you choose Export.'
             : teamAvailable
               ? 'Team issues are kept on this server. Local issues stay in this browser.'
-              : 'Local issues stay in this browser. BugsTow doesn’t upload them anywhere.'}
+              : 'Local issues stay in this browser. Issue text is sent to GitHub only when you choose Export.'}
         </p>
       </div>
     </div>

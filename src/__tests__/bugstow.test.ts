@@ -67,6 +67,41 @@ describe('Bugstow Local-First Application Test Suite', () => {
     expect(all[0].title).toBe('Navigation bar misaligned on small devices')
   })
 
+  it('persists structured report fields, priority, severity, and active workflow status', async () => {
+    const created = await issueRepo.create({ title: 'Crash', description: '', type: 'bug', projectId: null, priority: 'high', severity: 'critical', status: 'in_progress', details: { stepsToReproduce: 'Open settings', expectedBehavior: 'Loads' } })
+    await issueRepo.update(created.id, { status: 'blocked', priority: 'critical' })
+    const stored = await issueRepo.getById(created.id)
+    expect(stored).toMatchObject({ status: 'blocked', priority: 'critical', severity: 'critical', details: { stepsToReproduce: 'Open settings' } })
+  })
+
+  it('gives a legacy issue Medium priority without changing its Fixed status or screenshots', async () => {
+    const db = await getDB()
+    await db.put('issues', { id: 'old', title: 'Old', description: '', projectId: null, type: 'bug', status: 'fixed', screenshotId: 'shot', createdAt: '2025-01-01', updatedAt: '2025-01-01' } as Issue)
+    expect(await issueRepo.getById('old')).toMatchObject({ priority: 'medium', status: 'fixed', screenshotId: 'shot' })
+  })
+  it('moves a Local issue to Trash, restores it with its screenshot, then purges it', async () => {
+    const shot = new Blob(['screenshot'], { type: 'image/png' })
+    const made = await issueRepo.create({ title: 'Recover me', description: '', type: 'bug', projectId: null, priority: 'high' }, shot)
+    await issueRepo.delete(made.id)
+    expect((await issueRepo.getTrash()).map(i => i.id)).toContain(made.id)
+    expect(await screenshotRepo.getById(made.screenshotId!)).toBeDefined()
+    await issueRepo.restore(made.id)
+    expect((await issueRepo.getById(made.id))?.deletedAt).toBeUndefined()
+    await issueRepo.delete(made.id)
+    await issueRepo.purge(made.id)
+    expect(await issueRepo.getById(made.id)).toBeUndefined()
+    expect(await screenshotRepo.getById(made.screenshotId!)).toBeUndefined()
+  })
+  it('changes multiple Local issues together and refuses an unknown issue without partial writes', async () => {
+    const first = await issueRepo.create({ title: 'First', description: '', type: 'bug', projectId: null })
+    const second = await issueRepo.create({ title: 'Second', description: '', type: 'bug', projectId: null })
+    await expect(issueRepo.bulkUpdate([first.id, 'missing'], { priority: 'high' })).rejects.toThrow()
+    expect((await issueRepo.getById(first.id))?.priority).toBe('medium')
+    await issueRepo.bulkUpdate([first.id, second.id], { priority: 'high', status: 'blocked' })
+    expect((await issueRepo.getById(first.id))).toMatchObject({ priority: 'high', status: 'blocked' })
+    expect((await issueRepo.getById(second.id))).toMatchObject({ priority: 'high', status: 'blocked' })
+  })
+
   // ── Test 2: Screenshot Persistence as Blob ────────────────────────────────
   it('keeps the GitHub link of an imported issue (re-import matches on it)', async () => {
     const created = await issueRepo.create({
@@ -236,6 +271,16 @@ describe('Bugstow Local-First Application Test Suite', () => {
     expect(bugPrompt).toContain('Problem: Primary CTA button does not submit form')
     expect(bugPrompt).toContain('Additional context:\nClicking submit triggers form validation error')
     expect(bugPrompt).toContain('Inspect the relevant code, identify the underlying cause, and implement an appropriate fix.')
+    const structuredPrompt = generateIssuePrompt({
+      ...bugIssue, priority: 'critical', severity: 'major', status: 'blocked',
+      details: { stepsToReproduce: 'Submit the empty form', expectedBehavior: 'Show validation', actualBehavior: 'Page crashes', environment: 'Staging' },
+    }, project)
+    expect(structuredPrompt).toContain('Priority: critical')
+    expect(structuredPrompt).toContain('Status: blocked')
+    expect(structuredPrompt).toContain('Severity: major')
+    expect(structuredPrompt).toContain('Steps to reproduce:\nSubmit the empty form')
+    expect(structuredPrompt).toContain('Expected behavior:\nShow validation')
+    expect(structuredPrompt).toContain('Actual behavior:\nPage crashes')
 
     const ideaIssue: Issue = {
       ...bugIssue,
@@ -384,7 +429,9 @@ describe('Bugstow Local-First Application Test Suite', () => {
     // Delete issue
     await issueRepo.delete(issue.id)
 
-    // Screenshot should be cleaned up
+    // Screenshots remain while recoverable, then are cleaned up on permanent deletion.
+    expect(await screenshotRepo.getById(shotId)).toBeDefined()
+    await issueRepo.purge(issue.id)
     expect(await screenshotRepo.getById(shotId)).toBeUndefined()
     expect(await issueRepo.getById(issue.id)).toBeUndefined()
   })
@@ -498,8 +545,9 @@ describe('Bugstow Local-First Application Test Suite', () => {
     // Verify id2 was removed from screenshot repository
     expect(await screenshotRepo.getById(id2)).toBeUndefined()
 
-    // Delete issue: verify ALL remaining screenshots are cleaned up
+    // Permanent deletion cleans up all remaining screenshots.
     await issueRepo.delete(created.id)
+    await issueRepo.purge(created.id)
     for (const sid of updated.screenshotIds!) {
       expect(await screenshotRepo.getById(sid)).toBeUndefined()
     }

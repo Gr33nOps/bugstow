@@ -7,6 +7,8 @@ import { connectionKind } from "./lib/connection"
 import { ModePicker } from "./components/team/ModePicker"
 import { SelfHostInfo } from "./components/team/SelfHostInfo"
 import type { Project } from "./types"
+import { DesktopWorkspaceGate } from './components/team/DesktopWorkspaceGate'
+import { parseExtensionCapture, type ExtensionCaptureDraft } from './lib/extensionCapture'
 
 // Team mode (auth client + shared workspace) is a separate chunk, fetched only
 // from a BugsTow server. Local on a static site never loads it.
@@ -56,10 +58,32 @@ function Loading() {
  * it detects which one it is at runtime (see lib/teamServer.ts).
  */
 export default function RootApp() {
+  return <DesktopWorkspaceGate><RootContent /></DesktopWorkspaceGate>
+}
+
+function RootContent() {
   const { mode, setMode } = useAppMode()
   const [team, setTeam] = useState<TeamServerInfo | null>(null)
   const [showSelfHost, setShowSelfHost] = useState(false)
   const [localProjectToCopy, setLocalProjectToCopy] = useState<Pick<Project, "id" | "name"> | null>(null)
+  const [captureDraft, setCaptureDraft] = useState<ExtensionCaptureDraft | null>(null)
+
+  useEffect(() => {
+    const nonce = new URL(window.location.href).searchParams.get('capture') || ''
+    if (!/^[a-f0-9]{32}$/.test(nonce)) return
+    const receive = (event: MessageEvent) => {
+      if (event.source !== window || event.origin !== window.location.origin) return
+      const draft = parseExtensionCapture(event.data, nonce)
+      if (!draft) return
+      setCaptureDraft(draft)
+      window.postMessage({ type: 'bugstow-capture-ack', nonce }, window.location.origin)
+      const url = new URL(window.location.href)
+      url.searchParams.delete('capture')
+      window.history.replaceState({}, '', url)
+    }
+    window.addEventListener('message', receive)
+    return () => window.removeEventListener('message', receive)
+  }, [])
 
   useEffect(() => {
     detectTeamServer().then(setTeam)
@@ -82,7 +106,7 @@ export default function RootApp() {
     return (
       <div className="h-full">
         <Suspense fallback={<Loading />}>
-          <TeamRoot setupComplete={team.setupComplete} offline={team.offline} onUseLocal={() => setMode("local")} />
+          <TeamRoot setupComplete={team.setupComplete} offline={team.offline} onUseLocal={() => setMode("local")} captureDraft={captureDraft} onCaptureHandled={() => setCaptureDraft(null)} />
         </Suspense>
       </div>
     )
@@ -119,6 +143,8 @@ export default function RootApp() {
             onUseLocal={() => setMode("local")}
             localProjectToCopy={localProjectToCopy}
             onLocalProjectCopyClosed={() => setLocalProjectToCopy(null)}
+            captureDraft={captureDraft}
+            onCaptureHandled={() => setCaptureDraft(null)}
           />
         </Suspense>
       </div>
@@ -129,6 +155,8 @@ export default function RootApp() {
   return (
     <App
       teamAvailable={team.available}
+      captureDraft={captureDraft}
+      onCaptureHandled={() => setCaptureDraft(null)}
       onSwitchToTeam={
         team.available ? () => setMode("team") : () => setShowSelfHost(true)
       }

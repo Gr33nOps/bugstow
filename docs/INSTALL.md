@@ -3,7 +3,7 @@
 BugsTow runs on your own computer, like other open-source local web apps. You install it with
 one command and open it in your browser at **http://localhost:5757**. It has no cloud
 features and no hosted service: your issues stay on your computer. Everything works offline
-after installation; only installing, updating and GitHub import use the internet.
+after installation; only installing, updating and GitHub import/export use the internet.
 
 ## Install
 
@@ -199,3 +199,34 @@ folder stays; delete it yourself if you want your issues gone.
   `~/.local/bin` is on your PATH.
 - **Forgot a password**: `bugstow reset-password <username>` (or the email of an older account) prints a temporary
   password; you choose a new one when you sign in.
+
+
+## Reopen your team's workspace automatically
+
+On each teammate's computer, open their installed BugsTow and expand **Connect to your team** at the top. Paste the shared HTTPS address (or the invite link), then choose **Save and open Team**. The installed shortcut and the local browser address now open the shared workspace. Sign in there using the account from the invitation; creating another workspace on your own computer does not connect it to the team.
+
+The app remembers only the server address, not the invite token. The team host must be running and reachable through your LAN or Tailscale. Existing Local data stays on each computer. To disconnect, run `bugstow disconnect`, or open your local address with `?local=1` (for example `http://localhost:5757/?local=1`) and expand **Connect to your team** to disconnect. You can also use `bugstow connect https://your-team-address:5757` once from a terminal.
+
+## Organize, discuss, and recover issues
+
+Use the issue list to filter by status, priority, severity, type, project, dates, and (in Team) assignee. Sort in either direction. Select issue checkboxes, or **Select all filtered**, to change several statuses, priorities, projects, or Team assignees at once. Moving several issues to Trash asks for confirmation.
+
+Deleting an issue moves it to **Trash**. Use **Undo** immediately or open Trash later to restore it with its screenshots. **Delete permanently** asks for confirmation and cannot be undone; keep a backup before clearing Trash. Deleting a Team project leaves its issues in the workspace without a project and requires an owner or admin.
+
+In Team, open an issue to add comments and see its activity. **Copy link** shares the exact issue with someone who already belongs to that workspace. They must sign in; the link does not grant access by itself. A deleted issue link reports that the issue is unavailable.
+
+Choose **Board view** for Open, In Progress, Blocked, and Fixed columns. Drag a card between columns, or use its status menu with a keyboard. The list remains the default. While creating an issue, BugsTow suggests similar titles from the issues already in that mode. It never merges issues automatically.
+
+Open **Prompt template** in an issue to choose a task-specific prompt or save your own template in this browser. **Copy with prompt** remains a one-click action. **Fix references** lets you store GitHub repository, pull request, and commit URLs without changing anything on GitHub.
+
+For a human-readable copy, choose **Download CSV** or **Download Markdown** in Local's **Settings → Data & backups**, or **Download issues** in Team's top bar. These files include issue text and links but not screenshots and cannot restore a workspace; use a backup for recovery.
+
+The optional [BugsTow Capture extension](../extension/README.md) prepares an issue draft from a page you choose, including selected text and an optional screenshot. You review the draft in BugsTow before saving it.
+
+## Export issues to GitHub
+
+Choose **Export to GitHub** in Local's sidebar (on mobile, open the navigation menu) or Team's top bar. Select all issues or one project, enter the destination repository, and use a fine-grained personal access token restricted to that repository with **Issues: Read and write**. Review the count and destination before choosing **Export**.
+
+Export sends titles, descriptions, types and status to GitHub. Screenshots stay in BugsTow. Completed issues are closed after creation; issues already linked to GitHub are skipped. Each new link is saved immediately so later exports skip it. The token is used only for this operation and is never saved. Team export runs through your server and respects `BUGSTOW_OFFLINE`.
+
+Keep the dialog open until it finishes. If GitHub refuses an issue, export stops and reports partial progress. After a network interruption, check GitHub before retrying: GitHub may have created the last issue even if its response was lost. If closing an issue fails, the result includes its URL so you can close it manually.

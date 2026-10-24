@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BugsTow Capture</title>
+  <style>
+    body{font:14px system-ui,sans-serif;width:320px;margin:0;padding:16px;color:#12233b;background:#fff}
+    h1{font-size:18px;margin:0 0 12px} label{display:block;font-weight:600;margin:12px 0 5px}
+    input{box-sizing:border-box;width:100%;padding:8px;border:1px solid #b9c2ce;border-radius:6px}
+    button{padding:8px 10px;border:1px solid #9daabe;border-radius:6px;background:#fff;color:#12233b;cursor:pointer}
+    button:hover{background:#f0f4f8} button:disabled{opacity:.5;cursor:default}
+    .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.primary{background:#0f766e;color:#fff;border-color:#0f766e}
+    .primary:hover{background:#0c625b} p{font-size:12px;line-height:1.4;color:#536070;margin:10px 0 0}
+    #preview{display:none;margin-top:14px;border-top:1px solid #dce1e8;padding-top:12px;overflow-wrap:anywhere}
+    #preview img{max-width:100%;max-height:150px;object-fit:contain;border:1px solid #ddd}
+    #status{min-height:1.3em} @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+  </style>
+</head>
+<body>
+  <h1>BugsTow Capture</h1>
+  <label for="target">Your BugsTow address</label>
+  <input id="target" type="url" placeholder="http://localhost:5757" autocomplete="url" />
+  <div class="row"><button id="save" type="button">Save address</button></div>
+  <p>Only the address you approve gets access. Use HTTPS for a Team server on another computer.</p>
+  <div class="row"><button id="capture" type="button">Capture page</button><button id="screenshot" type="button">Capture screenshot</button></div>
+  <section id="preview" aria-label="Capture preview">
+    <strong id="title"></strong><p id="url"></p><p id="selection"></p><img id="image" alt="Screenshot preview" />
+    <div class="row"><button id="open" type="button" class="primary">Open draft in BugsTow</button></div>
+  </section>
+  <p id="status" role="status"></p>
+  <script src="popup.js"></script>
+</body>
+</html>

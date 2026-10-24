@@ -9,6 +9,8 @@ export interface ToastMessage {
   id: string
   text: string
   type?: 'success' | 'error' | 'info'
+  actionLabel?: string
+  onAction?: () => void
 }
 
 export function ToastContainer({ toasts }: { toasts: ToastMessage[] }) {
@@ -25,6 +27,7 @@ export function ToastContainer({ toasts }: { toasts: ToastMessage[] }) {
             <Check size={16} className="text-emerald-400 shrink-0" />
           )}
           <span>{t.text}</span>
+          {t.onAction && <button type="button" onClick={t.onAction} className="pointer-events-auto underline font-semibold" aria-label={t.actionLabel || 'Undo'}>{t.actionLabel || 'Undo'}</button>}
         </div>
       ))}
     </div>

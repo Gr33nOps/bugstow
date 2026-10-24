@@ -41,6 +41,7 @@ export function AppHeader({
 }: AppHeaderProps) {
   const names = {
     inbox: "Open issues",
+    trash: "Trash",
     fixed: "Completed",
     projects: "Projects",
     settings: "Settings",

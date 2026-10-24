@@ -4,6 +4,7 @@ import { clearPendingInvite, displayLogin, pendingInvite } from '../../lib/login
 import { TeamAuthGate } from './TeamAuthGate'
 import { TeamApp } from './TeamApp'
 import type { Project } from '../../types'
+import type { ExtensionCaptureDraft } from '../../lib/extensionCapture'
 
 function Loading() {
   return (
@@ -59,12 +60,16 @@ export default function TeamRoot({
   onUseLocal,
   localProjectToCopy,
   onLocalProjectCopyClosed,
+  captureDraft,
+  onCaptureHandled,
 }: {
   setupComplete: boolean
   offline: boolean
   onUseLocal: () => void
   localProjectToCopy?: Pick<Project, 'id' | 'name'> | null
   onLocalProjectCopyClosed?: () => void
+  captureDraft?: ExtensionCaptureDraft | null
+  onCaptureHandled?: () => void
 }) {
   const session = useSession()
   const signedIn = Boolean(session.data?.user)
@@ -87,6 +92,8 @@ export default function TeamRoot({
         offline={offline}
         localProjectToCopy={localProjectToCopy}
         onLocalProjectCopyClosed={onLocalProjectCopyClosed}
+        captureDraft={captureDraft}
+        onCaptureHandled={onCaptureHandled}
       />
     </>
   )

@@ -16,6 +16,7 @@ import {
 import type { Issue, Project } from '../../../types'
 import { TypeBadge, timeAgo } from '../../common/Icon'
 import { placeFloatingMenu } from '../../../lib/floatingMenu'
+import { PriorityBadge, STATUS_LABELS } from '../../common/IssueReportFields'
 
 interface IssueRowProps {
   issue: Issue
@@ -119,6 +120,8 @@ export function IssueRow({
         </p>
         <div className="flex items-center gap-2 mt-1 min-w-0 text-xs text-slate-500 dark:text-slate-400">
           <TypeBadge type={issue.type} customLabel={issue.customType} />
+          <PriorityBadge priority={issue.priority} />
+          {(issue.status === 'in_progress' || issue.status === 'blocked') && <span className="whitespace-nowrap">{STATUS_LABELS[issue.status]}</span>}
           <span className="@xl:hidden flex items-center gap-2 min-w-0">
             <span aria-hidden="true">·</span>
             {project ? (
@@ -170,13 +173,13 @@ export function IssueRow({
           type="button"
           onClick={onToggleFixed}
           className={`p-2 rounded-lg transition-colors ${
-            issue.status === 'open'
+            issue.status !== 'fixed'
               ? 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
               : 'text-emerald-600 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
-          title={issue.status === 'open' ? 'Mark completed' : 'Reopen Issue'}
+          title={issue.status !== 'fixed' ? 'Mark completed' : 'Reopen Issue'}
         >
-          {issue.status === 'open' ? <Check size={16} /> : <RotateCcw size={16} />}
+          {issue.status !== 'fixed' ? <Check size={16} /> : <RotateCcw size={16} />}
         </button>
       </div>
 
@@ -238,7 +241,7 @@ export function IssueRow({
             }}
             className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2.5"
           >
-            {issue.status === 'open' ? (
+            {issue.status !== 'fixed' ? (
               <>
                 <Check size={15} className="text-emerald-500" aria-hidden="true" />
                 <span>Mark completed</span>

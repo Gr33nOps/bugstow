@@ -1,6 +1,9 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { X, Image as ImageIcon, ChevronDown, AlertCircle, Plus } from 'lucide-react'
-import type { Project, IssueType } from '../../../types'
+import type { Project, Issue, IssueType, IssuePriority, IssueSeverity, IssueDetails } from '../../../types'
+import { findSimilarIssues } from '../../../lib/similarIssues'
+import { DuplicateSuggestions } from '../../common/DuplicateSuggestions'
+import { IssueReportFields } from '../../common/IssueReportFields'
 import { normalizeCustomBadge } from '../../../lib/writingAssist'
 import { WritingTools } from '../../common/WritingTools'
 
@@ -13,8 +16,11 @@ interface AttachedScreenshot {
 
 interface NewIssueModalProps {
   projects: Project[]
+  issues: Issue[]
   defaultProjectId: string | null
   initialFile?: File | null
+  initialTitle?: string
+  initialDescription?: string
   onSave: (
     data: {
       title: string
@@ -22,6 +28,9 @@ interface NewIssueModalProps {
       projectId: string | null
       type: IssueType
       customType?: string
+      priority: IssuePriority
+      severity: IssueSeverity | null
+      details: IssueDetails
     },
     screenshotBlob?: Blob | null,
     filename?: string,
@@ -35,22 +44,30 @@ const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 
 export function NewIssueModal({
   projects,
+  issues,
   defaultProjectId,
   initialFile,
+  initialTitle,
+  initialDescription,
   onSave,
   onClose,
 }: NewIssueModalProps) {
-  const [title, setTitle] = useState('')
-  const [desc, setDesc] = useState('')
+  const [title, setTitle] = useState(initialTitle || '')
+  const [desc, setDesc] = useState(initialDescription || '')
   const [projectId, setProjectId] = useState<string | null>(defaultProjectId)
   const [typeChoice, setTypeChoice] = useState<IssueType | 'custom'>('bug')
   const [customType, setCustomType] = useState('')
+  const [priority, setPriority] = useState<IssuePriority>('medium')
+  const [severity, setSeverity] = useState<IssueSeverity | null>(null)
+  const [details, setDetails] = useState<IssueDetails>({})
   const [screenshots, setScreenshots] = useState<AttachedScreenshot[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
+  const similar = useMemo(() => findSimilarIssues(title, desc, issues), [title, desc, issues])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const initialFileHandled = useRef<File | null>(null)
   const screenshotsRef = useRef<AttachedScreenshot[]>([])
   screenshotsRef.current = screenshots
 
@@ -84,7 +101,8 @@ export function NewIssueModal({
 
   // Process initial pasted file if provided
   useEffect(() => {
-    if (initialFile) {
+    if (initialFile && initialFileHandled.current !== initialFile) {
+      initialFileHandled.current = initialFile
       addFiles([initialFile])
     }
   }, [initialFile, addFiles])
@@ -153,6 +171,9 @@ export function NewIssueModal({
           projectId,
           type: typeChoice === 'custom' ? 'idea' : typeChoice,
           customType: typeChoice === 'custom' ? normalizeCustomBadge(customType) : undefined,
+          priority,
+          severity: typeChoice === 'bug' ? severity : null,
+          details,
         },
         first ? first.blob : null,
         first ? first.filename : undefined,
@@ -260,6 +281,8 @@ export function NewIssueModal({
           />
         </div>
 
+        <DuplicateSuggestions issues={similar} />
+
         {/* Project & Type selectors */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* Project dropdown */}
@@ -326,6 +349,8 @@ export function NewIssueModal({
           </div>
         )}
 
+
+        <IssueReportFields priority={priority} onPriorityChange={setPriority} severity={severity} onSeverityChange={setSeverity} details={details} onDetailsChange={setDetails} bug={typeChoice === 'bug'} />
 
         <div
           className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 p-4 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-brand hover:bg-slate-50 dark:hover:bg-slate-800/70 transition-colors relative group"

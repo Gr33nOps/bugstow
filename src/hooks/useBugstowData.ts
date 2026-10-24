@@ -19,6 +19,7 @@ import {
 
 export function useBugstowData() {
   const [issues, setIssues] = useState<Issue[]>([])
+  const [trashIssues, setTrashIssues] = useState<Issue[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [settings, setSettings] = useState<ApplicationSettings | null>(null)
   const [loading, setLoading] = useState(true)
@@ -67,13 +68,15 @@ export function useBugstowData() {
   const refreshData = useCallback(async () => {
     try {
       setError(null)
-      const [allIssues, allProjects, appSettings] = await Promise.all([
+      const [allIssues, trashed, allProjects, appSettings] = await Promise.all([
         issueRepo.getAll(),
+        issueRepo.getTrash(),
         projectRepo.getAll(),
         settingsRepo.get()
       ])
 
-      setIssues(allIssues)
+      setIssues(allIssues.filter(issue => !issue.deletedAt))
+      setTrashIssues(trashed)
       setProjects(allProjects)
       setSettings(appSettings)
 
@@ -114,6 +117,9 @@ export function useBugstowData() {
       projectId: string | null
       type: IssueType
       customType?: string
+      priority?: import('../types').IssuePriority
+      severity?: import('../types').IssueSeverity | null
+      details?: import('../types').IssueDetails
       status?: IssueStatus
     },
     screenshotBlob?: Blob | null,
@@ -232,19 +238,31 @@ export function useBugstowData() {
   const deleteIssue = useCallback(async (id: string): Promise<void> => {
     const target = issues.find(i => i.id === id)
     await issueRepo.delete(id)
-    const ids = target?.screenshotIds || (target?.screenshotId ? [target.screenshotId] : [])
-    ids.forEach(sid => {
-      if (screenshotUrlsRef.current[sid]) {
-        URL.revokeObjectURL(screenshotUrlsRef.current[sid])
-      }
-    })
-    setScreenshotUrls(prev => {
-      const copy = { ...prev }
-      ids.forEach(sid => delete copy[sid])
-      return copy
-    })
+    if (target) setTrashIssues(prev => [{ ...target, deletedAt: new Date().toISOString() }, ...prev])
     setIssues(prev => prev.filter(i => i.id !== id))
   }, [issueRepo, issues])
+
+  const restoreIssue = useCallback(async (id: string) => {
+    const restored = await issueRepo.restore(id)
+    setTrashIssues(prev => prev.filter(issue => issue.id !== id))
+    setIssues(prev => [restored, ...prev])
+  }, [issueRepo])
+
+  const purgeIssue = useCallback(async (id: string) => {
+    const target = trashIssues.find(issue => issue.id === id)
+    await issueRepo.purge(id)
+    setTrashIssues(prev => prev.filter(issue => issue.id !== id))
+    const ids = target?.screenshotIds || (target?.screenshotId ? [target.screenshotId] : [])
+    setScreenshotUrls(prev => {
+      const copy = { ...prev }
+      ids.forEach(sid => { if (copy[sid]) URL.revokeObjectURL(copy[sid]); delete copy[sid] })
+      return copy
+    })
+  }, [issueRepo, trashIssues])
+  const bulkUpdateIssues = useCallback(async (ids: string[], changes: Partial<Pick<Issue, 'priority' | 'status' | 'projectId'>> & { trash?: boolean }) => {
+    await issueRepo.bulkUpdate(ids, changes)
+    await refreshData()
+  }, [issueRepo, refreshData])
 
   // Create project
   const createProject = useCallback(async (name: string, color: string, description?: string): Promise<Project> => {
@@ -306,6 +324,7 @@ export function useBugstowData() {
     Object.values(screenshotUrlsRef.current).forEach(url => URL.revokeObjectURL(url))
     setScreenshotUrls({})
     setIssues([])
+    setTrashIssues([])
     setProjects([])
     await refreshData()
   }, [refreshData])
@@ -325,6 +344,7 @@ export function useBugstowData() {
 
   return {
     issues,
+    trashIssues,
     projects,
     settings,
     loading,
@@ -338,6 +358,9 @@ export function useBugstowData() {
     markFixed,
     reopenIssue,
     deleteIssue,
+    restoreIssue,
+    purgeIssue,
+    bulkUpdateIssues,
     createProject,
     updateProject,
     deleteProject,

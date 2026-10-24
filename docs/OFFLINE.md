@@ -1,12 +1,12 @@
 # Running BugsTow offline
 
 BugsTow can operate entirely offline after installation. It has no cloud
-features; the only time it reaches the internet is a GitHub import you start:
+features; the only time it reaches the internet is a GitHub import/export you start:
 
-- **Installed app:** GitHub import works out of the box and contacts GitHub
-  only at the moment you click **Import**. `BUGSTOW_OFFLINE=true` in
+- **Installed app:** GitHub import/export works out of the box and contacts GitHub
+  only at the moment you click **Import** or **Export**. `BUGSTOW_OFFLINE=true` in
   `bugstow.env` switches it off entirely.
-- **Team server:** GitHub import is off (`BUGSTOW_OFFLINE=true`, the default)
+- **Team server:** GitHub import/export is off (`BUGSTOW_OFFLINE=true`, the default)
   until its administrator sets `BUGSTOW_OFFLINE=false`.
 
 Step-by-step installation, HTTPS, backups, upgrades and the full test plan are
@@ -19,16 +19,16 @@ version: what "offline" means and how to check it yourself.
 
 | Component | Connects to |
 |---|---|
-| Local (browser) | Only the site it was loaded from, for its own files. No API, analytics, fonts or CDNs. Data stays in IndexedDB. When you import from GitHub: `api.github.com`, for that import. |
+| Local (browser) | Only the site it was loaded from, for its own files. No API, analytics, fonts or CDNs. Data stays in IndexedDB. When you import from or export to GitHub: `api.github.com`, for that operation. |
 | Team (browser) | Only its own BugsTow server. |
-| Team server / installed app | Nothing, except `api.github.com` when someone runs a GitHub import (installed app: allowed unless `BUGSTOW_OFFLINE=true`; team server: only with `BUGSTOW_OFFLINE=false`). |
+| Team server / installed app | Nothing, except `api.github.com` when someone runs a GitHub import/export (installed app: allowed unless `BUGSTOW_OFFLINE=true`; team server: only with `BUGSTOW_OFFLINE=false`). |
 | Authentication (better-auth) | Nothing. Local SQLite; its optional telemetry is forced off. |
 | Updates | Nothing. There is no update check. |
 
 Browsers enforce this as well: a Team server sends a Content-Security-Policy
 with `connect-src 'self'`, so pages it serves cannot open connections to other
 hosts. The installed desktop app adds exactly one host, `https://api.github.com`,
-for Local's GitHub import (and drops it with `BUGSTOW_OFFLINE=true`). The full audit is in
+for Local's GitHub import/export (and drops it with `BUGSTOW_OFFLINE=true`). The full audit is in
 [`RELEASE_OFFLINE.md` §11](RELEASE_OFFLINE.md#11-network-connections-audited).
 
 ## Where data is stored
@@ -71,7 +71,7 @@ the Network tab shows only the site's own files.
 
 ## Limitations
 
-- GitHub import needs the internet (and is off on a team server in offline mode).
+- GitHub import/export needs the internet (and is off on a team server in offline mode).
 - Building the bundle needs the internet once; installing and running do not.
 - Self-signed HTTPS shows a warning until each device trusts the certificate.
 - The Team server must be running for teammates to reach shared data.

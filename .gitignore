@@ -54,3 +54,5 @@ release/
 
 # Browser-test artifacts
 .playwright-mcp/
+test-results/
+playwright-report/

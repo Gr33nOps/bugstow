@@ -2,6 +2,10 @@ import type { Issue, Project, Screenshot, ApplicationSettings, IssueStatus } fro
 
 export interface IIssueRepository {
   getAll(): Promise<Issue[]>
+  getTrash(): Promise<Issue[]>
+  restore(id: string): Promise<Issue>
+  purge(id: string): Promise<void>
+  bulkUpdate(ids: string[], changes: Partial<Pick<Issue, 'priority' | 'status' | 'projectId'>> & { trash?: boolean }): Promise<void>
   getById(id: string): Promise<Issue | undefined>
   getByProject(projectId: string | null): Promise<Issue[]>
   getByStatus(status: IssueStatus): Promise<Issue[]>

@@ -1,4 +1,5 @@
 import { getDB, DEFAULT_SETTINGS } from '../storage/db'
+import { normalizeIssueFields } from '../lib/issueWorkflow'
 import type { Issue, Project, Screenshot, ApplicationSettings, IssueStatus } from '../types'
 import type {
   IIssueRepository,
@@ -19,33 +20,72 @@ export function generateUUID(): string {
 }
 
 export class IndexedDbIssueRepository implements IIssueRepository {
+  async getTrash(): Promise<Issue[]> {
+    const db = await getDB()
+    return (await db.getAll('issues')).filter(issue => Boolean(issue.deletedAt)).map(normalizeIssueFields)
+  }
+
+  async bulkUpdate(ids: string[], changes: Partial<Pick<Issue, 'priority' | 'status' | 'projectId'>> & { trash?: boolean }): Promise<void> {
+    if (ids.length < 1 || ids.length > 200 || new Set(ids).size !== ids.length) throw new Error('Select 1 to 200 distinct issues')
+    const db = await getDB()
+    const tx = db.transaction('issues', 'readwrite')
+    try {
+      const store = tx.objectStore('issues')
+      const found: Issue[] = []
+      for (const id of ids) {
+        const issue = await store.get(id)
+        if (!issue || issue.deletedAt) throw new Error('An issue is unavailable')
+        found.push(issue)
+      }
+      const timestamp = new Date().toISOString()
+      for (const issue of found) {
+        const { trash, ...fields } = changes
+        await store.put({ ...issue, ...fields, ...(trash ? { deletedAt: timestamp } : {}), updatedAt: timestamp })
+      }
+      await tx.done
+    } catch (error) {
+      try { tx.abort() } catch { /* already closed */ }
+      await tx.done.catch(() => {})
+      throw error
+    }
+  }
+
+  async restore(id: string): Promise<Issue> {
+    const db = await getDB()
+    const issue = await db.get('issues', id)
+    if (!issue?.deletedAt) throw new Error('Issue is not in Trash')
+    const restored = { ...issue, deletedAt: undefined, updatedAt: new Date().toISOString() }
+    await db.put('issues', restored)
+    return restored
+  }
   async getAll(): Promise<Issue[]> {
     const db = await getDB()
     const all = await db.getAll('issues')
     // Return newest first by default
-    return all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    return all.filter(issue => !issue.deletedAt).map(normalizeIssueFields).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }
 
   async getById(id: string): Promise<Issue | undefined> {
     const db = await getDB()
-    return db.get('issues', id)
+    const issue = await db.get('issues', id)
+    return issue && !issue.deletedAt ? normalizeIssueFields(issue) : undefined
   }
 
   async getByProject(projectId: string | null): Promise<Issue[]> {
     const db = await getDB()
     if (projectId === null) {
       const all = await db.getAll('issues')
-      return all.filter(i => i.projectId === null)
+      return all.filter(i => i.projectId === null && !i.deletedAt).map(normalizeIssueFields)
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     }
     const list = await db.getAllFromIndex('issues', 'by-project', projectId)
-    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    return list.filter(i => !i.deletedAt).map(normalizeIssueFields).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }
 
   async getByStatus(status: IssueStatus): Promise<Issue[]> {
     const db = await getDB()
     const list = await db.getAllFromIndex('issues', 'by-status', status)
-    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    return list.filter(i => !i.deletedAt).map(normalizeIssueFields).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }
 
   async create(
@@ -100,6 +140,9 @@ export class IndexedDbIssueRepository implements IIssueRepository {
         type: issueData.type,
         ...(issueData.customType ? { customType: issueData.customType } : {}),
         status: issueData.status || 'open',
+        priority: issueData.priority || 'medium',
+        severity: issueData.severity || null,
+        details: issueData.details || {},
         screenshotId: screenshotIds[0] || null,
         screenshotIds,
         ...(issueData.githubUrl ? { githubUrl: issueData.githubUrl, githubNumber: issueData.githubNumber } : {}),
@@ -128,7 +171,7 @@ export class IndexedDbIssueRepository implements IIssueRepository {
     }
 
     const updated: Issue = {
-      ...existing,
+      ...normalizeIssueFields(existing),
       ...updates,
       title: updates.title !== undefined ? updates.title.trim() : existing.title,
       updatedAt: new Date().toISOString()
@@ -182,7 +225,7 @@ export class IndexedDbIssueRepository implements IIssueRepository {
     }
 
     const updated: Issue = {
-      ...existing,
+      ...normalizeIssueFields(existing),
       ...updates,
       title: updates.title !== undefined ? updates.title.trim() : existing.title,
       screenshotId,
@@ -244,7 +287,7 @@ export class IndexedDbIssueRepository implements IIssueRepository {
 
     const finalScreenshotIds = [...keepIds, ...addedIds]
     const updated: Issue = {
-      ...existing,
+      ...normalizeIssueFields(existing),
       ...updates,
       title: updates.title !== undefined ? updates.title.trim() : existing.title,
       screenshotId: finalScreenshotIds[0] || null,
@@ -259,12 +302,18 @@ export class IndexedDbIssueRepository implements IIssueRepository {
 
   async delete(id: string): Promise<void> {
     const db = await getDB()
+    const issue = await db.get('issues', id)
+    if (issue && !issue.deletedAt) await db.put('issues', { ...issue, deletedAt: new Date().toISOString() })
+  }
+
+  async purge(id: string): Promise<void> {
+    const db = await getDB()
     const tx = db.transaction(['issues', 'screenshots'], 'readwrite')
     const issueStore = tx.objectStore('issues')
     const screenshotStore = tx.objectStore('screenshots')
 
     const existing = await issueStore.get(id)
-    if (existing) {
+    if (existing?.deletedAt) {
       const idsToDelete = new Set<string>()
       if (existing.screenshotId) idsToDelete.add(existing.screenshotId)
       if (existing.screenshotIds) {

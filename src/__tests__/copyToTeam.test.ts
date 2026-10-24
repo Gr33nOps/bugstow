@@ -77,4 +77,16 @@ describe('copying Local into a team workspace', () => {
     // Only the newly copied issue's screenshot is uploaded.
     expect(calls.filter(c => c.path.startsWith('screenshots'))).toHaveLength(1)
   })
+
+  it('does not resurrect trashed issues and keeps fix references', async () => {
+    const backup: BackupData = { ...local, issues: [
+      { ...local.issues[0], fixReferences: ['https://github.com/acme/web/pull/3'] },
+      { ...local.issues[2], deletedAt: at },
+    ] }
+    const result = await migrateBackupToTeam(backup, 'team-1')
+    expect(result.issues).toBe(1)
+    const created = calls.filter(call => call.method === 'POST' && call.path.startsWith('issues'))
+    expect(created).toHaveLength(1)
+    expect(created[0].body?.fixReferences).toEqual(['https://github.com/acme/web/pull/3'])
+  })
 })

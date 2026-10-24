@@ -1,4 +1,5 @@
 import { getDB } from '../storage/db'
+import { normalizeIssueFields } from '../lib/issueWorkflow'
 import type { BackupData, EncryptedBackupPayload, ExportPayload, Project, Issue, Screenshot, ApplicationSettings } from '../types'
 export type { BackupData, EncryptedBackupPayload, ExportPayload }
 import { IndexedDbSettingsRepository } from '../repositories/indexedDbRepositories'
@@ -316,7 +317,7 @@ export async function restoreBackupData(backupData: BackupData): Promise<void> {
 
     // Populate issues
     for (const issue of backupData.issues) {
-      await issueStore.put(issue)
+      await issueStore.put(normalizeIssueFields(issue))
     }
 
     // Populate screenshots

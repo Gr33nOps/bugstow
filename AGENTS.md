@@ -24,6 +24,8 @@ No user/team data touches the maintainer's infrastructure.
 - `src/hooks/useTeamData.ts` - Team data via the server API (optimistic concurrency on issue edits)
 - `src/services/` - `backupService` (encrypted export/import), `promptService`, `storageService`, `teamApi`, `teamMigration` (Copy Local issues → Team: reads this browser directly or a backup file; keeps status/GitHub link, reuses projects by name)
 - `src/components/team/` - `ModePicker`, `SelfHostInfo` (eager); `TeamRoot` → `TeamAuthGate`, `TeamApp` (lazy-loaded chunk, only fetched when served by the BugsTow server)
+- `src/components/common/` - Shared Trash, Kanban, prompt-template, duplicate-suggestion, and GitHub fix-reference controls
+- `extension/` - Optional Chrome/Edge capture extension; explicit page capture and reviewable issue handoff, no automatic issue creation
 - `src/lib/connection.ts` - localhost / LAN HTTP / LAN HTTPS classification for honest warnings
 - `src/lib/retiredSync.ts` - Deletes the `bugstow_sync` IndexedDB (OAuth tokens/key) left by the cloud sync removed in 2.6
 - `server/` - Self-hosted team server (Express, better-auth, SQLite, filesystem screenshots)
@@ -65,7 +67,7 @@ No user/team data touches the maintainer's infrastructure.
 
 ## Constraints
 
-- No cloud features at all (removed in 2.6): no sync, no cloud backups, no OAuth to storage providers, no hosted site, no cloud dependencies (Neon, Cloudflare R2, Vercel functions). The only outside host the app talks to is `api.github.com` for a GitHub import the user starts.
+- No cloud features at all (removed in 2.6): no sync, no cloud backups, no OAuth to storage providers, no hosted site, no cloud dependencies (Neon, Cloudflare R2, Vercel functions). The only outside host the app talks to is `api.github.com` for a GitHub import or export the user starts.
 - Two modes only: Local data stays in the browser; Team data stays on the computer running BugsTow.
 - The desktop CSP `connect-src` is `'self' https://api.github.com` (just `'self'` with BUGSTOW_OFFLINE=true); keep it that narrow.
 - Migrations must remain additive/non-destructive.

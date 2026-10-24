@@ -31,8 +31,10 @@ import {
 import { formatBytes } from "../../../services/storageService"
 import { useStorageEstimate } from "../../../hooks/useStorageEstimate"
 import { isDesktopEdition } from "../../../lib/teamServer"
+import { downloadPortableIssues, type PortableIssue } from '../../../services/portabilityExport'
 
 interface SettingsViewProps {
+  portableIssues: PortableIssue[]
   theme: Theme
   onSetTheme: (theme: Theme) => void
   onClearAllData: () => Promise<void>
@@ -47,6 +49,7 @@ interface SettingsViewProps {
 }
 
 export function SettingsView({
+  portableIssues,
   theme,
   onSetTheme,
   onClearAllData,
@@ -246,6 +249,15 @@ export function SettingsView({
               </span>
             </button>
 
+            <div className="px-5 py-4">
+              <span className="text-[15px] font-semibold">Download issues</span>
+              <p className="mt-1 text-xs text-slate-500">CSV and Markdown include issue text and links. Use a backup to keep screenshots and restore data.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={() => { downloadPortableIssues(portableIssues, 'csv'); onToast('CSV downloaded') }} className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-700">Download CSV</button>
+                <button type="button" onClick={() => { downloadPortableIssues(portableIssues, 'markdown'); onToast('Markdown downloaded') }} className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-700">Download Markdown</button>
+              </div>
+            </div>
+
             {/* Restore backup button */}
             <button
               type="button"
@@ -278,7 +290,7 @@ export function SettingsView({
                   </p>
                   <p className="text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
                     Local issues are saved only in this browser, on this
-                    device. BugsTow doesn't upload them anywhere. Clearing this
+                    device. Only an export you start sends issue text to GitHub. Clearing this
                     browser's site data deletes them, so download a backup now
                     and then.
                   </p>

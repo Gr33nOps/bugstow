@@ -191,7 +191,7 @@ export function planImport(
       continue
     }
     const status = gh.closed ? 'fixed' : 'open'
-    if (here.status !== status) setStatus.push({ id: here.id, status })
+    if (here.status === 'fixed' && status === 'open' || here.status !== 'fixed' && status === 'fixed') setStatus.push({ id: here.id, status })
     else unchanged++
   }
   return { create, setStatus, unchanged }

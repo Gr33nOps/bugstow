@@ -1,5 +1,10 @@
-import type { IssueType } from '../types'
-import type { Team, TeamMember, TeamInvite, TeamProject, TeamIssue, CurrentUser } from '../types/team'
+import type { IssueType, IssuePriority, IssueSeverity, IssueDetails, IssueStatus } from '../types'
+import type { ExportSummary } from '../../server/src/githubExport'
+
+export function exportGithubIssues(teamId: string, repo: string, token: string, issueIds: string[]): Promise<ExportSummary> {
+  return api('github-export', { method: 'POST', body: JSON.stringify({ teamId, repo, token, issueIds }) })
+}
+import type { Team, TeamMember, TeamInvite, TeamProject, TeamIssue, TeamIssueEvent, CurrentUser } from '../types/team'
 
 /** An API error with the HTTP status and, when present, the server's error code and body. */
 export class TeamApiError extends Error {
@@ -122,7 +127,7 @@ export async function listIssues(teamId: string): Promise<TeamIssue[]> {
 }
 export async function createIssue(
   teamId: string,
-  data: { title: string; description: string; type: IssueType; customType?: string; projectId: string | null; assigneeId: string | null }
+  data: { title: string; description: string; type: IssueType; customType?: string; projectId: string | null; assigneeId: string | null; priority?: IssuePriority; severity?: IssueSeverity | null; details?: IssueDetails }
 ): Promise<TeamIssue> {
   return (
     await api<{ issue: TeamIssue }>(`issues?teamId=${encodeURIComponent(teamId)}`, {
@@ -143,10 +148,14 @@ export async function copyIssueIn(
     description: string
     type: IssueType
     customType?: string
-    status: 'open' | 'fixed'
+    status: IssueStatus
+    priority?: IssuePriority
+    severity?: IssueSeverity | null
+    details?: IssueDetails
     projectId: string | null
     githubUrl?: string
     githubNumber?: number
+    fixReferences?: string[]
   }
 ): Promise<{ issue: TeamIssue; existing?: boolean }> {
   return api(`issues?teamId=${encodeURIComponent(teamId)}`, { method: 'POST', body: JSON.stringify(data) })
@@ -163,9 +172,13 @@ export async function updateIssue(
     description: string
     type: IssueType
     customType: string | null
-    status: 'open' | 'fixed'
+    status: IssueStatus
+    priority: IssuePriority
+    severity: IssueSeverity | null
+    details: IssueDetails
     projectId: string | null
     assigneeId: string | null
+    fixReferences: string[]
   }>,
   expectedUpdatedAt?: string
 ): Promise<TeamIssue> {
@@ -178,6 +191,30 @@ export async function updateIssue(
 }
 export async function deleteIssue(id: string): Promise<void> {
   await api(`issues?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+export async function listTrash(teamId: string): Promise<TeamIssue[]> {
+  return (await api<{ issues: TeamIssue[] }>(`issues/trash?teamId=${encodeURIComponent(teamId)}`)).issues
+}
+export async function getLinkedIssue(id: string): Promise<TeamIssue> {
+  return (await api<{ issue: TeamIssue }>(`issues/link?id=${encodeURIComponent(id)}`)).issue
+}
+export async function restoreIssue(id: string): Promise<TeamIssue> {
+  return (await api<{ issue: TeamIssue }>(`issues/restore?id=${encodeURIComponent(id)}`, { method: 'POST' })).issue
+}
+export async function purgeIssue(id: string): Promise<void> {
+  await api(`issues/purge?id=${encodeURIComponent(id)}`, { method: 'DELETE', body: JSON.stringify({ confirm: true }) })
+}
+export async function listIssueActivity(id: string): Promise<TeamIssueEvent[]> {
+  return (await api<{ events: TeamIssueEvent[] }>(`issues/activity?id=${encodeURIComponent(id)}`)).events
+}
+export async function addIssueComment(id: string, body: string): Promise<TeamIssueEvent> {
+  return (await api<{ comment: TeamIssueEvent }>(`issues/comments?id=${encodeURIComponent(id)}`, { method: 'POST', body: JSON.stringify({ body }) })).comment
+}
+export async function deleteIssueComment(id: string, commentId: string): Promise<void> {
+  await api(`issues/comments?id=${encodeURIComponent(id)}&commentId=${encodeURIComponent(commentId)}`, { method: 'DELETE' })
+}
+export async function bulkUpdateIssues(teamId: string, ids: string[], changes: Record<string, unknown>): Promise<number> {
+  return (await api<{ updated: number }>('issues/bulk', { method: 'POST', body: JSON.stringify({ teamId, ids, changes }) })).updated
 }
 
 // ── Screenshots ─────────────────────────────────────────────────────────────

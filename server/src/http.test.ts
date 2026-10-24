@@ -132,6 +132,12 @@ test('teammates join by invite', async () => {
   carolId = c.data.user.id
 })
 
+test('a member cannot delete a project', async () => {
+  const project = (await A(`/api/projects?teamId=${teamId}`, { method: 'POST', body: { name: 'Keep this project' } })).data.project
+  assert.equal((await C(`/api/projects?id=${project.id}`, { method: 'DELETE' })).status, 403)
+  assert.ok((await A(`/api/projects?teamId=${teamId}`)).data.projects.some((item: { id: string }) => item.id === project.id))
+})
+
 test('a team admin cannot remove the owner but can remove members', async () => {
   const kickOwner = await B(`/api/members?teamId=${teamId}&userId=${ownerId}`, { method: 'DELETE' })
   assert.equal(kickOwner.status, 403)
@@ -381,8 +387,15 @@ test('GitHub import: importing again adds nothing new and follows GitHub open/cl
   fakeRepos['acme/web'].issues[1].state = 'closed'
   const closed = await imp({ repo: 'acme/web', includeClosed: true })
   assert.deepEqual([closed.data.imported, closed.data.updated], [0, 1])
-  const issues = (await A(`/api/issues?teamId=${teamId}`)).data.issues as Array<{ title: string; status: string }>
+  const issues = (await A(`/api/issues?teamId=${teamId}`)).data.issues as Array<{ id: string; title: string; status: string }>
   assert.equal(issues.find(i => i.title === 'Login fails')?.status, 'fixed')
+  const localWork = issues.find(i => i.title === 'Checkout overlaps footer')!
+  assert.equal((await A(`/api/issues?id=${localWork.id}`, { method: 'PATCH', body: { status: 'in_progress' } })).status, 200)
+  assert.equal((await imp({ repo: 'acme/web' })).data.updated, 0, 'open GitHub issue keeps local progress')
+  assert.equal((await A(`/api/issues?teamId=${teamId}`)).data.issues.find((i: { id: string }) => i.id === localWork.id).status, 'in_progress')
+  fakeRepos['acme/web'].issues[1].state = 'open'
+  assert.equal((await imp({ repo: 'acme/web' })).data.updated, 1, 'reopened GitHub issue becomes Open')
+  assert.equal((await A(`/api/issues?teamId=${teamId}`)).data.issues.find((i: { title: string }) => i.title === 'Login fails').status, 'open')
 })
 
 test('GitHub import: another repository with the same issue numbers is not skipped', async () => {
@@ -483,3 +496,124 @@ test('copying Local issues in keeps completed status and GitHub links, and never
   assert.equal(odd.data.issue.github_url, null)
 })
 
+
+test('GitHub export enforces membership and offline mode, saves links and skips repeat exports', async () => {
+  const { config } = await import('./config.ts')
+  const created = await A(`/api/issues?teamId=${teamId}`, { method: 'POST', body: { title: 'Export me', description: 'Details', status: 'fixed' } })
+  const id = created.data.issue.id
+  const body = { teamId, repo: 'acme/export', token: 'write-key', issueIds: [id] }
+  config.offline = true
+  assert.equal((await A('/api/github-export', { method: 'POST', body })).status, 403)
+  config.offline = false
+  assert.equal((await C('/api/github-export', { method: 'POST', body })).status, 403)
+  assert.equal((await A('/api/github-export', { method: 'POST', body: { ...body, issueIds: ['missing'] } })).status, 400)
+  const trashed = (await A(`/api/issues?teamId=${teamId}`, { method: 'POST', body: { title: 'Do not export from Trash' } })).data.issue.id
+  await A(`/api/issues?id=${trashed}`, { method: 'DELETE' })
+  assert.equal((await A('/api/github-export', { method: 'POST', body: { ...body, issueIds: [trashed] } })).status, 400)
+  let creates = 0
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    if (!String(input).startsWith('https://api.github.com/')) return realFetch(input, init)
+    assert.equal((init?.headers as Record<string, string>).Authorization, 'Bearer write-key')
+    if (init?.method === 'POST') creates++
+    return new Response(JSON.stringify({ number: 23, html_url: 'https://github.com/acme/export/issues/23' }), { status: 201 })
+  }) as typeof fetch
+  try {
+    const first = await A('/api/github-export', { method: 'POST', body })
+    assert.equal(first.status, 200)
+    assert.equal(first.data.exported, 1)
+    const again = await A('/api/github-export', { method: 'POST', body })
+    assert.equal(again.data.skipped, 1)
+    assert.equal(creates, 1)
+    const issues = (await A(`/api/issues?teamId=${teamId}`)).data.issues
+    assert.equal(issues.find((i: any) => i.id === id).github_url, 'https://github.com/acme/export/issues/23')
+  } finally { globalThis.fetch = realFetch }
+})
+
+test('issue report metadata survives Team create, edit, and read; old defaults are Medium', async () => {
+  const plain = await A(`/api/issues?teamId=${teamId}`, { method: 'POST', body: { title: 'Plain report' } })
+  assert.equal(plain.status, 201)
+  assert.equal(plain.data.issue.priority, 'medium')
+  const created = await A(`/api/issues?teamId=${teamId}`, { method: 'POST', body: {
+    title: 'Bug report', status: 'in_progress', priority: 'high', severity: 'major',
+    details: { stepsToReproduce: 'Open settings', actualBehavior: 'Crash' },
+  } })
+  assert.equal(created.status, 201, JSON.stringify(created.data))
+  assert.equal(created.data.issue.status, 'in_progress')
+  const updated = await A(`/api/issues?id=${created.data.issue.id}`, { method: 'PATCH', body: { status: 'blocked', priority: 'critical', expectedUpdatedAt: created.data.issue.updated_at } })
+  assert.equal(updated.status, 200, JSON.stringify(updated.data))
+  const loaded = (await A(`/api/issues?teamId=${teamId}`)).data.issues.find((i: any) => i.id === created.data.issue.id)
+  assert.equal(loaded.status, 'blocked')
+  assert.equal(loaded.priority, 'critical')
+  assert.equal(loaded.details.stepsToReproduce, 'Open settings')
+  const rejected = await A(`/api/issues?id=${created.data.issue.id}`, { method: 'PATCH', body: { priority: 'impossible' } })
+  assert.equal(rejected.status, 400)
+})
+
+test('Trash keeps screenshots and metadata until an explicit permanent delete', async () => {
+  const made = await A(`/api/issues?teamId=${teamId}`, { method: 'POST', body: { title: 'Recover me', priority: 'high' } })
+  const id = made.data.issue.id
+  assert.equal((await A(`/api/issues?id=${id}`, { method: 'DELETE' })).status, 200)
+  assert.ok(!(await A(`/api/issues?teamId=${teamId}`)).data.issues.some((i: { id: string }) => i.id === id))
+  const trash = await A(`/api/issues/trash?teamId=${teamId}`)
+  assert.equal(trash.data.issues.find((i: { id: string }) => i.id === id).priority, 'high')
+  assert.equal((await A(`/api/issues/restore?id=${id}`, { method: 'POST' })).status, 200)
+  assert.ok((await A(`/api/issues?teamId=${teamId}`)).data.issues.some((i: { id: string }) => i.id === id))
+  await A(`/api/issues?id=${id}`, { method: 'DELETE' })
+  assert.equal((await A(`/api/issues/purge?id=${id}`, { method: 'DELETE', body: { confirm: true } })).status, 200)
+  assert.ok(!(await A(`/api/issues/trash?teamId=${teamId}`)).data.issues.some((i: { id: string }) => i.id === id))
+})
+
+test('Team comments and activity are visible only to workspace members', async () => {
+  const made = await A(`/api/issues?teamId=${teamId}`, { method: 'POST', body: { title: 'Discuss me' } })
+  const id = made.data.issue.id
+  const posted = await A(`/api/issues/comments?id=${id}`, { method: 'POST', body: { body: 'Investigating now' } })
+  assert.equal(posted.status, 201)
+  await A(`/api/issues?id=${id}`, { method: 'PATCH', body: { status: 'blocked', priority: 'high' } })
+  const timeline = await A(`/api/issues/activity?id=${id}`)
+  assert.ok(timeline.data.events.some((event: { body: string }) => event.body === 'Investigating now'))
+  assert.ok(timeline.data.events.some((event: { kind: string }) => event.kind === 'status'))
+  assert.equal((await C(`/api/issues/activity?id=${id}`)).status, 403)
+  assert.equal((await C(`/api/issues/comments?id=${id}`, { method: 'POST', body: { body: 'No access' } })).status, 403)
+  assert.equal((await B(`/api/issues/comments?id=${id}&commentId=${posted.data.comment.id}`, { method: 'DELETE' })).status, 403)
+})
+
+test('bulk changes are atomic and reject issues outside the workspace', async () => {
+  const a = (await A(`/api/issues?teamId=${teamId}`, { method: 'POST', body: { title: 'Bulk A' } })).data.issue.id
+  const b = (await A(`/api/issues?teamId=${teamId}`, { method: 'POST', body: { title: 'Bulk B' } })).data.issue.id
+  assert.equal((await A('/api/issues/bulk', { method: 'POST', body: { teamId, ids: [a, b], changes: { priority: 'critical', status: 'in_progress' } } })).status, 200)
+  const list = (await A(`/api/issues?teamId=${teamId}`)).data.issues
+  assert.ok(list.filter((i: { id: string; priority: string; status: string }) => [a, b].includes(i.id)).every((i: { priority: string; status: string }) => i.priority === 'critical' && i.status === 'in_progress'))
+  assert.equal((await A('/api/issues/bulk', { method: 'POST', body: { teamId, ids: [a, 'not-in-team'], changes: { status: 'fixed' } } })).status, 400)
+  assert.equal((await A('/api/issues/bulk', { method: 'POST', body: { teamId, ids: [a], changes: { projectId: false } } })).status, 400)
+  assert.equal((await A(`/api/issues?teamId=${teamId}`)).data.issues.find((i: { id: string }) => i.id === a).status, 'in_progress')
+})
+
+test('an exact Team issue link requires membership and hides trashed issues', async () => {
+  const id = (await A(`/api/issues?teamId=${teamId}`, { method: 'POST', body: { title: 'Link target' } })).data.issue.id
+  assert.equal((await A(`/api/issues/link?id=${id}`)).data.issue.id, id)
+  assert.equal((await C(`/api/issues/link?id=${id}`)).status, 403)
+  await A(`/api/issues?id=${id}`, { method: 'DELETE' })
+  assert.equal((await A(`/api/issues/link?id=${id}`)).status, 404)
+})
+
+test('GitHub fix references are validated and saved with Team issues', async () => {
+  const made = await A(`/api/issues?teamId=${teamId}`, { method: 'POST', body: { title: 'Linked fix' } })
+  const id = made.data.issue.id
+  const link = 'https://github.com/acme/app/pull/12'
+  const saved = await A(`/api/issues?id=${id}`, { method: 'PATCH', body: { fixReferences: [link] } })
+  assert.equal(saved.status, 200)
+  assert.deepEqual(saved.data.issue.fix_references, [link])
+  const rejected = await A(`/api/issues?id=${id}`, { method: 'PATCH', body: { fixReferences: ['https://github.com.evil.test/acme/app'] } })
+  assert.equal(rejected.status, 400)
+  assert.equal((await A(`/api/issues?id=${id}`, { method: 'PATCH', body: { fixReferences: ['https://github.com/../app'] } })).status, 400)
+  assert.deepEqual((await A(`/api/issues/link?id=${id}`)).data.issue.fix_references, [link])
+})
+
+test('deleting a Team project leaves its issues recoverable as unassigned', async () => {
+  const project = (await A(`/api/projects?teamId=${teamId}`, { method: 'POST', body: { name: 'Temporary project' } })).data.project
+  const issue = (await A(`/api/issues?teamId=${teamId}`, { method: 'POST', body: { title: 'Keep me', projectId: project.id } })).data.issue
+  assert.equal((await A(`/api/projects?id=${project.id}`, { method: 'DELETE' })).status, 200)
+  const stored = (await A(`/api/issues?teamId=${teamId}`)).data.issues.find((item: { id: string }) => item.id === issue.id)
+  assert.equal(stored.project_id, null)
+  assert.equal(stored.title, 'Keep me')
+})

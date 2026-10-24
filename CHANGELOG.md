@@ -1,13 +1,24 @@
 # Changelog
 
+## 2.9.0
+
+- Teammates can run `bugstow connect <workspace-url>` once so their installed shortcut reopens the shared Team workspace. `bugstow disconnect` returns the shortcut to this computer.
+- Local and Team issues can be exported to GitHub Issues with a user-supplied repository token. Successful exports save the GitHub link on each issue so retries skip it.
+- Local and Team issues now support Critical, High, Medium, and Low priority, optional bug severity, and expandable structured report details. Existing issues default to Medium.
+- Issue details support Open, In Progress, Blocked, and Fixed. Active lists include In Progress and Blocked; Completed continues to show Fixed. Lists can filter and sort by the new fields.
+- Copied AI prompts include priority, status, severity, and entered report details. Re-importing open GitHub issues preserves In Progress and Blocked, while a closed or reopened issue still updates to Fixed or Open.
+- Deleting an issue now moves it to Trash with Undo. Restoring keeps its screenshots and details; permanent deletion requires confirmation. Deleting a Team project leaves its issues unassigned, and only workspace owners or admins can do it.
+- Team issues now have comments and an activity timeline, plus private direct links that work after sign-in. Local and Team lists support bulk actions, date filters, and ascending or descending sorting.
+- Local and Team now offer six on-device prompt templates plus one editable template saved in the browser, duplicate suggestions during issue creation, validated GitHub fix links, and an optional keyboard-accessible Kanban board.
+- CSV and Markdown issue downloads are available alongside backups. An optional Chrome/Edge capture extension can hand off the current page, selected text, and an explicitly captured screenshot as a reviewable issue draft.
+- Playwright browser tests now cover Local and a fresh self-hosted Team server, including direct links, comments, board status changes, capture drafts, and fix references.
+
 ## 2.8.5
 
 - Team issue details now use the same clear, aligned layout as Local, including a safer delete
   confirmation and responsive controls.
 - Issues can hold several screenshots. Add or paste multiple images while creating or editing an
   issue; failed uploads no longer remove existing screenshots.
-- A teammate can run `bugstow connect <workspace-url>` once so their BugsTow shortcut opens the
-  shared Team workspace on every later launch. `bugstow disconnect` returns it to this computer.
 
 ## 2.8.4
 

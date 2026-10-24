@@ -14,8 +14,7 @@ to reproduce.
 
 ## Scope
 
-- **Local** keeps data in the browser's IndexedDB. Nothing is uploaded; BugsTow has
-  no cloud features.
+- **Local** keeps data in the browser's IndexedDB. It has no cloud sync. An explicit GitHub export uploads selected issue text to the chosen repository; screenshots are not uploaded.
 - **Team on the installed app** keeps data in a SQLite database and screenshot
   folder on that computer and listens on 127.0.0.1 only. Others can reach it only
   after an explicit choice: `bugstow start --lan` (HTTPS with a certificate made on

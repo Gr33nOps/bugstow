@@ -32,12 +32,19 @@ import {
   Link2,
   Edit3,
 } from "lucide-react"
-import { filterTeamIssues } from "../../lib/teamFilters"
+import { filterAndSortIssues, type WorkflowFilters } from '../../lib/issueWorkflow'
+import { findSimilarIssues } from '../../lib/similarIssues'
+import { DuplicateSuggestions } from '../common/DuplicateSuggestions'
+import { KanbanBoard } from '../common/KanbanBoard'
+import { downloadPortableIssues } from '../../services/portabilityExport'
+import { captureScreenshotFile, type ExtensionCaptureDraft } from '../../lib/extensionCapture'
 import { useTeamData } from "../../hooks/useTeamData"
 import { signOut, authClient } from "../../lib/authClient"
 import {
   getMe,
+  exportGithubIssues,
   resetUserPassword,
+  getLinkedIssue,
   IssueConflictError,
   listBackups,
   runBackupNow,
@@ -51,6 +58,7 @@ import {
 import { displayLogin } from "../../lib/login"
 import { connectionKind } from "../../lib/connection"
 import { GithubImportModal } from "../features/github/GithubImportModal"
+import { GithubExportModal } from "../features/github/GithubExportModal"
 import { BugstowLogoIcon, BRAND_PRIMARY, GithubMark, timeAgo } from "../common/Icon"
 import { ModeSwitch } from "../common/ModeSwitch"
 import { isDesktopEdition } from "../../lib/teamServer"
@@ -64,10 +72,13 @@ import {
 } from "../../services/backupService"
 import { migrateBackupToTeam, selectProjectBackup, type MigrationResult } from "../../services/teamMigration"
 import { getDB } from "../../storage/db"
-import type { IssueType, BackupData, EncryptedBackupPayload } from "../../types"
+import type { IssueType, IssuePriority, IssueSeverity, IssueDetails, BackupData, EncryptedBackupPayload } from "../../types"
+import { IssueReportFields, PriorityBadge, STATUS_LABELS } from '../common/IssueReportFields'
 import type { TeamIssue, TeamMember, CurrentUser } from "../../types/team"
 import { placeFloatingMenu } from "../../lib/floatingMenu"
 import { TeamIssueDetail } from "./TeamIssueDetail"
+import { TrashView } from '../common/TrashView'
+import { issueLink, readIssueLink } from '../../lib/teamIssueLinks'
 
 const TYPE_META: Record<IssueType, {
   label: string
@@ -118,6 +129,8 @@ interface TeamAppProps {
   offline?: boolean
   localProjectToCopy?: { id: string; name: string } | null
   onLocalProjectCopyClosed?: () => void
+  captureDraft?: ExtensionCaptureDraft | null
+  onCaptureHandled?: () => void
 }
 
 /**
@@ -217,6 +230,8 @@ function Workspace({
   offline = false,
   localProjectToCopy,
   onLocalProjectCopyClosed,
+  captureDraft,
+  onCaptureHandled,
   me,
 }: TeamAppProps & { me: CurrentUser }) {
   const data = useTeamData(true)
@@ -233,19 +248,72 @@ function Workspace({
   } = data
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [linkedIssue, setLinkedIssue] = useState<TeamIssue | null>(null)
+  const [linkError, setLinkError] = useState('')
+  const [trashOpen, setTrashOpen] = useState(false)
+  const [boardView, setBoardView] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [bulkAction, setBulkAction] = useState('status')
+  const [bulkValue, setBulkValue] = useState('fixed')
+  const [undoId, setUndoId] = useState<string | null>(null)
+  const clearIssueLink = () => {
+    const url = new URL(window.location.href)
+    if (!url.searchParams.has('issue')) return
+    url.searchParams.delete('issue')
+    url.searchParams.delete('team')
+    window.history.replaceState({}, '', url)
+  }
   const [query, setQuery] = useState("")
   const [projectFilter, setProjectFilter] = useState("all")
   useEffect(() => {
     setProjectFilter("all")
     setSelectedId(null)
+    setSelectedIds([])
   }, [activeTeamId])
+  useEffect(() => {
+    const link = readIssueLink(window.location.href)
+    if (!link || teams.length === 0) return
+    if (!teams.some(team => team.id === link.teamId)) { setLinkError('This issue is not available in your workspaces.'); return }
+    if (activeTeamId !== link.teamId) { setActiveTeamId(link.teamId); return }
+    let cancelled = false
+    getLinkedIssue(link.issueId).then(issue => { if (cancelled) return; setLinkedIssue(issue); setSelectedId(issue.id); setLinkError(''); setTrashOpen(false) }).catch(() => { if (cancelled) return; setLinkedIssue(null); setSelectedId(null); setLinkError('This issue is unavailable or has been moved to Trash.') })
+    return () => { cancelled = true }
+  }, [teams, activeTeamId, setActiveTeamId])
+  useEffect(() => {
+    const onPop = () => {
+      const link = readIssueLink(window.location.href)
+      if (!link) { setSelectedId(null); setLinkError(''); return }
+      if (link.teamId !== activeTeamId) setActiveTeamId(link.teamId)
+      getLinkedIssue(link.issueId).then(issue => { setLinkedIssue(issue); setSelectedId(issue.id); setLinkError('') }).catch(() => { setSelectedId(null); setLinkError('This issue is unavailable or has been moved to Trash.') })
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [activeTeamId, setActiveTeamId])
   const [typeFilter, setTypeFilter] = useState<IssueType | "all">("all")
-  const [statusFilter, setStatusFilter] = useState<"open" | "fixed" | "all">(
-    "open",
+  const [statusFilter, setStatusFilter] = useState<string>(
+    "active",
   )
+  const [priorityFilter, setPriorityFilter] = useState('all')
+  const [severityFilter, setSeverityFilter] = useState('all')
+  const [assigneeFilter, setAssigneeFilter] = useState('all')
+  const [sort, setSort] = useState<WorkflowFilters['sort']>('created')
+  const [direction, setDirection] = useState<'asc' | 'desc'>('desc')
+  const [createdFrom, setCreatedFrom] = useState('')
+  const [createdTo, setCreatedTo] = useState('')
+  const [updatedFrom, setUpdatedFrom] = useState('')
+  const [updatedTo, setUpdatedTo] = useState('')
   const [showNew, setShowNew] = useState(false)
+  const [initialCapture, setInitialCapture] = useState<ExtensionCaptureDraft | null>(null)
+  const captureFile = useMemo(() => initialCapture ? captureScreenshotFile(initialCapture) : null, [initialCapture])
+  useEffect(() => {
+    if (!captureDraft) return
+    setInitialCapture(captureDraft)
+    setShowNew(true)
+    onCaptureHandled?.()
+  }, [captureDraft, onCaptureHandled])
   const [showMembers, setShowMembers] = useState(false)
   const [showImport, setShowImport] = useState(false)
+  const [showExport, setShowExport] = useState(false)
   const [showMigrate, setShowMigrate] = useState(false)
   useEffect(() => {
     if (localProjectToCopy) setShowMigrate(true)
@@ -277,29 +345,46 @@ function Workspace({
   const [moving, setMoving] = useState<{ id: string; name: string } | null>(null)
   const canMoveProjects = activeTeam?.role === "owner" || activeTeam?.role === "admin"
   const [toast, setToast] = useState<string | null>(null)
-  const remoteTipKey = me.shareUrl ? `bugstow_remote_tip:${me.shareUrl}` : ""
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
+  const remoteAddress = me.shareUrl || (connectionKind() === "lan-https" ? location.origin : null)
+  const remoteTipKey = remoteAddress ? `bugstow_remote_tip:${remoteAddress}` : ""
   const [showRemoteTip, setShowRemoteTip] = useState(() => {
-    if (!me.shareUrl || me.isServerAdmin) return false
-    try { return localStorage.getItem(`bugstow_remote_tip:${me.shareUrl}`) !== "hidden" } catch { return true }
+    if (!remoteAddress || me.isServerAdmin) return false
+    try { return localStorage.getItem(`bugstow_remote_tip:${remoteAddress}`) !== "hidden" } catch { return true }
   })
 
-  const notify = (msg: string) => {
+  const notify = (msg: string, duration = 2800) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    if (msg !== 'Issue moved to Trash') setUndoId(null)
     setToast(msg)
-    setTimeout(() => setToast(null), 2800)
+    toastTimer.current = setTimeout(() => setToast(null), duration)
   }
+  const portableIssues = useMemo(() => issues.map(issue => ({
+    id: issue.id, title: issue.title, description: issue.description, type: issue.type,
+    status: issue.status, priority: issue.priority, severity: issue.severity,
+    projectName: issue.project_name, assigneeName: issue.assignee_name,
+    createdAt: issue.created_at, updatedAt: issue.updated_at, details: issue.details,
+    githubUrl: issue.github_url, fixReferences: issue.fix_references,
+  })), [issues])
 
   const filtered = useMemo(
     () =>
-      filterTeamIssues(issues, {
+      filterAndSortIssues(issues, {
         query,
         project: projectFilter,
         status: statusFilter,
         type: typeFilter,
+        priority: priorityFilter,
+        severity: severityFilter,
+        assignee: assigneeFilter,
+        sort, direction,
+        createdFrom, createdTo, updatedFrom, updatedTo,
       }),
-    [issues, query, projectFilter, statusFilter, typeFilter],
+    [issues, query, projectFilter, statusFilter, typeFilter, priorityFilter, severityFilter, assigneeFilter, sort, direction, createdFrom, createdTo, updatedFrom, updatedTo],
   )
 
-  const selected = issues.find((i) => i.id === selectedId) || null
+  const selected = issues.find((i) => i.id === selectedId) || (linkedIssue?.id === selectedId && linkedIssue.team_id === activeTeamId ? linkedIssue : null)
 
   // No team yet → onboarding.
   if (!loading && teams.length === 0) {
@@ -314,6 +399,7 @@ function Workspace({
 
   return (
     <div className="h-full flex bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2 focus:text-slate-900">Skip to content</a>
       <aside
         aria-label="Team navigation"
         className="app-sidebar hidden lg:flex w-60 shrink-0 flex-col border-r border-slate-200 dark:border-slate-800"
@@ -336,16 +422,18 @@ function Workspace({
           <button
             type="button"
             className="nav-item"
-            aria-current={statusFilter === "open" ? "page" : undefined}
+            aria-current={statusFilter === "active" ? "page" : undefined}
             onClick={() => {
-              setStatusFilter("open")
+              setTrashOpen(false)
+              setStatusFilter("active")
               setSelectedId(null)
+              clearIssueLink()
             }}
           >
             <Inbox size={18} />
-            <span className="flex-1 text-left">Open issues</span>
+            <span className="flex-1 text-left">Active issues</span>
             <span className="text-xs">
-              {issues.filter((i) => i.status === "open").length}
+              {issues.filter((i) => i.status !== "fixed").length}
             </span>
           </button>
           <button
@@ -353,8 +441,10 @@ function Workspace({
             className="nav-item"
             aria-current={statusFilter === "fixed" ? "page" : undefined}
             onClick={() => {
+              setTrashOpen(false)
               setStatusFilter("fixed")
               setSelectedId(null)
+              clearIssueLink()
             }}
           >
             <CheckCircle2 size={18} />
@@ -363,6 +453,7 @@ function Workspace({
               {issues.filter((i) => i.status === "fixed").length}
             </span>
           </button>
+          <button type="button" className="nav-item" aria-current={trashOpen ? 'page' : undefined} onClick={() => { setTrashOpen(true); setSelectedId(null); clearIssueLink() }}><Trash2 size={18} /><span className="flex-1 text-left">Trash</span><span className="text-xs">{data.trashIssues.length}</span></button>
         </nav>
         <div className="px-3 mt-7 flex-1 overflow-y-auto">
           <p className="px-3 mb-2 text-xs text-slate-500 dark:text-slate-400">
@@ -372,7 +463,7 @@ function Workspace({
             type="button"
             className="nav-item"
             aria-current={projectFilter === "all" ? "page" : undefined}
-            onClick={() => setProjectFilter("all")}
+            onClick={() => { setProjectFilter("all"); setSelectedId(null); clearIssueLink() }}
           >
             <GitBranch size={16} />
             All projects
@@ -386,6 +477,7 @@ function Workspace({
                 onClick={() => {
                   setProjectFilter(p.id)
                   setSelectedId(null)
+                  clearIssueLink()
                 }}
               >
                 <span
@@ -398,6 +490,7 @@ function Workspace({
                 <ProjectMenu
                   name={p.name}
                   onMove={() => setMoving({ id: p.id, name: p.name })}
+                  onDelete={async () => { const count = issues.filter(issue => issue.project_id === p.id).length; if (!window.confirm(`Delete project “${p.name}”? Its ${count} issue${count === 1 ? '' : 's'} will remain in this workspace as unassigned.`)) return; try { await data.deleteProject(p.id); setProjectFilter('all'); notify('Project deleted; its issues are unassigned') } catch (error) { notify(error instanceof Error ? error.message : 'Could not delete project') } }}
                 />
               )}
             </div>
@@ -433,7 +526,7 @@ function Workspace({
           <ModeSwitch mode="team" onSwitch={onUseLocal} />
         </div>
       </aside>
-      <div className="flex-1 min-w-0 flex flex-col">
+      <main id="main-content" tabIndex={-1} className="flex-1 min-w-0 flex flex-col">
         {/* Top bar */}
         {/* relative z-20: its menus (workspace switcher) must open above the page below. */}
         <header className="relative z-20 flex items-center gap-2 px-3 sm:px-5 h-16 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 backdrop-blur-sm shrink-0">
@@ -464,6 +557,7 @@ function Workspace({
                     onClick={() => {
                       setActiveTeamId(t.id)
                       setSelectedId(null)
+                      clearIssueLink()
                       setShowTeamMenu(false)
                     }}
                     className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
@@ -492,7 +586,7 @@ function Workspace({
 
           {offline && (
             <span
-              title="This server runs in offline mode. All features work locally; only GitHub import is disabled."
+              title="This server runs in offline mode. All features work locally; GitHub import and export are disabled."
               className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
             >
               <WifiOff size={12} /> Offline
@@ -500,6 +594,15 @@ function Workspace({
           )}
 
           <div className="flex-1" />
+          <button type="button" disabled={offline || !data.activeTeamId} onClick={() => setShowExport(true)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-50">Export to GitHub</button>
+          <details className="relative text-sm">
+            <summary className="cursor-pointer rounded-lg border border-slate-300 px-3 py-1.5 dark:border-slate-700">Download issues</summary>
+            <div className="absolute right-0 z-40 mt-1 min-w-40 space-y-1 rounded-lg border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+              <button type="button" onClick={() => downloadPortableIssues(portableIssues, 'csv')} className="block w-full rounded px-2 py-1 text-left hover:bg-slate-100 dark:hover:bg-slate-800">CSV</button>
+              <button type="button" onClick={() => downloadPortableIssues(portableIssues, 'markdown')} className="block w-full rounded px-2 py-1 text-left hover:bg-slate-100 dark:hover:bg-slate-800">Markdown</button>
+            </div>
+          </details>
+          <button type="button" onClick={() => { setTrashOpen(value => !value); setSelectedId(null); clearIssueLink() }} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm lg:hidden">{trashOpen ? 'Issues' : `Trash (${data.trashIssues.length})`}</button>
 
           <button
             type="button"
@@ -548,7 +651,7 @@ function Workspace({
           />
         </header>
 
-        {showRemoteTip && me.shareUrl && (
+        {showRemoteTip && remoteAddress && (
           <div className="flex flex-wrap items-center gap-3 border-b border-teal-200 bg-teal-50 px-5 py-3 text-sm text-teal-950 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-100">
             <div className="min-w-52 flex-1">
               <strong className="font-semibold">Open this workspace from your BugsTow shortcut.</strong>{" "}
@@ -558,10 +661,10 @@ function Workspace({
               type="button"
               onClick={async () => {
                 try {
-                  await navigator.clipboard.writeText(`bugstow connect ${me.shareUrl}`)
+                  await navigator.clipboard.writeText(`bugstow connect ${remoteAddress}`)
                   notify("Setup command copied")
                 } catch {
-                  notify(`Run: bugstow connect ${me.shareUrl}`)
+                  notify(`Run: bugstow connect ${remoteAddress}`)
                 }
               }}
               className="rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-800 dark:bg-teal-300 dark:text-teal-950 dark:hover:bg-teal-200"
@@ -582,6 +685,8 @@ function Workspace({
           </div>
         )}
 
+        {trashOpen ? <TrashView issues={data.trashIssues.map(issue => ({ id: issue.id, title: issue.title, deletedAt: issue.deleted_at }))} onRestore={async id => { await data.restoreIssue(id); notify('Issue restored') }} onPurge={async id => { await data.purgeIssue(id); notify('Issue permanently deleted') }} /> : <>
+        {linkError && <div role="alert" className="border-b border-amber-300 bg-amber-50 px-5 py-2 text-sm text-amber-900">{linkError}</div>}
         <div
           className={`page-heading shrink-0 ${
             selected ? "hidden md:block" : ""
@@ -592,7 +697,7 @@ function Workspace({
               ? "Completed"
               : statusFilter === "all"
                 ? "All issues"
-                : "Open issues"}
+                : statusFilter === "active" ? "Active issues" : `${statusFilter.replace('_', ' ')} issues`}
           </h1>
           <p className="page-description">
             {activeTeam?.name || "Your workspace"} · {filtered.length} issue
@@ -626,10 +731,19 @@ function Workspace({
             }
             className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
           >
+            <option value="active">Active</option>
             <option value="open">Open</option>
+            <option value="in_progress">In Progress</option>
+            <option value="blocked">Blocked</option>
             <option value="fixed">Completed</option>
             <option value="all">All statuses</option>
           </select>
+          <details className="w-full text-sm"><summary className="cursor-pointer text-slate-600 dark:text-slate-300">More filters and sorting</summary><div className="mt-3 flex flex-wrap gap-2">
+          <select aria-label="Priority" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="all">All priorities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+          <select aria-label="Severity" value={severityFilter} onChange={e => setSeverityFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="all">All severities</option><option value="critical">Critical</option><option value="major">Major</option><option value="minor">Minor</option></select>
+          <select aria-label="Assignee" value={assigneeFilter} onChange={e => setAssigneeFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="all">All assignees</option><option value="unassigned">Unassigned</option>{members.map(member => <option key={member.user_id} value={member.user_id}>{member.name || displayLogin(member.email) || 'Member'}</option>)}</select>
+          <select aria-label="Sort issues" value={sort} onChange={e => setSort(e.target.value as WorkflowFilters['sort'])} className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="created">Created</option><option value="updated">Updated</option><option value="priority">Priority</option><option value="severity">Severity</option><option value="status">Status</option><option value="type">Type</option><option value="project">Project</option><option value="assignee">Assignee</option><option value="title">Title</option></select>
+          <button type="button" aria-label="Reverse sort order" onClick={() => setDirection(value => value === 'asc' ? 'desc' : 'asc')} className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700">{direction === 'desc' ? 'Descending' : 'Ascending'}</button>
           <select
             aria-label="Issue type"
             value={typeFilter}
@@ -641,6 +755,11 @@ function Workspace({
             <option value="uiux">UI/UX</option>
             <option value="idea">Idea</option>
           </select>
+          <label>Created from<input type="date" value={createdFrom} onChange={event => setCreatedFrom(event.target.value)} className="ml-2 rounded border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-900" /></label>
+          <label>Created to<input type="date" value={createdTo} onChange={event => setCreatedTo(event.target.value)} className="ml-2 rounded border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-900" /></label>
+          <label>Updated from<input type="date" value={updatedFrom} onChange={event => setUpdatedFrom(event.target.value)} className="ml-2 rounded border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-900" /></label>
+          <label>Updated to<input type="date" value={updatedTo} onChange={event => setUpdatedTo(event.target.value)} className="ml-2 rounded border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-900" /></label>
+          </div></details>
           <select
             aria-label="Project"
             value={projectFilter}
@@ -654,7 +773,20 @@ function Workspace({
               </option>
             ))}
           </select>
+          {filtered.length > 0 && <button type="button" className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700" onClick={() => setSelectedIds(filtered.map(issue => issue.id))}>Select all {filtered.length} filtered</button>}
+          <button type="button" className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700" onClick={() => { setBoardView(value => !value); setStatusFilter('all'); setSelectedId(null); clearIssueLink() }}>{boardView ? 'List view' : 'Board view'}</button>
         </div>
+
+        {selectedIds.length > 0 && <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-5 py-2 text-sm dark:border-slate-700"><strong>{selectedIds.length} selected</strong>
+          <button type="button" className="underline" onClick={() => setSelectedIds(filtered.map(issue => issue.id))}>Select all {filtered.length} filtered</button>
+          <button type="button" className="underline" onClick={() => setSelectedIds([])}>Clear</button>
+          <select aria-label="Bulk action" value={bulkAction} onChange={event => { setBulkAction(event.target.value); setBulkValue(event.target.value === 'priority' ? 'medium' : event.target.value === 'status' ? 'fixed' : '') }} className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"><option value="status">Change status</option><option value="priority">Change priority</option><option value="projectId">Move to project</option><option value="assigneeId">Assign to person</option><option value="trash">Move to Trash</option></select>
+          {bulkAction === 'status' && <select aria-label="New status" value={bulkValue} onChange={event => setBulkValue(event.target.value)} className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900">{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>}
+          {bulkAction === 'priority' && <select aria-label="New priority" value={bulkValue} onChange={event => setBulkValue(event.target.value)} className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>}
+          {bulkAction === 'projectId' && <select aria-label="Destination project" value={bulkValue} onChange={event => setBulkValue(event.target.value)} className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"><option value="">Unassigned</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select>}
+          {bulkAction === 'assigneeId' && <select aria-label="New assignee" value={bulkValue} onChange={event => setBulkValue(event.target.value)} className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"><option value="">Unassigned</option>{members.map(member => <option key={member.user_id} value={member.user_id}>{member.name || displayLogin(member.email)}</option>)}</select>}
+          <button type="button" className="rounded bg-brand px-3 py-1.5 font-semibold text-white" onClick={async () => { if (bulkAction === 'trash' && !window.confirm(`Move ${selectedIds.length} issues to Trash?`)) return; try { const count = await data.bulkUpdate(selectedIds, { [bulkAction]: bulkAction === 'trash' ? true : bulkValue || null }); setSelectedIds([]); setSelectedId(null); notify(`${count} issues updated`) } catch (error) { notify(error instanceof Error ? error.message : 'Bulk update failed') } }}>Apply</button>
+        </div>}
 
         {/* Body */}
         <div className="flex-1 min-h-0 flex">
@@ -663,7 +795,7 @@ function Workspace({
               selected ? "hidden md:flex md:flex-1 md:min-w-0" : "flex"
             } flex-col bg-white dark:bg-slate-900 w-full border-r border-slate-200 dark:border-slate-800 overflow-y-auto`}
           >
-            {loading ? (
+            {boardView ? <KanbanBoard issues={filtered.map(issue => ({ ...issue, projectName: issue.project_name }))} onOpen={issue => { setSelectedId(issue.id); setLinkedIssue(null); if (activeTeamId) window.history.pushState({}, '', issueLink(window.location.href, activeTeamId, issue.id)) }} onStatusChange={async (issue, status) => { await data.updateIssue(issue.id, { status }); notify('Issue status updated') }} /> : loading ? (
               <div className="p-8 text-center text-sm text-slate-400">
                 Loading…
               </div>
@@ -680,6 +812,10 @@ function Workspace({
                       setTypeFilter("all")
                       setProjectFilter("all")
                       setStatusFilter("all")
+                      setPriorityFilter('all')
+                      setSeverityFilter('all')
+                      setAssigneeFilter('all')
+                      setCreatedFrom(''); setCreatedTo(''); setUpdatedFrom(''); setUpdatedTo('')
                     }}
                     className="text-brand dark:text-brand-light font-medium"
                   >
@@ -716,18 +852,20 @@ function Workspace({
               </div>
             ) : (
               filtered.map((issue) => (
-                <button
+                <div
                   key={issue.id}
-                  type="button"
-                  onClick={() => setSelectedId(issue.id)}
-                  className={`w-full text-left px-5 py-4 border-b border-slate-100 dark:border-slate-800/70 hover:bg-slate-50 dark:hover:bg-slate-800/40 ${
+                  className={`flex items-start gap-2 w-full px-5 py-4 border-b border-slate-100 dark:border-slate-800/70 hover:bg-slate-50 dark:hover:bg-slate-800/40 ${
                     selectedId === issue.id
                       ? "bg-indigo-50/60 dark:bg-indigo-950/30"
                       : ""
                   }`}
                 >
+                  <input type="checkbox" aria-label={`Select ${issue.title}`} checked={selectedIds.includes(issue.id)} onChange={event => setSelectedIds(current => event.target.checked ? [...current, issue.id] : current.filter(id => id !== issue.id))} className="mt-1" />
+                  <button type="button" onClick={() => { setSelectedId(issue.id); setLinkedIssue(null); setLinkError(''); if (activeTeamId) window.history.pushState({}, '', issueLink(window.location.href, activeTeamId, issue.id)) }} className="min-w-0 flex-1 text-left">
                   <div className="flex items-center gap-2 mb-1">
                     <TypeBadge type={issue.type} customLabel={issue.custom_type} />
+                    <PriorityBadge priority={issue.priority} />
+                    {(issue.status === 'in_progress' || issue.status === 'blocked') && <span className="text-xs font-semibold text-slate-500">{STATUS_LABELS[issue.status]}</span>}
                     {issue.status === "fixed" && (
                       <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                         FIXED
@@ -756,7 +894,8 @@ function Workspace({
                       </span>
                     )}
                   </div>
-                </button>
+                  </button>
+                </div>
               ))
             )}
           </div>
@@ -775,10 +914,15 @@ function Workspace({
                 onDelete={async (id) => {
                   await data.deleteIssue(id)
                   setSelectedId(null)
-                  notify("Issue deleted")
+                  const url = new URL(window.location.href); url.searchParams.delete('issue'); window.history.replaceState({}, '', url)
+                  setUndoId(id)
+                  notify("Issue moved to Trash", 5000)
+                  window.setTimeout(() => setUndoId(current => current === id ? null : current), 5000)
                 }}
-                onClose={() => setSelectedId(null)}
+                onClose={() => { setSelectedId(null); const url = new URL(window.location.href); url.searchParams.delete('issue'); window.history.pushState({}, '', url) }}
                 onToast={notify}
+                currentUserId={me.id}
+                onCopyLink={async () => { if (!activeTeamId) return; const base = me.shareUrl ? new URL(`${window.location.pathname}${window.location.search}`, me.shareUrl).href : window.location.href; await navigator.clipboard.writeText(issueLink(base, activeTeamId, selected.id)); notify('Issue link copied') }}
               />
             ) : (
               <div className="flex-1 hidden md:flex items-center justify-center text-sm text-slate-400">
@@ -787,15 +931,21 @@ function Workspace({
             )}
           </div>
         </div>
+        </>}
 
         {showNew && (
           <NewIssueModal
             projects={projects}
+            issues={issues}
+            initialTitle={initialCapture?.title}
+            initialDescription={initialCapture?.description}
+            initialFile={captureFile}
             members={members}
             onCreate={data.createIssue}
-            onClose={() => setShowNew(false)}
+            onClose={() => { setShowNew(false); setInitialCapture(null) }}
             onDone={() => {
               setShowNew(false)
+              setInitialCapture(null)
               notify("Issue created")
             }}
           />
@@ -834,6 +984,17 @@ function Workspace({
             }}
           />
         )}
+        {showExport && <GithubExportModal
+          issues={data.issues.map(i => ({ ...i, projectId: i.project_id, githubUrl: i.github_url }))}
+          projects={data.projects}
+          onClose={() => setShowExport(false)}
+          onExport={async (repo, token, ids) => {
+            if (!data.activeTeamId) throw new Error('Choose a workspace first.')
+            const result = await exportGithubIssues(data.activeTeamId, repo, token, ids)
+            try { await data.reload() } catch { result.warnings.push('Export finished, but refreshing BugsTow failed. Reload before exporting again.') }
+            return result
+          }}
+        />}
         {showImport && (
           <GithubImportModal
             projects={projects}
@@ -906,10 +1067,10 @@ function Workspace({
             role="status"
             className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-lg bg-slate-900 text-white text-sm shadow-lg dark:bg-white dark:text-slate-900"
           >
-            {toast}
+            {toast} {undoId && <button type="button" className="ml-2 font-semibold underline" onClick={async () => { try { await data.restoreIssue(undoId); setUndoId(null); notify('Issue restored') } catch (error) { notify(error instanceof Error ? error.message : 'Could not restore issue') } }}>Undo</button>}
           </div>
         )}
-      </div>
+      </main>
     </div>
   )
 }
@@ -1020,7 +1181,7 @@ function UserMenu({
 }
 
 /** The ⋯ next to a project in the sidebar. */
-function ProjectMenu({ name, onMove }: { name: string; onMove: () => void }) {
+function ProjectMenu({ name, onMove, onDelete }: { name: string; onMove: () => void; onDelete: () => void }) {
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -1053,7 +1214,7 @@ function ProjectMenu({ name, onMove }: { name: string; onMove: () => void }) {
           setPosition(placeFloatingMenu(
             event.currentTarget.getBoundingClientRect(),
             { width: window.innerWidth, height: window.innerHeight },
-            { width: 208, height: 50 },
+            { width: 208, height: 90 },
           ))
         }}
         aria-label={`More for ${name}`}
@@ -1082,6 +1243,7 @@ function ProjectMenu({ name, onMove }: { name: string; onMove: () => void }) {
           >
             <FolderInput size={15} aria-hidden="true" /> Move to workspace…
           </button>
+          <button type="button" role="menuitem" onClick={() => { setPosition(null); onDelete() }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/30"><Trash2 size={15} /> Delete project…</button>
         </div>,
         document.body,
       )}
@@ -1375,12 +1537,20 @@ function ModalShell({
 
 function NewIssueModal({
   projects,
+  issues,
+  initialTitle,
+  initialDescription,
+  initialFile,
   members,
   onCreate,
   onClose,
   onDone,
 }: {
   projects: { id: string; name: string }[]
+  issues: TeamIssue[]
+  initialTitle?: string
+  initialDescription?: string
+  initialFile?: File | null
   members: TeamMember[]
   onCreate: (
     data: {
@@ -1388,6 +1558,9 @@ function NewIssueModal({
       description: string
       type: IssueType
       customType?: string
+      priority?: IssuePriority
+      severity?: IssueSeverity | null
+      details?: IssueDetails
       projectId: string | null
       assigneeId: string | null
     },
@@ -1396,16 +1569,21 @@ function NewIssueModal({
   onClose: () => void
   onDone: () => void
 }) {
-  const [title, setTitle] = useState("")
-  const [description, setDescription] = useState("")
+  const [title, setTitle] = useState(initialTitle || "")
+  const [description, setDescription] = useState(initialDescription || "")
   const [type, setType] = useState<IssueType | "custom">("bug")
   const [customType, setCustomType] = useState("")
+  const [priority, setPriority] = useState<IssuePriority>('medium')
+  const [severity, setSeverity] = useState<IssueSeverity | null>(null)
+  const [details, setDetails] = useState<IssueDetails>({})
   const [projectId, setProjectId] = useState("")
   const [assigneeId, setAssigneeId] = useState("")
   const [files, setFiles] = useState<Array<{ file: File; previewUrl: string }>>([])
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const similar = useMemo(() => findSimilarIssues(title, description, issues), [title, description, issues])
   const fileRef = useRef<HTMLInputElement>(null)
+  const initialFileHandled = useRef<File | null>(null)
   const filesRef = useRef<Array<{ file: File; previewUrl: string }>>([])
 
   filesRef.current = files
@@ -1420,6 +1598,7 @@ function NewIssueModal({
     if (additions.length > 0) setFiles((current) => [...current, ...additions])
     if (fileRef.current) fileRef.current.value = ""
   }
+  useEffect(() => { if (initialFile && initialFileHandled.current !== initialFile) { initialFileHandled.current = initialFile; addFiles([initialFile]) } }, [initialFile])
 
   const removeFile = (index: number) => {
     setFiles((current) => {
@@ -1464,6 +1643,9 @@ function NewIssueModal({
           description,
           type: type === "custom" ? "idea" : type,
           customType: type === "custom" ? normalizeCustomBadge(customType) : undefined,
+          priority,
+          severity: type === 'bug' ? severity : null,
+          details,
           projectId: projectId || null,
           assigneeId: assigneeId || null,
         },
@@ -1527,6 +1709,7 @@ function NewIssueModal({
             className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-brand resize-y"
           />
         </div>
+        <DuplicateSuggestions issues={similar} />
         <div className="grid grid-cols-3 gap-2">
           <select
             value={type}
@@ -1581,6 +1764,7 @@ function NewIssueModal({
           </label>
         )}
 
+        <IssueReportFields priority={priority} onPriorityChange={setPriority} severity={severity} onSeverityChange={setSeverity} details={details} onDetailsChange={setDetails} bug={type === 'bug'} />
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {files.map(({ file, previewUrl }, index) => (
             <div key={`${file.name}-${index}`} className="group relative aspect-video overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">

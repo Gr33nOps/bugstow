@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import type { Tab, Issue, Project, IssueType } from './types'
+import type { Tab, Issue, Project, IssueType, IssuePriority, IssueSeverity, IssueDetails } from './types'
 import { useBugstowData } from './hooks/useBugstowData'
 import { useStorageEstimate } from './hooks/useStorageEstimate'
 import { useTheme } from './hooks/useTheme'
@@ -27,6 +27,12 @@ import { IssueDetail } from './components/features/issues/IssueDetail'
 import { ProjectsView, ProjectModal } from './components/features/projects/ProjectsView'
 import { SettingsView } from './components/features/settings/SettingsView'
 import { GithubImportModal } from './components/features/github/GithubImportModal'
+import { GithubExportModal } from './components/features/github/GithubExportModal'
+import { TrashView } from './components/common/TrashView'
+import { KanbanBoard } from './components/common/KanbanBoard'
+import { captureScreenshotFile, type ExtensionCaptureDraft } from './lib/extensionCapture'
+import { exportGithubIssues } from '../server/src/githubExport'
+import { detectTeamServer } from './lib/teamServer'
 import { isDesktopEdition } from './lib/teamServer'
 import { Shield, X, Download } from 'lucide-react'
 
@@ -34,13 +40,18 @@ export default function App({
   onSwitchToTeam,
   onCopyProjectToTeam,
   teamAvailable = false,
+  captureDraft,
+  onCaptureHandled,
 }: {
   onSwitchToTeam?: () => void
   onCopyProjectToTeam?: (project: Project) => void
   teamAvailable?: boolean
+  captureDraft?: ExtensionCaptureDraft | null
+  onCaptureHandled?: () => void
 } = {}) {
   const {
     issues,
+    trashIssues,
     projects,
     settings,
     loading,
@@ -53,6 +64,9 @@ export default function App({
     markFixed,
     reopenIssue,
     deleteIssue,
+    restoreIssue,
+    purgeIssue,
+    bulkUpdateIssues,
     createProject,
     updateProject,
     deleteProject,
@@ -73,6 +87,7 @@ export default function App({
   // Navigation & View States
   const [settingsSection, setSettingsSection] = useState<'general' | 'data'>('general')
   const [currentTab, setCurrentTab] = useState<Tab>('inbox')
+  const [boardView, setBoardView] = useState(false)
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
   const [projectFilterId, setProjectFilterId] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -85,21 +100,30 @@ export default function App({
 
   // Modals & Overlays
   const [showNewIssueModal, setShowNewIssueModal] = useState(false)
+  const [initialCapture, setInitialCapture] = useState<ExtensionCaptureDraft | null>(null)
   const [showQuickProjectModal, setShowQuickProjectModal] = useState(false)
   const [initialPastedFile, setInitialPastedFile] = useState<File | null>(null)
+  useEffect(() => {
+    if (!captureDraft) return
+    setInitialCapture(captureDraft)
+    setInitialPastedFile(captureScreenshotFile(captureDraft))
+    setShowNewIssueModal(true)
+    onCaptureHandled?.()
+  }, [captureDraft, onCaptureHandled])
   const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null)
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogProps | null>(null)
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
   const [showGithubImport, setShowGithubImport] = useState(false)
+  const [showGithubExport, setShowGithubExport] = useState(false)
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
 
   // Toast Notifications
   const [toasts, setToasts] = useState<ToastMessage[]>([])
 
-  const showToast = useCallback((text: string, type: 'success' | 'error' | 'info' = 'success') => {
+  const showToast = useCallback((text: string, type: 'success' | 'error' | 'info' = 'success', onAction?: () => void) => {
     const id = Math.random().toString(36).slice(2, 9)
-    setToasts(prev => [...prev, { id, text, type }])
+    setToasts(prev => [...prev, { id, text, type, onAction, actionLabel: 'Undo' }])
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id))
     }, 3500)
@@ -126,7 +150,7 @@ export default function App({
   }, [projectFilterId, projects])
 
   // Counts
-  const openIssues = useMemo(() => issues.filter(i => i.status === 'open'), [issues])
+  const openIssues = useMemo(() => issues.filter(i => i.status !== 'fixed'), [issues])
   const fixedIssues = useMemo(() => issues.filter(i => i.status === 'fixed'), [issues])
 
   const storageUsedFormatted = useMemo(() => {
@@ -176,7 +200,7 @@ export default function App({
       // Escape key closes modals / selection
       if (e.key === 'Escape') {
         // The GitHub import dialog closes itself.
-        if (showGithubImport) return
+        if (showGithubImport || showGithubExport) return
         if (zoomImageUrl) {
           setZoomImageUrl(null)
           return
@@ -210,7 +234,7 @@ export default function App({
 
     window.addEventListener('keydown', handleGlobalKeyDown)
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [zoomImageUrl, showNewIssueModal, showQuickProjectModal, showKeyboardShortcuts, showAbout, confirmDialog, selectedIssueId, showGithubImport])
+  }, [zoomImageUrl, showNewIssueModal, showQuickProjectModal, showKeyboardShortcuts, showAbout, confirmDialog, selectedIssueId, showGithubImport, showGithubExport])
 
   // Global clipboard paste listener (when modal is not already open)
   useEffect(() => {
@@ -249,6 +273,9 @@ export default function App({
       projectId: string | null
       type: IssueType
       customType?: string
+      priority: IssuePriority
+      severity: IssueSeverity | null
+      details: IssueDetails
     },
     screenshotBlob?: Blob | null,
     filename?: string,
@@ -263,6 +290,9 @@ export default function App({
           type: data.type,
           customType: data.customType,
           status: 'open',
+          priority: data.priority,
+          severity: data.severity,
+          details: data.details,
         },
         screenshotBlob || undefined,
         filename,
@@ -293,7 +323,7 @@ export default function App({
 
   // Handle Toggle Fixed / Reopen
   const handleToggleFixed = async (issue: Issue) => {
-    if (issue.status === 'open') {
+    if (issue.status !== 'fixed') {
       await markFixed(issue.id)
       showToast('Marked as fixed')
     } else {
@@ -306,7 +336,7 @@ export default function App({
   const handleDeleteIssueRequest = (issue: Issue) => {
     setConfirmDialog({
       title: 'Delete Issue',
-      message: `Are you sure you want to delete "${issue.title}"? This cannot be undone.`,
+      message: `Move "${issue.title}" to Trash? You can restore it later.`,
       confirmLabel: 'Delete',
       isDestructive: true,
       onConfirm: async () => {
@@ -315,7 +345,7 @@ export default function App({
           setSelectedIssueId(null)
         }
         setConfirmDialog(null)
-        showToast('Issue deleted')
+        showToast('Issue moved to Trash', 'success', () => { void restoreIssue(issue.id).then(() => showToast('Issue restored')) })
       },
       onCancel: () => setConfirmDialog(null),
     })
@@ -361,6 +391,13 @@ export default function App({
     switch (currentTab) {
       case 'inbox':
         return (
+          <div className="flex min-h-0 flex-1 flex-col bg-white dark:bg-slate-900">
+            <div className="flex justify-end border-b border-slate-200 px-5 py-2 text-sm dark:border-slate-800"><button type="button" onClick={() => setBoardView(value => !value)} className="rounded border border-slate-300 px-3 py-1.5 dark:border-slate-700">{boardView ? 'List view' : 'Board view'}</button></div>
+            {boardView ? <KanbanBoard
+              issues={issues.filter(issue => (!projectFilterId || issue.projectId === projectFilterId) && (typeFilter === 'all' || issue.type === typeFilter) && (!searchQuery || `${issue.title} ${issue.description}`.toLowerCase().includes(searchQuery.toLowerCase()))).map(issue => ({ ...issue, projectName: projects.find(project => project.id === issue.projectId)?.name }))}
+              onOpen={issue => setSelectedIssueId(issue.id)}
+              onStatusChange={async (issue, status) => { await updateIssue(issue.id, { status }); showToast('Issue status updated') }}
+            /> :
           <ListView
             title="Open issues"
             subtitle="Track what needs attention. Keep the details together."
@@ -374,6 +411,7 @@ export default function App({
             onToggleFixed={handleToggleFixed}
             onCopyPrompt={handleCopyPrompt}
             onDeleteIssue={handleDeleteIssueRequest}
+            onBulkUpdate={async (ids, changes) => { try { await bulkUpdateIssues(ids, changes); setSelectedIssueId(null); showToast(`${ids.length} issues updated`) } catch (error) { showToast(error instanceof Error ? error.message : 'Bulk update failed', 'error'); throw error } }}
             emptyHeading="A clear place to start"
             emptySub="Add your first issue or bring in your work from GitHub."
             showCaptureOnEmpty={true}
@@ -384,6 +422,8 @@ export default function App({
             typeFilter={typeFilter}
             onTypeFilterChange={setTypeFilter}
           />
+            }
+          </div>
         )
 
       case 'fixed':
@@ -400,6 +440,7 @@ export default function App({
             onToggleFixed={handleToggleFixed}
             onCopyPrompt={handleCopyPrompt}
             onDeleteIssue={handleDeleteIssueRequest}
+            onBulkUpdate={async (ids, changes) => { try { await bulkUpdateIssues(ids, changes); setSelectedIssueId(null); showToast(`${ids.length} issues updated`) } catch (error) { showToast(error instanceof Error ? error.message : 'Bulk update failed', 'error'); throw error } }}
             emptyHeading="No fixed issues yet"
             emptySub="Mark resolved issues as fixed to clear them from your inbox."
             showCaptureOnEmpty={false}
@@ -411,6 +452,9 @@ export default function App({
             onTypeFilterChange={setTypeFilter}
           />
         )
+
+      case 'trash':
+        return <TrashView issues={trashIssues} onRestore={async id => { await restoreIssue(id); showToast('Issue restored') }} onPurge={async id => { await purgeIssue(id); showToast('Issue permanently deleted') }} />
 
       case 'projects':
         return (
@@ -439,6 +483,7 @@ export default function App({
       case 'settings':
         return (
           <SettingsView
+            portableIssues={issues.map(issue => ({ ...issue, projectName: projects.find(project => project.id === issue.projectId)?.name }))}
             theme={theme}
             onSetTheme={setTheme}
             onClearAllData={async () => {
@@ -496,6 +541,7 @@ export default function App({
 
   return (
     <div className="flex h-screen w-screen bg-slate-50 dark:bg-slate-950 overflow-hidden text-slate-900 dark:text-slate-100 antialiased selection:bg-brand-soft dark:selection:bg-indigo-950 selection:text-brand dark:selection:text-indigo-300 transition-colors">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2 focus:text-slate-900">Skip to content</a>
       {/* Desktop Responsive Sidebar */}
       <div className="hidden md:flex h-full">
         <Sidebar
@@ -506,6 +552,7 @@ export default function App({
           }}
           inboxCount={openIssues.length}
           fixedCount={fixedIssues.length}
+          trashCount={trashIssues.length}
           projects={projects}
           activeProjectFilterId={projectFilterId}
           onSelectProjectFilter={id => {
@@ -515,6 +562,7 @@ export default function App({
           }}
           onNewIssue={() => setShowNewIssueModal(true)}
           onImportGithub={() => setShowGithubImport(true)}
+          onExportGithub={() => setShowGithubExport(true)}
           onCreateProject={() => setShowQuickProjectModal(true)}
           collapsed={sidebarCollapsed}
           onToggleCollapse={handleToggleSidebar}
@@ -584,7 +632,7 @@ export default function App({
         )}
 
         {/* Center Workspace (Split view or full content) */}
-        <main className="flex-1 flex overflow-hidden min-h-0 bg-slate-50/50 dark:bg-slate-950">
+        <main id="main-content" tabIndex={-1} className="flex-1 flex overflow-hidden min-h-0 bg-slate-50/50 dark:bg-slate-950">
           {selectedIssue ? (
             <>
               {/* Left pane: list on desktop (hidden on mobile when issue is open) */}
@@ -634,6 +682,7 @@ export default function App({
               }}
               inboxCount={openIssues.length}
               fixedCount={fixedIssues.length}
+              trashCount={trashIssues.length}
               projects={projects}
               activeProjectFilterId={projectFilterId}
               onSelectProjectFilter={id => {
@@ -650,6 +699,7 @@ export default function App({
                 setMobileDrawerOpen(false)
                 setShowGithubImport(true)
               }}
+              onExportGithub={() => { setMobileDrawerOpen(false); setShowGithubExport(true) }}
               onCreateProject={() => {
                 setMobileDrawerOpen(false)
                 setShowQuickProjectModal(true)
@@ -674,6 +724,13 @@ export default function App({
       )}
 
       {/* Capture New Issue Modal */}
+      {showGithubExport && <GithubExportModal issues={issues} projects={projects} onClose={() => setShowGithubExport(false)} onExport={async (repo, token, ids) => {
+        const server = await detectTeamServer()
+        if (server.available && (server.offline || server.edition !== 'desktop')) throw new Error('GitHub export is unavailable in Local mode on this server. Use the Team workspace or a desktop app with internet features enabled.')
+        return exportGithubIssues(repo, token, issues.filter(i => ids.includes(i.id)), async (id, githubUrl, githubNumber) => {
+          await updateIssue(id, { githubUrl, githubNumber })
+        })
+      }} />}
       {showGithubImport && (
         <GithubImportModal
           projects={projects}
@@ -706,12 +763,16 @@ export default function App({
       {showNewIssueModal && (
         <NewIssueModal
           projects={projects}
+          issues={issues}
           defaultProjectId={projectFilterId}
           initialFile={initialPastedFile}
+          initialTitle={initialCapture?.title}
+          initialDescription={initialCapture?.description}
           onSave={handleSaveNewIssue}
           onClose={() => {
             setShowNewIssueModal(false)
             setInitialPastedFile(null)
+            setInitialCapture(null)
           }}
         />
       )}

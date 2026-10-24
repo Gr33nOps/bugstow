@@ -20,12 +20,16 @@ import {
 import type { Issue, Project, IssueType } from '../../../types'
 import { TypeBadge, timeAgo, BRAND_PRIMARY, GithubMark } from '../../common/Icon'
 import {
-  copyPromptToClipboard,
   copyScreenshotImageToClipboard,
-  copyPromptAndImageToClipboard,
+  copyTextAndImageToClipboard,
 } from '../../../services/promptService'
+import { generatePromptWithTemplate } from '../../../services/promptTemplates'
+import { usePromptTemplateSelection } from '../../common/PromptTemplateControls'
+import { FixReferences } from '../../common/FixReferences'
 import { WritingTools } from '../../common/WritingTools'
 import { normalizeCustomBadge } from '../../../lib/writingAssist'
+import { IssueReportFields, IssueReportSummary, PriorityBadge, STATUS_LABELS } from '../../common/IssueReportFields'
+import type { IssueDetails, IssuePriority, IssueSeverity, IssueStatus } from '../../../types'
 
 interface IssueDetailProps {
   issue: Issue
@@ -74,6 +78,7 @@ export function IssueDetail({
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const promptTemplate = usePromptTemplateSelection()
 
   // Edit form state
   const [editTitle, setEditTitle] = useState(issue.title)
@@ -81,6 +86,9 @@ export function IssueDetail({
   const [editProject, setEditProject] = useState<string | null>(issue.projectId)
   const [editType, setEditType] = useState<IssueType | 'custom'>(issue.customType ? 'custom' : issue.type)
   const [editCustomType, setEditCustomType] = useState(issue.customType || '')
+  const [editPriority, setEditPriority] = useState<IssuePriority>(issue.priority || 'medium')
+  const [editSeverity, setEditSeverity] = useState<IssueSeverity | null>(issue.severity || null)
+  const [editDetails, setEditDetails] = useState<IssueDetails>(issue.details || {})
 
   // Multi-image edit state
   const [keepScreenshotIds, setKeepScreenshotIds] = useState<string[]>([])
@@ -101,6 +109,12 @@ export function IssueDetail({
     setEditProject(issue.projectId)
     setEditType(issue.customType ? 'custom' : issue.type)
     setEditCustomType(issue.customType || '')
+    setEditPriority(issue.priority || 'medium')
+    setEditSeverity(issue.severity || null)
+    setEditDetails(issue.details || {})
+    setEditPriority(issue.priority || 'medium')
+    setEditSeverity(issue.severity || null)
+    setEditDetails(issue.details || {})
     setKeepScreenshotIds(currentScreenshotIds)
     // Revoke object URLs for added previews
     newScreenshotsToAdd.forEach(s => URL.revokeObjectURL(s.previewUrl))
@@ -218,6 +232,9 @@ export function IssueDetail({
             projectId: editProject || null,
             type: issueType,
             customType,
+            priority: editPriority,
+            severity: editType === 'bug' ? editSeverity : null,
+            details: editDetails,
           },
           {
             keepScreenshotIds,
@@ -234,6 +251,9 @@ export function IssueDetail({
             projectId: editProject || null,
             type: issueType,
             customType,
+            priority: editPriority,
+            severity: editType === 'bug' ? editSeverity : null,
+            details: editDetails,
           },
           blob !== undefined ? blob : (keepScreenshotIds.length === 0 ? null : undefined)
         )
@@ -256,7 +276,7 @@ export function IssueDetail({
       mainBlob = await getScreenshotBlob(primaryId)
     }
 
-    const res = await copyPromptAndImageToClipboard(issue, project, mainBlob)
+    const res = await copyTextAndImageToClipboard(generatePromptWithTemplate(issue, project, promptTemplate.templateId, promptTemplate.customTemplate), mainBlob)
     if (res.textCopied && res.imageCopied) {
       onToast?.('Copied prompt + image! Paste it into your AI assistant')
     } else if (res.textCopied) {
@@ -473,6 +493,7 @@ export function IssueDetail({
               </label>
             )}
 
+            <IssueReportFields priority={editPriority} onPriorityChange={setEditPriority} severity={editSeverity} onSeverityChange={setEditSeverity} details={editDetails} onDetailsChange={setEditDetails} bug={editType === 'bug'} />
             {/* Screenshots Edit: View existing + add more images */}
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -577,6 +598,7 @@ export function IssueDetail({
             <div>
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <TypeBadge type={issue.type} customLabel={issue.customType} />
+                <PriorityBadge priority={issue.priority} />
                 {project ? (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                     <span
@@ -608,6 +630,12 @@ export function IssueDetail({
               </h1>
             </div>
 
+            <label className="mb-4 block text-xs font-semibold text-slate-600 dark:text-slate-300">Status
+              <select aria-label="Issue status" className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800" value={issue.status} onChange={e => void onUpdate({ status: e.target.value as IssueStatus })}>
+                {Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
+            <IssueReportSummary severity={issue.severity} details={issue.details} />
             {/* Description Section */}
             <div>
               <h3 className="text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400 mb-2">
@@ -622,6 +650,8 @@ export function IssueDetail({
               )}
             </div>
 
+            <FixReferences links={issue.fixReferences || []} onChange={async links => { await onUpdate({ fixReferences: links }); onToast?.('Fix references saved') }} />
+
             {/* AI Prompts & Actions Bar */}
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 flex flex-col gap-3">
               <div className="flex items-center justify-between">
@@ -631,6 +661,7 @@ export function IssueDetail({
                 </span>
                 <span className="hidden sm:inline text-xs text-slate-400">Paste into the tool you use</span>
               </div>
+              {promptTemplate.controls}
 
               {/* Primary prompt action */}
               <div className="flex flex-wrap items-center gap-2">
@@ -647,7 +678,7 @@ export function IssueDetail({
                 {/* Secondary prompt text only */}
                 {currentScreenshotIds.length > 0 && <button
                   type="button"
-                  onClick={onCopyPrompt}
+                  onClick={() => { if (promptTemplate.templateId === 'fix') onCopyPrompt(); else void copyTextAndImageToClipboard(generatePromptWithTemplate(issue, project, promptTemplate.templateId, promptTemplate.customTemplate)).then(result => onToast?.(result.textCopied ? 'Prompt text copied' : 'Failed to copy to clipboard', result.textCopied ? 'success' : 'error')) }}
                   className="px-3.5 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg transition-colors"
                   title="Copy plain prompt text"
                 >
@@ -659,12 +690,12 @@ export function IssueDetail({
                   type="button"
                   onClick={onToggleFixed}
                   className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-lg border transition-colors ${
-                    issue.status === 'open'
+                    issue.status !== 'fixed'
                       ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200'
                   }`}
                 >
-                  {issue.status === 'open' ? (
+                  {issue.status !== 'fixed' ? (
                     <>
                       <Check size={14} className="text-emerald-600" />
                       <span>Mark completed</span>

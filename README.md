@@ -68,9 +68,13 @@ Each link works once, for one person, for 7 days. People you invite see every pr
 
 - **Capture quickly.** Press <kbd>Ctrl</kbd>+<kbd>K</kbd>, type or use on-device voice input, and paste or select as many screenshots as the issue needs.
 - **Clean up rough notes.** **Fix writing** corrects spelling, grammar and punctuation without changing what you meant.
-- **Keep it organised.** Projects, built-in or custom issue badges, search, and a Completed list for finished work.
+- **Keep it organised.** Projects, built-in or custom issue badges, priorities, search, status/priority/severity filters, sorting, and a Completed list for finished work. Set an issue to Open, In Progress, Blocked, or Fixed from its detail view.
+- **Recover and collaborate.** Trash keeps deleted issues recoverable; Team adds comments, activity, and private issue links. Select several issues for bulk changes, or use the optional Kanban board.
+- **Stay in your workflow.** Choose a local prompt template, see similar existing issues, attach GitHub fix links, and download issue text as CSV or Markdown. The optional [Capture extension](extension/README.md) opens a reviewable draft from a page you choose.
+- **Report a bug clearly.** Add optional severity, steps to reproduce, expected and actual behavior, environment, version, and notes under **More report details**. BugsTow does not collect system details automatically. Copy with prompt includes anything you entered.
 - **Hand it to your AI assistant.** **Copy with prompt** gives you ready-to-paste instructions and includes the screenshot when the destination supports rich paste.
-- **Import from GitHub.** Paste a repository link. Importing again adds new issues and follows open/closed, without duplicates. BugsTow never changes anything on GitHub.
+- **Export to GitHub.** Export all issues or one project to a repository using a token with Issues: Read and write. Existing GitHub links are skipped; screenshots stay in BugsTow.
+- **Import from GitHub.** Paste a repository link. Importing again adds new issues and follows open/closed, without duplicates. Import does not change anything on GitHub.
 - **Work together.** Copy one Local project to Team, assign issues, keep several workspaces, and move a project between them.
 - **Keep copies.** Team backs up daily, and can copy each backup to a second drive. Local can download a backup file, optionally encrypted.
 
@@ -78,8 +82,8 @@ Light and dark themes, keyboard shortcuts and phone-sized screens are supported.
 
 ## Your data
 
-- Local issues live in your browser; Team data lives in a folder on the computer running BugsTow. Nothing is uploaded to BugsTow or to any cloud.
-- After installation everything works offline. Only GitHub import and updates use the internet. [Details](docs/OFFLINE.md)
+- Local issues live in your browser; Team data lives in a folder on the computer running BugsTow. Nothing is uploaded to the maintainer. GitHub export sends the selected issue text to the repository you choose.
+- After installation everything works offline. GitHub import, export and updates use the internet. [Details](docs/OFFLINE.md)
 - BugsTow doesn't encrypt data at rest. Clearing browser data deletes Local issues, so keep a backup, and whoever runs a Team computer can read its data.
 
 ## Everyday commands

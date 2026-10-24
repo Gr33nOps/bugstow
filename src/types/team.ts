@@ -1,4 +1,4 @@
-import type { IssueType, IssueStatus } from './index'
+import type { IssueType, IssueStatus, IssuePriority, IssueSeverity, IssueDetails } from './index'
 
 export type MemberRole = 'owner' | 'admin' | 'member'
 
@@ -32,6 +32,16 @@ export interface TeamProject {
   color: string
   created_at: string
   updated_at: string
+  deleted_at?: string | null
+}
+
+export interface TeamIssueEvent {
+  id: string
+  author_id: string
+  author_name: string | null
+  kind: string
+  body: string
+  created_at: string
 }
 
 export interface TeamIssue {
@@ -43,12 +53,17 @@ export interface TeamIssue {
   type: IssueType
   custom_type: string | null
   status: IssueStatus
+  priority: IssuePriority
+  severity: IssueSeverity | null
+  details: IssueDetails
   assignee_id: string | null
   created_by: string
   github_url: string | null
   github_number: number | null
+  fix_references: string[]
   created_at: string
   updated_at: string
+  deleted_at?: string | null
   project_name: string | null
   assignee_name: string | null
   assignee_email: string | null
