@@ -534,7 +534,7 @@ export default function App({
   ) : null
 
   return (
-    <div className="flex h-screen w-screen bg-slate-50 dark:bg-slate-950 overflow-hidden text-slate-900 dark:text-slate-100 antialiased selection:bg-brand-soft dark:selection:bg-indigo-950 selection:text-brand dark:selection:text-indigo-300 transition-colors">
+    <div className="flex h-dvh w-full bg-slate-50 dark:bg-slate-950 overflow-hidden text-slate-900 dark:text-slate-100 antialiased selection:bg-brand-soft dark:selection:bg-indigo-950 selection:text-brand dark:selection:text-indigo-300 transition-colors">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2 focus:text-slate-900">Skip to content</a>
       {/* Desktop Responsive Sidebar */}
       <div className="hidden md:flex h-full">
@@ -569,6 +569,9 @@ export default function App({
       <div className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-slate-900 relative min-w-0 transition-colors">
         {/* Global Desktop Top Bar */}
         <AppHeader
+          onImportGithub={() => setShowGithubImport(true)}
+          onExportGithub={() => setShowGithubExport(true)}
+          onCreateProject={() => setShowQuickProjectModal(true)}
           currentTab={currentTab}
           activeProject={activeProject}
           onClearProjectFilter={() => setProjectFilterId(null)}
@@ -626,22 +629,14 @@ export default function App({
         )}
 
         {/* Center Workspace (Split view or full content) */}
-        <main id="main-content" tabIndex={-1} className="flex-1 flex overflow-hidden min-h-0 bg-slate-50/50 dark:bg-slate-950">
-          {selectedIssue ? (
-            <>
-              {/* Left pane: list on desktop (hidden on mobile when issue is open) */}
-              <div className="hidden md:flex flex-1 overflow-hidden border-r border-slate-200 dark:border-slate-800 min-w-0 bg-white dark:bg-slate-900">
-                {renderTabContent()}
-              </div>
-
-              {/* Right pane: issue detail panel on desktop, full screen on mobile */}
-              <div className="flex-1 md:flex-initial md:w-[480px] lg:w-[540px] xl:w-[600px] flex flex-col overflow-hidden bg-white dark:bg-slate-900 shrink-0 border-l border-slate-200/80 dark:border-slate-800">
-                {issueDetailComponent}
-              </div>
-            </>
-          ) : (
-            /* Normal Tab Content */
-            renderTabContent()
+        <main id="main-content" tabIndex={-1} className="issue-workspace flex-1 flex overflow-hidden min-h-0 bg-slate-50/50 dark:bg-slate-950">
+          <div className={`issue-master-pane ${selectedIssue ? 'hidden md:flex' : 'flex'} flex-1 overflow-hidden min-w-0 bg-white dark:bg-slate-900`}>
+            {renderTabContent()}
+          </div>
+          {selectedIssue && (
+            <div className="issue-detail-pane flex-1 min-w-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900 shrink-0 border-l border-slate-200 dark:border-slate-800">
+              {issueDetailComponent}
+            </div>
           )}
         </main>
 

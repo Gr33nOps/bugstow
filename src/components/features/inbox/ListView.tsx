@@ -112,7 +112,7 @@ export function ListView({
   return (
     <section
       aria-label={title}
-      className="flex-1 min-w-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900"
+      className="min-h-0 flex-1 min-w-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900"
     >
       <div className="page-heading shrink-0">
         <div className="flex items-center gap-3">
@@ -230,7 +230,7 @@ export function ListView({
           </div>
         ) : (
           filteredIssues.map((issue) => (
-            <div key={issue.id} className="issue-list-row flex min-w-0 items-center">
+            <div key={issue.id} data-active={selectedIssueId === issue.id} className="issue-list-row flex shrink-0 min-w-0 items-center">
               {onBulkUpdate && <input type="checkbox" aria-label={`Select ${issue.title}`} checked={selectedIds.includes(issue.id)} onChange={event => setSelectedIds(current => event.target.checked ? [...current, issue.id] : current.filter(id => id !== issue.id))} className="ml-3" />}
             <IssueRow
               issue={issue}

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.9.3
+
+- Local and Team detail panels adapt to the available workspace width, keeping a readable single pane on narrow screens and balanced split panes on larger screens.
+- Board columns scroll independently and remain horizontally reachable; list rows keep their height instead of squeezing into the viewport.
+- Selected Local rows use one continuous highlight, and buttons and dropdown labels no longer accidentally select text.
+- Local header Actions keeps project creation and GitHub import/export available with the sidebar collapsed; header heights and sidebar widths match Team.
+- Opening and closing a Local issue preserves filters and the list's mounted state.
+- Local issue menus focus their first action, support arrow keys, and return focus on Escape without closing the issue underneath.
+- Added regression coverage for the narrow-screen breakpoint, pane resizing, board scrolling, selection, retained filters, and keyboard menus.
+
 ## 2.9.2
 
 - Local and Team share a segmented List/Board switcher, redesigned priority badges, compact dropdown controls, and a structured filter panel.

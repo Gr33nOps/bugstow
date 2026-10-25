@@ -1,6 +1,6 @@
 # UI review — October 25, 2026
 
-This review covers the Local and Team web application for version 2.9.2.
+This review covers the Local and Team web application for version 2.9.3.
 
 ## Repeatable screen coverage
 
@@ -21,8 +21,19 @@ Setup and desktop connection screens use API fixtures. Walkthroughs check docume
 - People refreshes on open so newly joined teammates appear without reloading.
 - Project save errors stay in the form for correction or retry.
 
+## Follow-up fixes for 2.9.3
+
+- Available-width container queries prevent collapsed list panes and half-width details around the 760–767 px breakpoint.
+- Board scroll areas and non-shrinking list rows keep content reachable.
+- Selection highlights span the complete row once; control labels no longer select accidentally.
+- Local header Actions preserves access with the sidebar collapsed. Header and sidebar dimensions match Team.
+- Local filters remain mounted while opening and closing details, avoiding resets and interrupted search edits.
+- Local issue menus take focus, support arrow keys, and dismiss with Escape without closing the underlying issue.
+
+`e2e/responsive.e2e.ts` checks these behaviors, including widths of 390, 760, 767, 768, 1024, 1280, and 1600 px. Team detail resizing is also covered. The screenshot sheets are generated local review artifacts, not release assets.
+
 ## Verification and boundaries
 
-Production build/typecheck, 101 unit tests, and all 16 Playwright tests passed. Browser runs use Chromium and isolated test data. No real GitHub issues were exported and no user data was modified.
+Production build/typecheck, 101 unit tests, and all 20 Playwright tests passed. Browser runs use Chromium and isolated test data. No real GitHub issues were exported and no user data was modified.
 
 This does not certify every possible error, dataset, browser, or OS combination. Native install/shortcut UI and the browser extension's permission prompts are outside this web-screen pass. Real-device Safari/Firefox and live GitHub authorization remain release checks.

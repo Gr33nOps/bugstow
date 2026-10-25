@@ -305,7 +305,7 @@ export function TeamIssueDetail({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-7 py-6">
+      <div className="detail-body min-h-0 flex-1 overflow-y-auto px-7 py-6">
         {conflict && (
           <div role="alert" className="mb-5 flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
             <p className="flex items-start gap-2"><AlertTriangle size={16} className="mt-0.5 shrink-0" /><span><strong>This issue changed on another computer.</strong> Reload it before saving.</span></p>

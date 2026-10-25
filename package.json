@@ -2,7 +2,7 @@
   "name": "bugstow",
   "description": "A privacy-first issue tracker. Local stays in your browser; Team stays on your computer.",
   "private": true,
-  "version": "2.9.2",
+  "version": "2.9.3",
   "type": "module",
   "scripts": {
     "dev": "vite",

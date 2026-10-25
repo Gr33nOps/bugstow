@@ -301,7 +301,7 @@ export function IssueDetail({
   }
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-900 overflow-hidden select-none transition-colors">
+    <div className="flex flex-col h-full min-w-0 bg-white dark:bg-slate-900 overflow-hidden transition-colors">
       {/* Header bar */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
         <div className="flex items-center gap-3">
@@ -383,7 +383,7 @@ export function IssueDetail({
       </div>
 
       {/* Main content scrollable */}
-      <div className="flex-1 overflow-y-auto px-7 py-6 flex flex-col gap-6">
+      <div className="detail-body min-h-0 flex-1 overflow-y-auto px-7 py-6 flex flex-col gap-6">
         {error && (
           <div className="flex items-center gap-2.5 p-3.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg text-sm text-red-700 dark:text-red-300">
             <AlertCircle size={18} className="text-red-500 shrink-0" />

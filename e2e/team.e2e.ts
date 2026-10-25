@@ -119,6 +119,16 @@ test('Team issue link, comments, board, and fix references work after refresh', 
   await page.getByRole('button', { name: /Team browser issue/ }).click()
   await expect(page).toHaveURL(new RegExp(`team=${teamId}.*issue=`))
   await expect(page.getByText('Open the Team board')).toBeVisible()
+  for (const width of [390, 768, 1024, 1280]) {
+    await page.setViewportSize({ width, height: 844 })
+    await expect(page.getByRole('button', { name: 'Edit issue', exact: true })).toBeInViewport()
+    const row = page.getByRole('checkbox', { name: 'Select Team browser issue' })
+    if (await row.isVisible()) expect((await page.locator('.issue-master-pane').boundingBox())!.width).toBeGreaterThanOrEqual(320)
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: test.info().outputPath(`team-detail-${width}.png`) })
+  }
+  await page.setViewportSize({ width: 1280, height: 720 })
+
 
   await page.getByRole('button', { name: 'More options' }).click()
   await page.getByRole('menuitem', { name: 'Delete', exact: true }).click()

@@ -181,3 +181,30 @@ select { appearance: none; padding-right: 30px !important; background-image: url
 [role=dialog] { outline: none; }
 
 body:has([role="dialog"], dialog[open]) .toast-stack { visibility: hidden; }
+
+/* Pane breakpoints follow available workspace width, including the sidebar. */
+.issue-workspace { container-type: inline-size; }
+.issue-workspace > .issue-detail-pane { flex: 0 0 48%; width: 48%; }
+@container (max-width: 767px) {
+  .issue-workspace > .issue-master-pane:has(+ .issue-detail-pane:not(.hidden)) { display: none; }
+  .issue-workspace > .issue-detail-pane:not(.hidden) { flex: 1 1 100%; width: 100%; border-left: 0; }
+}
+button, summary, [role=button], label:has(input[type=checkbox]) { user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+button:disabled { cursor: not-allowed; }
+.issue-list-row > [role=button] { background: transparent; border-bottom: 0; box-shadow: none; }
+.issue-list-row:hover { background: var(--color-slate-50); }
+.dark .issue-list-row:hover { background: var(--color-slate-800); }
+.issue-list-row[data-active=true] { background: var(--color-brand-soft); box-shadow: inset 3px 0 var(--color-brand); }
+.dark .issue-list-row[data-active=true], .dark .issue-list-row:has(input:checked), .dark .team-issue-row:has(input:checked) { background: #173337; }
+.issue-list-row:has(input:checked) > [role=button] { background: transparent; }
+.issue-list-row input[type=checkbox], .team-issue-row input[type=checkbox] { width: 18px; height: 18px; margin-top: 0; cursor: pointer; }
+.issue-list-row { container-type: inline-size; }
+.board-track { overscroll-behavior-x: contain; scrollbar-gutter: stable; }
+.board-column { flex-basis: 240px; min-width: 240px; overflow: hidden; }
+.board-column > h2 { flex-shrink: 0; }
+.detail-body { overflow-wrap: anywhere; scrollbar-gutter: stable; }
+.filter-grid { grid-template-columns: repeat(auto-fit, minmax(min(155px, 100%), 1fr)); }
+@media (max-width: 640px) {
+  .board-column { min-width: min(280px, 78vw); }
+  .detail-body { padding: 20px; }
+}

@@ -50,6 +50,7 @@ export function IssueRow({
     }
     const closeMenu = () => setMenuPosition(null)
     if (menuPosition) {
+      menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus()
       document.addEventListener('mousedown', handleClickOutside)
       window.addEventListener('resize', closeMenu)
       window.addEventListener('scroll', closeMenu, true)
@@ -218,6 +219,23 @@ export function IssueRow({
           className="fixed w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl py-1.5 z-[70] animate-in fade-in zoom-in-95 duration-100 text-slate-800 dark:text-slate-200"
           style={menuPosition}
           onClick={e => e.stopPropagation()}
+          onKeyDown={e => {
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              e.stopPropagation()
+              setMenuPosition(null)
+              menuButtonRef.current?.focus()
+            } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
+              e.preventDefault()
+              const items = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+              const current = items.indexOf(document.activeElement as HTMLButtonElement)
+              const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (current + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
+              items[next]?.focus()
+            } else if (e.key === 'Tab') {
+              setMenuPosition(null)
+              menuButtonRef.current?.focus()
+            }
+          }}
         >
           <button
             type="button"

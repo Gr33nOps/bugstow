@@ -431,7 +431,7 @@ function Workspace({
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2 focus:text-slate-900">Skip to content</a>
       <aside
         aria-label="Team navigation"
-        className="app-sidebar hidden lg:flex w-60 shrink-0 flex-col border-r border-slate-200 dark:border-slate-800"
+        className="app-sidebar hidden lg:flex w-64 shrink-0 flex-col border-r border-slate-200 dark:border-slate-800"
       >
         <div className="flex items-center gap-2.5 px-6 h-20 shrink-0">
           <BugstowLogoIcon size={26} color={BRAND_PRIMARY} />
@@ -558,7 +558,7 @@ function Workspace({
       <main id="main-content" tabIndex={-1} className="flex-1 min-w-0 flex flex-col">
         {/* Top bar */}
         {/* relative z-20: its menus (workspace switcher) must open above the page below. */}
-        <header className="relative z-20 flex items-center gap-2 px-3 sm:px-5 h-16 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 backdrop-blur-sm shrink-0">
+        <header className="relative z-20 flex items-center gap-2 px-3 sm:px-5 h-14 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
           <div ref={workspaceMenuRef} className="relative min-w-0 flex-1 sm:flex-none">
             <button
               type="button"
@@ -816,6 +816,7 @@ function Workspace({
 
         </div>
 
+        <div className={`${selected ? "hidden md:block" : ""} shrink-0`}>
         {selectedIds.length === 0 && filtered.length > 0 && <div className="border-b border-slate-200 px-5 py-2 dark:border-slate-700"><button type="button" className="selection-button" onClick={() => setSelectedIds(filtered.map(issue => issue.id))}>Select all {filtered.length} filtered</button></div>}
         {selectedIds.length > 0 && <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-5 py-2 text-sm dark:border-slate-700"><strong>{selectedIds.length} selected</strong>
           <button type="button" className="selection-button" onClick={() => setSelectedIds(filtered.map(issue => issue.id))}>Select all {filtered.length} filtered</button>
@@ -828,12 +829,14 @@ function Workspace({
           <button type="button" className="rounded bg-brand px-3 py-1.5 font-semibold text-white" onClick={async () => { if (bulkAction === 'trash' && !window.confirm(`Move ${selectedIds.length} issues to Trash?`)) return; try { const count = await data.bulkUpdate(selectedIds, { [bulkAction]: bulkAction === 'trash' ? true : bulkValue || null }); setSelectedIds([]); setSelectedId(null); notify(`${count} issues updated`) } catch (error) { notify(error instanceof Error ? error.message : 'Bulk update failed') } }}>Apply</button>
         </div>}
 
+        </div>
+
         {/* Body */}
-        <div className="flex-1 min-h-0 flex">
+        <div className="issue-workspace flex-1 min-h-0 min-w-0 flex">
           <div
             className={`${
               selected ? "hidden md:flex md:flex-1 md:min-w-0" : "flex"
-            } flex-col bg-white dark:bg-slate-900 w-full border-r border-slate-200 dark:border-slate-800 overflow-y-auto`}
+            } issue-master-pane min-w-0 flex-col bg-white dark:bg-slate-900 w-full border-r border-slate-200 dark:border-slate-800 overflow-y-auto`}
           >
             {boardView ? <KanbanBoard issues={filtered.map(issue => ({ ...issue, projectName: issue.project_name }))} onOpen={issue => { setSelectedId(issue.id); setLinkedIssue(null); if (activeTeamId) window.history.pushState({}, '', issueLink(window.location.href, activeTeamId, issue.id)) }} onStatusChange={async (issue, status) => { await data.updateIssue(issue.id, { status }); notify('Issue status updated') }} /> : loading ? (
               <div className="p-8 text-center text-sm text-slate-400">
@@ -941,7 +944,7 @@ function Workspace({
             )}
           </div>
 
-          <div className={`${selected ? "flex" : "hidden"} flex-1 md:flex-initial md:w-[480px] lg:w-[540px] xl:w-[600px] min-w-0 shrink-0`}>
+          <div className={`${selected ? "flex" : "hidden"} issue-detail-pane flex-1 min-w-0 shrink-0`}>
             {selected ? (
               <TeamIssueDetail
                 key={selected.id}

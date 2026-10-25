@@ -56,3 +56,6 @@ release/
 .playwright-mcp/
 test-results/
 playwright-report/
+
+# Generated UI screenshot review sheets
+artifacts/ui-review/
