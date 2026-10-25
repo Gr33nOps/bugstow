@@ -306,7 +306,6 @@ export function NewIssueModal({
                   </option>
                 ))}
               </select>
-              <ChevronDown size={15} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             </div>
           </div>
 
@@ -327,7 +326,6 @@ export function NewIssueModal({
                 <option value="idea">Idea</option>
                 <option value="custom">Custom badge…</option>
               </select>
-              <ChevronDown size={15} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             </div>
           </div>
         </div>

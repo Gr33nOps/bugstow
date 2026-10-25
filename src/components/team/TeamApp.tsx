@@ -1,3 +1,7 @@
+import { ProjectModal } from '../features/projects/ProjectsView'
+import { ViewSwitcher } from '../common/ViewSwitcher'
+import { useTheme } from '../../hooks/useTheme'
+import { Sun, Moon } from 'lucide-react'
 import React, { useState, useEffect, useMemo, useRef } from "react"
 import { createPortal } from "react-dom"
 import { useDialogFocus } from '../../hooks/useDialogFocus'
@@ -140,6 +144,14 @@ interface TeamAppProps {
  * must come before the workspace.
  */
 export function TeamApp(props: TeamAppProps) {
+
+  useEffect(() => {
+    const dismiss = (event: Event) => document.querySelectorAll<HTMLDetailsElement>('details[data-popover][open]').forEach(menu => {
+      if (event instanceof KeyboardEvent ? event.key === 'Escape' : !menu.contains(event.target as Node)) { menu.open = false; if (event instanceof KeyboardEvent) menu.querySelector('summary')?.focus() }
+    })
+    document.addEventListener('pointerdown', dismiss); document.addEventListener('keydown', dismiss)
+    return () => { document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', dismiss) }
+  }, [])
   const [me, setMe] = useState<CurrentUser | null>(null)
   const [meError, setMeError] = useState<string | null>(null)
 
@@ -252,6 +264,8 @@ function Workspace({
   const [linkedIssue, setLinkedIssue] = useState<TeamIssue | null>(null)
   const [linkError, setLinkError] = useState('')
   const [trashOpen, setTrashOpen] = useState(false)
+  const { theme, toggleTheme, isDark } = useTheme()
+  const [showProjectCreate, setShowProjectCreate] = useState(false)
   const [boardView, setBoardView] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkAction, setBulkAction] = useState('status')
@@ -341,6 +355,15 @@ function Workspace({
     }
   }, [])
   const [showTeamMenu, setShowTeamMenu] = useState(false)
+  const workspaceMenuRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!showTeamMenu) return
+    const dismiss = (event: Event) => {
+      if (event instanceof KeyboardEvent ? event.key === 'Escape' : !workspaceMenuRef.current?.contains(event.target as Node)) { setShowTeamMenu(false); if (event instanceof KeyboardEvent) workspaceMenuRef.current?.querySelector('button')?.focus() }
+    }
+    document.addEventListener('pointerdown', dismiss); document.addEventListener('keydown', dismiss)
+    return () => { document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', dismiss) }
+  }, [showTeamMenu])
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [showBackups, setShowBackups] = useState(false)
   const [moving, setMoving] = useState<{ id: string; name: string } | null>(null)
@@ -463,7 +486,7 @@ function Workspace({
         </nav>
         <div className="px-3 mt-7 flex-1 overflow-y-auto">
           <p className="px-3 mb-2 text-xs text-slate-500 dark:text-slate-400">
-            Your projects
+            <span>Your projects</span><button type="button" aria-label="New project" onClick={() => setShowProjectCreate(true)} className="float-right rounded p-1 hover:bg-slate-200 dark:hover:bg-slate-800"><Plus size={14} /></button>
           </p>
           <button
             type="button"
@@ -514,7 +537,7 @@ function Workspace({
           <button
             type="button"
             className="nav-item"
-            onClick={() => setShowMembers(true)}
+            onClick={() => { setShowMembers(true); void data.reload().catch(error => notify(error instanceof Error ? error.message : "Could not refresh members")) }}
           >
             <Users size={18} />
             People & invitations
@@ -536,7 +559,7 @@ function Workspace({
         {/* Top bar */}
         {/* relative z-20: its menus (workspace switcher) must open above the page below. */}
         <header className="relative z-20 flex items-center gap-2 px-3 sm:px-5 h-16 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 backdrop-blur-sm shrink-0">
-          <div className="relative min-w-0 flex-1 sm:flex-none">
+          <div ref={workspaceMenuRef} className="relative min-w-0 flex-1 sm:flex-none">
             <button
               type="button"
               onClick={() => setShowTeamMenu((v) => !v)}
@@ -554,7 +577,7 @@ function Workspace({
             {showTeamMenu && (
               <div
                 className="absolute z-30 mt-1 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg py-1"
-                onMouseLeave={() => setShowTeamMenu(false)}
+
               >
                 {teams.map((t) => (
                   <button
@@ -600,9 +623,10 @@ function Workspace({
           )}
 
           <div className="hidden flex-1 sm:block" />
-          <details className="relative shrink-0 text-sm">
-            <summary className="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-700">Actions</summary>
-            <div onClick={event => { if ((event.target as HTMLElement).closest('button')) event.currentTarget.closest('details')?.removeAttribute('open') }} className="absolute right-0 z-40 mt-2 flex w-56 flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+          <details data-popover className="relative shrink-0 text-sm">
+            <summary className="action-trigger">Actions <ChevronDown size={14} /></summary>
+            <div onClick={event => { if ((event.target as HTMLElement).closest('button')) { const menu = event.currentTarget.closest('details'); menu?.removeAttribute('open'); menu?.querySelector('summary')?.focus() } }} className="absolute right-0 z-40 mt-2 flex w-56 flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+          <button type="button" onClick={() => setShowProjectCreate(true)} className="lg:hidden">New project</button>
           <button type="button" disabled={offline || !data.activeTeamId} onClick={() => setShowExport(true)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-50">Export to GitHub</button>
           {offline && <p className="px-1 text-xs text-slate-500 dark:text-slate-400">GitHub access is disabled on this server.</p>}
           <details className="relative text-sm">
@@ -625,7 +649,7 @@ function Workspace({
           </button>
           <button
             type="button"
-            onClick={() => setShowMembers(true)}
+            onClick={() => { setShowMembers(true); void data.reload().catch(error => notify(error instanceof Error ? error.message : "Could not refresh members")) }}
             aria-label="People and invitations"
             className="lg:hidden flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
           >
@@ -652,6 +676,7 @@ function Workspace({
               <AlertTriangle size={12} /> Not encrypted
             </span>
           )}
+          <button type="button" onClick={toggleTheme} aria-label={`Change theme (currently ${theme})`} className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">{isDark ? <Moon size={17} /> : <Sun size={17} />}</button>
           <UserMenu
             label={userLabel}
             onUseLocal={onUseLocal}
@@ -711,10 +736,11 @@ function Workspace({
                 ? "All issues"
                 : statusFilter === "active" ? "Active issues" : `${statusFilter.replace('_', ' ')} issues`}
           </h1>
-          <p className="page-description">
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3"><p className="page-description">
             {activeTeam?.name || "Your workspace"} · {filtered.length} issue
             {filtered.length === 1 ? "" : "s"}
           </p>
+          <ViewSwitcher board={boardView} onChange={value => { setBoardView(value); setStatusFilter("all"); setSelectedId(null); clearIssueLink() }} /></div>
         </div>
         <div
           className={`${
@@ -736,6 +762,19 @@ function Workspace({
             />
           </div>
           <select
+            aria-label="Project"
+            value={projectFilter}
+            onChange={(e) => setProjectFilter(e.target.value)}
+            className="max-w-40 px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+          >
+            <option value="all">All projects</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <select
             aria-label="Issue status"
             value={statusFilter}
             onChange={(e) =>
@@ -750,7 +789,7 @@ function Workspace({
             <option value="fixed">Completed</option>
             <option value="all">All statuses</option>
           </select>
-          <details className="w-full text-sm"><summary className="cursor-pointer text-slate-600 dark:text-slate-300">More filters and sorting</summary><div className="mt-3 flex flex-wrap gap-2">
+          <details className="issue-filters w-full text-sm"><summary>More filters and sorting</summary><div className="filter-grid">
           <select aria-label="Priority" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="all">All priorities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
           <select aria-label="Severity" value={severityFilter} onChange={e => setSeverityFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="all">All severities</option><option value="critical">Critical</option><option value="major">Major</option><option value="minor">Minor</option></select>
           <select aria-label="Assignee" value={assigneeFilter} onChange={e => setAssigneeFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><option value="all">All assignees</option><option value="unassigned">Unassigned</option>{members.map(member => <option key={member.user_id} value={member.user_id}>{member.name || displayLogin(member.email) || 'Member'}</option>)}</select>
@@ -772,26 +811,15 @@ function Workspace({
           <label>Updated from<input type="date" value={updatedFrom} onChange={event => setUpdatedFrom(event.target.value)} className="ml-2 rounded border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-900" /></label>
           <label>Updated to<input type="date" value={updatedTo} onChange={event => setUpdatedTo(event.target.value)} className="ml-2 rounded border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-900" /></label>
           </div></details>
-          <select
-            aria-label="Project"
-            value={projectFilter}
-            onChange={(e) => setProjectFilter(e.target.value)}
-            className="lg:hidden max-w-40 px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
-          >
-            <option value="all">All projects</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-          {filtered.length > 0 && <button type="button" className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700" onClick={() => setSelectedIds(filtered.map(issue => issue.id))}>Select all {filtered.length} filtered</button>}
-          <button type="button" className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700" onClick={() => { setBoardView(value => !value); setStatusFilter('all'); setSelectedId(null); clearIssueLink() }}>{boardView ? 'List view' : 'Board view'}</button>
+
+
+
         </div>
 
+        {selectedIds.length === 0 && filtered.length > 0 && <div className="border-b border-slate-200 px-5 py-2 dark:border-slate-700"><button type="button" className="selection-button" onClick={() => setSelectedIds(filtered.map(issue => issue.id))}>Select all {filtered.length} filtered</button></div>}
         {selectedIds.length > 0 && <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-5 py-2 text-sm dark:border-slate-700"><strong>{selectedIds.length} selected</strong>
-          <button type="button" className="underline" onClick={() => setSelectedIds(filtered.map(issue => issue.id))}>Select all {filtered.length} filtered</button>
-          <button type="button" className="underline" onClick={() => setSelectedIds([])}>Clear</button>
+          <button type="button" className="selection-button" onClick={() => setSelectedIds(filtered.map(issue => issue.id))}>Select all {filtered.length} filtered</button>
+          <button type="button" className="selection-button" onClick={() => setSelectedIds([])}>Clear</button>
           <select aria-label="Bulk action" value={bulkAction} onChange={event => { setBulkAction(event.target.value); setBulkValue(event.target.value === 'priority' ? 'medium' : event.target.value === 'status' ? 'fixed' : '') }} className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"><option value="status">Change status</option><option value="priority">Change priority</option><option value="projectId">Move to project</option><option value="assigneeId">Assign to person</option><option value="trash">Move to Trash</option></select>
           {bulkAction === 'status' && <select aria-label="New status" value={bulkValue} onChange={event => setBulkValue(event.target.value)} className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900">{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>}
           {bulkAction === 'priority' && <select aria-label="New priority" value={bulkValue} onChange={event => setBulkValue(event.target.value)} className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>}
@@ -866,15 +894,16 @@ function Workspace({
               filtered.map((issue) => (
                 <div
                   key={issue.id}
-                  className={`flex items-start gap-2 w-full px-5 py-4 border-b border-slate-100 dark:border-slate-800/70 hover:bg-slate-50 dark:hover:bg-slate-800/40 ${
+                  className={`team-issue-row flex items-center gap-3 w-full px-5 py-4 border-b border-slate-100 dark:border-slate-800/70 hover:bg-slate-50 dark:hover:bg-slate-800/40 ${
                     selectedId === issue.id
                       ? "bg-indigo-50/60 dark:bg-indigo-950/30"
                       : ""
                   }`}
                 >
                   <input type="checkbox" aria-label={`Select ${issue.title}`} checked={selectedIds.includes(issue.id)} onChange={event => setSelectedIds(current => event.target.checked ? [...current, issue.id] : current.filter(id => id !== issue.id))} className="mt-1" />
-                  <button type="button" onClick={() => { setSelectedId(issue.id); setLinkedIssue(null); setLinkError(''); if (activeTeamId) window.history.pushState({}, '', issueLink(window.location.href, activeTeamId, issue.id)) }} className="min-w-0 flex-1 text-left">
-                  <div className="flex items-center gap-2 mb-1">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-700 dark:bg-slate-800" aria-hidden="true">{issue.type === "bug" ? <Bug size={18} /> : issue.type === "idea" ? <Lightbulb size={18} /> : <Palette size={18} />}</span>
+                  <button type="button" onClick={() => { setSelectedId(issue.id); setLinkedIssue(null); setLinkError(''); if (activeTeamId) window.history.pushState({}, '', issueLink(window.location.href, activeTeamId, issue.id)) }} className="team-issue-content min-w-0 flex-1 text-left">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
                     <TypeBadge type={issue.type} customLabel={issue.custom_type} />
                     <PriorityBadge priority={issue.priority} />
                     {(issue.status === 'in_progress' || issue.status === 'blocked') && <span className="text-xs font-semibold text-slate-500">{STATUS_LABELS[issue.status]}</span>}
@@ -889,7 +918,7 @@ function Workspace({
                       </span>
                     )}
                   </div>
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100 line-clamp-2">
+                  <p className="team-issue-title text-sm font-medium text-slate-800 dark:text-slate-100 line-clamp-2">
                     {issue.title}
                   </p>
                   <div className="flex items-center gap-2 mt-1.5 text-xs text-slate-400 min-w-0">
@@ -1046,6 +1075,7 @@ function Workspace({
           />
         )}
 
+        {showProjectCreate && <ProjectModal onClose={() => setShowProjectCreate(false)} onSave={async (name, color) => { await data.createProject(name, color); setShowProjectCreate(false); notify("Project created") }} />}
         {showBackups && <BackupsModal onClose={() => setShowBackups(false)} />}
 
         {showChangePassword && (
@@ -1121,9 +1151,19 @@ function UserMenu({
   onBackups?: () => void
 }) {
   const [open, setOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const dismiss = (event: Event) => {
+      if (event instanceof KeyboardEvent ? event.key === 'Escape' : !menuRef.current?.contains(event.target as Node)) { setOpen(false); if (event instanceof KeyboardEvent) menuRef.current?.querySelector('button')?.focus() }
+    }
+    document.addEventListener('pointerdown', dismiss); document.addEventListener('keydown', dismiss)
+    return () => { document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', dismiss) }
+  }, [open])
   return (
-    <div className="relative">
+    <div ref={menuRef} className="relative">
       <button
+        aria-label="Account menu" aria-expanded={open}
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-200"
@@ -1134,7 +1174,7 @@ function UserMenu({
       {open && (
         <div
           className="absolute right-0 z-30 mt-1 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg py-1"
-          onMouseLeave={() => setOpen(false)}
+
         >
           <div className="px-3 py-2 text-xs text-slate-400 truncate">
             {label}
@@ -1426,12 +1466,14 @@ function CreateTeamInline({
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder={isDesktopEdition() ? "New workspace name" : "New team name"}
-        className="flex-1 px-2 py-1.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-brand"
+        aria-label="New workspace name"
+        className="min-w-0 flex-1 px-2 py-1.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-brand"
       />
       <button
         type="submit"
-        disabled={busy}
-        className="px-2 py-1 text-sm font-semibold text-white bg-brand rounded-lg disabled:opacity-50"
+        disabled={busy || !name.trim()}
+        aria-label="Create workspace"
+        className="shrink-0 px-2 py-1 text-sm font-semibold text-white bg-brand rounded-lg disabled:opacity-50"
       >
         <Plus size={16} />
       </button>
@@ -1545,7 +1587,7 @@ function ModalShell({
         className="absolute inset-0 bg-black/45 backdrop-blur-sm"
         onClick={() => { if (dismissible) onClose() }}
       />
-      <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-6 text-slate-900 dark:text-slate-100 max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-6 text-slate-900 dark:text-slate-100 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
         {children}
       </div>
     </div>
@@ -1728,7 +1770,7 @@ function NewIssueModal({
           />
         </div>
         <DuplicateSuggestions issues={similar} />
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <select
             value={type}
             aria-label="Issue type"
@@ -2133,7 +2175,7 @@ function Reachability({ shareUrl, onToast }: { shareUrl: string | null; onToast:
           href="https://login.tailscale.com/admin/machines"
           target="_blank"
           rel="noopener noreferrer"
-          className="underline"
+          className="selection-button"
         >
           Machines
         </a>{" "}

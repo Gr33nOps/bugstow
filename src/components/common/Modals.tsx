@@ -1,3 +1,4 @@
+import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { APP_VERSION } from '../../version'
 import { shortcut } from '../../lib/platform'
 import React, { useEffect } from 'react'
@@ -15,8 +16,8 @@ export interface ToastMessage {
 
 export function ToastContainer({ toasts }: { toasts: ToastMessage[] }) {
   return (
-    <div role="status" aria-live="polite" className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 flex flex-col gap-2 z-[200] pointer-events-none">
-      {toasts.map(t => (
+    <div role="status" aria-live="polite" className="toast-stack fixed w-max max-w-[calc(100vw-2rem)] bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 flex flex-col gap-2 z-[200] pointer-events-none">
+      {toasts.slice(-2).map(t => (
         <div
           key={t.id}
           className="flex items-center gap-2.5 bg-slate-900/95 dark:bg-slate-800/95 text-white text-sm font-medium px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md border border-slate-800 dark:border-slate-700 animate-in fade-in slide-in-from-bottom-2 duration-150"
@@ -26,7 +27,7 @@ export function ToastContainer({ toasts }: { toasts: ToastMessage[] }) {
           ) : (
             <Check size={16} className="text-emerald-400 shrink-0" />
           )}
-          <span>{t.text}</span>
+          <span className="min-w-0 break-words">{t.text}</span>
           {t.onAction && <button type="button" onClick={t.onAction} className="pointer-events-auto underline font-semibold" aria-label={t.actionLabel || 'Undo'}>{t.actionLabel || 'Undo'}</button>}
         </div>
       ))}
@@ -55,6 +56,7 @@ export function ConfirmModal({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const dialogRef = useDialogFocus(onCancel)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onCancel()
@@ -64,9 +66,9 @@ export function ConfirmModal({
   }, [onCancel])
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
       <div className="absolute inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-xs transition-opacity" onClick={onCancel} />
-      <div className="relative bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-md p-6 sm:p-7 overflow-hidden animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100">
+      <div className="dialog-surface relative bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-md p-6 sm:p-7 overflow-hidden animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">{title}</h3>
         <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-6">{message}</p>
         <div className="flex gap-3 justify-end">
@@ -97,6 +99,7 @@ export function ConfirmModal({
 // ── Image Fullscreen Modal ────────────────────────────────────────────────
 
 export function ImageFullModal({ src, onClose }: { src: string; onClose: () => void }) {
+  const dialogRef = useDialogFocus(onClose)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -106,7 +109,7 @@ export function ImageFullModal({ src, onClose }: { src: string; onClose: () => v
   }, [onClose])
 
   return (
-    <div
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Image preview"
       className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 md:p-8 select-none"
       onClick={onClose}
     >
@@ -131,6 +134,7 @@ export function ImageFullModal({ src, onClose }: { src: string; onClose: () => v
 // ── Keyboard Shortcuts Modal ──────────────────────────────────────────────
 
 export function KeyboardShortcutsModal({ onClose }: { onClose: () => void }) {
+  const dialogRef = useDialogFocus(onClose)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -149,9 +153,9 @@ export function KeyboardShortcutsModal({ onClose }: { onClose: () => void }) {
   ]
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
       <div className="absolute inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-xs" onClick={onClose} />
-      <div className="relative bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-md p-6 sm:p-7 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100">
+      <div className="dialog-surface relative bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-md p-6 sm:p-7 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
             <Keyboard size={20} className="text-brand" />
@@ -184,6 +188,7 @@ export function KeyboardShortcutsModal({ onClose }: { onClose: () => void }) {
 // ── About Bugstow Modal ───────────────────────────────────────────────────
 
 export function AboutModal({ onClose }: { onClose: () => void }) {
+  const dialogRef = useDialogFocus(onClose)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -193,9 +198,9 @@ export function AboutModal({ onClose }: { onClose: () => void }) {
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="About BugsTow" className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
       <div className="absolute inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-xs" onClick={onClose} />
-      <div className="relative bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-sm p-6 sm:p-7 text-center animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100">
+      <div className="dialog-surface relative bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-sm p-6 sm:p-7 text-center animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100">
         <button
           type="button"
           aria-label="Close"

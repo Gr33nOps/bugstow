@@ -1,3 +1,5 @@
+import { KanbanBoard } from '../../common/KanbanBoard'
+import { ViewSwitcher } from '../../common/ViewSwitcher'
 import React, { useState, useMemo, useEffect } from "react"
 import { Search } from "lucide-react"
 import type { Issue, Project, IssueType, IssuePriority, IssueStatus } from "../../../types"
@@ -6,6 +8,8 @@ import { EmptyState } from "./EmptyState"
 import { filterAndSortIssues, type WorkflowFilters } from '../../../lib/issueWorkflow'
 
 interface ListViewProps {
+  boardIssues?: Issue[]
+  onStatusChange?: (issue: Issue, status: IssueStatus) => Promise<void>
   title: string
   subtitle: string
   issues: Issue[]
@@ -31,6 +35,7 @@ interface ListViewProps {
 }
 
 export function ListView({
+  boardIssues, onStatusChange,
   title,
   subtitle,
   issues,
@@ -54,6 +59,7 @@ export function ListView({
   typeFilter: externalTypeFilter,
   onTypeFilterChange: externalOnTypeFilterChange,
 }: ListViewProps) {
+  const [boardView, setBoardView] = useState(false)
   // Local fallback states if not controlled by parent
   const [internalSearch, setInternalSearch] = useState("")
   const [internalTypeFilter, setInternalTypeFilter] =
@@ -86,10 +92,10 @@ export function ListView({
     }
   }, [activeProjectFilter])
 
-  const filteredIssues = useMemo(() => filterAndSortIssues(issues, {
+  const filteredIssues = useMemo(() => filterAndSortIssues(boardView && boardIssues ? boardIssues : issues, {
     query: search, type: typeFilter, project: projectFilter, status: statusFilter,
     priority: priorityFilter, severity: severityFilter, sort, direction, createdFrom, createdTo, updatedFrom, updatedTo,
-  }), [issues, search, typeFilter, projectFilter, statusFilter, priorityFilter, severityFilter, sort, direction, createdFrom, createdTo, updatedFrom, updatedTo])
+  }), [boardView, boardIssues, issues, search, typeFilter, projectFilter, statusFilter, priorityFilter, severityFilter, sort, direction, createdFrom, createdTo, updatedFrom, updatedTo])
 
   useEffect(() => {
     const visible = new Set(filteredIssues.map(issue => issue.id))
@@ -110,12 +116,12 @@ export function ListView({
     >
       <div className="page-heading shrink-0">
         <div className="flex items-center gap-3">
-          <h1 className="page-title text-slate-900 dark:text-white">{title}</h1>
+          <h1 className="page-title text-slate-900 dark:text-white">{boardView && boardIssues ? "All issues" : title}</h1>
           <span className="rounded-md bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">
-            {issues.length}
+            {boardView && boardIssues ? boardIssues.length : issues.length}
           </span>
         </div>
-        <p className="page-description">{subtitle}</p>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-3"><p className="page-description">{subtitle}</p><ViewSwitcher board={boardView} onChange={setBoardView} /></div>
       </div>
       <div className="flex flex-wrap items-center gap-2 px-5 sm:px-7 pb-5 border-b border-slate-200 dark:border-slate-800">
         <div className="relative flex-1 min-w-40">
@@ -125,7 +131,7 @@ export function ListView({
           />
           <input
             type="search"
-            aria-label="Search issues"
+            aria-label={boardView ? "Search board" : "Search issues"}
             placeholder="Search issues…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -150,9 +156,9 @@ export function ListView({
           ))}
         </select>
         {title !== 'Completed' && <select aria-label="Filter by status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-3 py-2 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200">
-          <option value="all">All active statuses</option><option value="open">Open</option><option value="in_progress">In Progress</option><option value="blocked">Blocked</option>
+          <option value="all">{boardView ? "All statuses" : "All active statuses"}</option>{boardView && <option value="fixed">Fixed</option>}<option value="open">Open</option><option value="in_progress">In Progress</option><option value="blocked">Blocked</option>
         </select>}
-        <details className="w-full text-sm"><summary className="cursor-pointer text-slate-600 dark:text-slate-300">More filters and sorting</summary><div className="mt-3 flex flex-wrap gap-2">
+        <details className="issue-filters w-full text-sm"><summary>More filters and sorting</summary><div className="filter-grid">
         <select aria-label="Filter by priority" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)} className="px-3 py-2 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200">
           <option value="all">All priorities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
         </select>
@@ -182,8 +188,8 @@ export function ListView({
         </div></details>
       </div>
       {onBulkUpdate && filteredIssues.length > 0 && <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-5 py-2 text-sm dark:border-slate-700">
-        <button type="button" onClick={() => setSelectedIds(filteredIssues.map(issue => issue.id))} className="underline">Select all {filteredIssues.length} filtered</button>
-        {selectedIds.length > 0 && <><strong>{selectedIds.length} selected</strong><button type="button" onClick={() => setSelectedIds([])} className="underline">Clear</button>
+        <button type="button" onClick={() => setSelectedIds(filteredIssues.map(issue => issue.id))} className="selection-button">Select all {filteredIssues.length} filtered</button>
+        {selectedIds.length > 0 && <><strong>{selectedIds.length} selected</strong><button type="button" onClick={() => setSelectedIds([])} className="selection-button">Clear</button>
           <select aria-label="Bulk action" value={bulkAction} onChange={event => { setBulkAction(event.target.value); setBulkValue(event.target.value === 'priority' ? 'medium' : event.target.value === 'status' ? 'fixed' : '') }} className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"><option value="status">Change status</option><option value="priority">Change priority</option><option value="projectId">Move to project</option><option value="trash">Move to Trash</option></select>
           {bulkAction === 'status' && <select aria-label="New status" value={bulkValue} onChange={event => setBulkValue(event.target.value)} className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"><option value="open">Open</option><option value="in_progress">In Progress</option><option value="blocked">Blocked</option><option value="fixed">Fixed</option></select>}
           {bulkAction === 'priority' && <select aria-label="New priority" value={bulkValue} onChange={event => setBulkValue(event.target.value)} className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>}
@@ -191,7 +197,7 @@ export function ListView({
           <button type="button" className="rounded bg-brand px-3 py-1.5 font-semibold text-white" onClick={async () => { if (bulkAction === 'trash' && !window.confirm(`Move ${selectedIds.length} issues to Trash?`)) return; try { await onBulkUpdate(selectedIds, bulkAction === 'trash' ? { trash: true } : bulkAction === 'priority' ? { priority: bulkValue as IssuePriority } : bulkAction === 'status' ? { status: bulkValue as IssueStatus } : { projectId: bulkValue || null }); setSelectedIds([]) } catch { /* parent shows the error */ } }}>Apply</button>
         </>}
       </div>}
-      <div className="flex-1 min-h-0 overflow-y-auto @container flex flex-col">
+      {boardView ? <KanbanBoard issues={filteredIssues.map(issue => ({ ...issue, projectName: projects.find(project => project.id === issue.projectId)?.name }))} onOpen={onSelectIssue} onStatusChange={onStatusChange || (async () => {})} /> : <div className="flex-1 min-h-0 overflow-y-auto @container flex flex-col">
         {issues.length === 0 ? (
           <EmptyState
             heading={emptyHeading}
@@ -224,7 +230,7 @@ export function ListView({
           </div>
         ) : (
           filteredIssues.map((issue) => (
-            <div key={issue.id} className="flex items-center">
+            <div key={issue.id} className="issue-list-row flex min-w-0 items-center">
               {onBulkUpdate && <input type="checkbox" aria-label={`Select ${issue.title}`} checked={selectedIds.includes(issue.id)} onChange={event => setSelectedIds(current => event.target.checked ? [...current, issue.id] : current.filter(id => id !== issue.id))} className="ml-3" />}
             <IssueRow
               issue={issue}
@@ -252,7 +258,7 @@ export function ListView({
             </div>
           ))
         )}
-      </div>
+      </div>}
     </section>
   )
 }

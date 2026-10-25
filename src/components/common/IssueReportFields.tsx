@@ -18,8 +18,8 @@ const DETAIL_FIELDS: Array<[keyof IssueDetails, string, boolean]> = [
 const inputClass = 'mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white'
 
 export function PriorityBadge({ priority = 'medium' }: { priority?: IssuePriority }) {
-  const color = priority === 'critical' ? 'text-rose-700 dark:text-rose-300' : priority === 'high' ? 'text-amber-700 dark:text-amber-300' : 'text-slate-600 dark:text-slate-300'
-  return <span className={`rounded border border-current px-1.5 py-0.5 text-xs font-semibold ${color}`} aria-label={`${PRIORITY_LABELS[priority]} priority`}>{PRIORITY_LABELS[priority]}</span>
+  const level = { low: 1, medium: 2, high: 3, critical: 4 }[priority]
+  return <span className={`priority-badge priority-${priority}`} aria-label={`${PRIORITY_LABELS[priority]} priority`}><span className="priority-meter" aria-hidden="true">{[1,2,3,4].map(bar => <i key={bar} style={{height: 3 + bar * 2, opacity: bar <= level ? 1 : .2}} />)}</span>{PRIORITY_LABELS[priority]}</span>
 }
 
 export function IssueReportFields({ priority, onPriorityChange, severity, onSeverityChange, details, onDetailsChange, bug = true }: {

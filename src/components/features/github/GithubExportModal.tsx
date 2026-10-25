@@ -21,7 +21,7 @@ export function GithubExportModal({ issues, projects, onExport, onClose }: {
   const count = selected.filter(i => !i.githubUrl).length
   const repo = parseRepo(repoInput)
   const cls = 'w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-transparent px-3 py-2'
-  return <dialog ref={dialog} onCancel={e => { e.preventDefault(); if (!running.current) onClose() }} className="m-auto w-full max-w-lg rounded-xl bg-white p-6 text-slate-900 shadow-xl backdrop:bg-black/50 dark:bg-slate-900 dark:text-white">
+  return <dialog aria-label="Export to GitHub" ref={dialog} onCancel={e => { e.preventDefault(); if (!running.current) onClose() }} className="m-auto w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto max-w-lg rounded-xl bg-white p-6 text-slate-900 shadow-xl backdrop:bg-black/50 dark:bg-slate-900 dark:text-white">
     <form onSubmit={async e => {
       e.preventDefault()
       if (!repo || running.current) return

@@ -1,3 +1,4 @@
+import { useDialogFocus } from '../../../hooks/useDialogFocus'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { X, ExternalLink, Check, AlertCircle, KeyRound, ChevronDown } from 'lucide-react'
 import { GithubMark } from '../../common/Icon'
@@ -58,6 +59,7 @@ export function GithubImportModal({
   const [showKey, setShowKey] = useState(false)
   const [token, setToken] = useState('')
   const [busy, setBusy] = useState(false)
+  const dialogRef = useDialogFocus(onClose, !busy)
   const [error, setError] = useState<{ code?: GithubImportErrorCode; text: string } | null>(null)
   const [done, setDone] = useState<{ summary: ImportSummary; repo: GithubRepoRef; projectName: string | null } | null>(
     null
@@ -125,7 +127,7 @@ export function GithubImportModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="gh-import-title">
+    <div ref={dialogRef} tabIndex={-1} className="fixed inset-0 z-[120] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="gh-import-title">
       <div className="absolute inset-0 bg-black/45 dark:bg-black/70" onClick={() => !busy && onClose()} />
       <div className="relative w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl text-slate-900 dark:text-slate-100">
         <div className="flex items-start justify-between gap-3 px-6 pt-6">

@@ -1,3 +1,4 @@
+import { useDialogFocus } from '../../../hooks/useDialogFocus'
 import React, { useState, useRef, useEffect } from "react"
 import {
   Download,
@@ -469,6 +470,7 @@ function ExportBackupModal({
   const [confirmPass, setConfirmPass] = useState("")
   const [showPass, setShowPass] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const dialogRef = useDialogFocus(onClose, !isExporting)
   const [error, setError] = useState<string | null>(null)
 
   const handleExport = async (e: React.FormEvent) => {
@@ -503,14 +505,14 @@ function ExportBackupModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Download backup" className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
       <div
         className="absolute inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-xs"
         onClick={onClose}
       />
       <form
         onSubmit={handleExport}
-        className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200/80 dark:border-slate-800 w-full max-w-md p-6 sm:p-7 flex flex-col gap-4 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100"
+        className="dialog-surface relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200/80 dark:border-slate-800 w-full max-w-md p-6 sm:p-7 flex flex-col gap-4 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100"
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -521,6 +523,7 @@ function ExportBackupModal({
           </div>
           <button
             type="button"
+            aria-label="Close dialog"
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
           >
@@ -569,6 +572,7 @@ function ExportBackupModal({
               <div className="relative">
                 <input
                   type={showPass ? "text" : "password"}
+                  aria-label="Passphrase"
                   placeholder="Enter a secure passphrase"
                   value={passphrase}
                   onChange={(e) => setPassphrase(e.target.value)}
@@ -576,6 +580,7 @@ function ExportBackupModal({
                 />
                 <button
                   type="button"
+                  aria-label={showPass ? "Hide passphrase" : "Show passphrase"}
                   onClick={() => setShowPass(!showPass)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 >
@@ -590,6 +595,7 @@ function ExportBackupModal({
               </label>
               <input
                 type={showPass ? "text" : "password"}
+                aria-label="Confirm passphrase"
                 placeholder="Confirm your passphrase"
                 value={confirmPass}
                 onChange={(e) => setConfirmPass(e.target.value)}
@@ -657,6 +663,7 @@ function ImportBackupModal({
   const [validatedData, setValidatedData] = useState<BackupData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const dialogRef = useDialogFocus(onClose, !isProcessing)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -737,12 +744,12 @@ function ImportBackupModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Restore backup" className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
       <div
         className="absolute inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-xs"
         onClick={onClose}
       />
-      <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200/80 dark:border-slate-800 w-full max-w-md p-6 sm:p-7 flex flex-col gap-4 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100">
+      <div className="dialog-surface relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200/80 dark:border-slate-800 w-full max-w-md p-6 sm:p-7 flex flex-col gap-4 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Upload size={20} className="text-brand" />
@@ -752,6 +759,7 @@ function ImportBackupModal({
           </div>
           <button
             type="button"
+            aria-label="Close dialog"
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
           >
@@ -809,6 +817,7 @@ function ImportBackupModal({
               <input
                 autoFocus
                 type="password"
+                aria-label="Backup passphrase"
                 placeholder="Enter passphrase"
                 value={passphrase}
                 onChange={(e) => setPassphrase(e.target.value)}
@@ -892,16 +901,17 @@ function ClearDataModal({
 }) {
   const [typed, setTyped] = useState("")
   const [isClearing, setIsClearing] = useState(false)
+  const dialogRef = useDialogFocus(onClose, !isClearing)
 
   const isMatch = typed.trim().toLowerCase() === "delete"
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Clear all local data" className="fixed inset-0 z-[120] flex items-center justify-center p-4 select-none">
       <div
         className="absolute inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-xs"
         onClick={onClose}
       />
-      <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200/80 dark:border-slate-800 w-full max-w-sm p-6 sm:p-7 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100">
+      <div className="dialog-surface relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200/80 dark:border-slate-800 w-full max-w-sm p-6 sm:p-7 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
           Clear all local data?
         </h3>
@@ -923,6 +933,7 @@ function ClearDataModal({
             type="text"
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
+            aria-label="Type DELETE to confirm"
             placeholder="DELETE"
             className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-red-500 text-slate-900 dark:text-white"
           />

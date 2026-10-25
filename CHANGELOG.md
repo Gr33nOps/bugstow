@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.9.2
+
+- Local and Team share a segmented List/Board switcher, redesigned priority badges, compact dropdown controls, and a structured filter panel.
+- Local board keeps the list's priority, severity, date, project, and type filters and bulk actions. Completed also offers a board.
+- Board columns have status markers, counts, empty states, and more readable cards. Local rows keep aligned widths with long titles.
+- Team now has a light/dark theme control. Actions, account, and workspace menus dismiss on outside interaction or Escape instead of overlapping.
+- Project, backup, help, and confirmation dialogs keep keyboard focus inside and fit small screens; nested dialogs dismiss one at a time.
+- Team exposes project creation and refreshes the People list when reopened after someone joins. Project save failures remain visible in the form.
+- Added Local and Team screen walkthroughs across light/dark themes and phone/desktop sizes, including invitations, password resets, settings, and setup.
+
+
 ## 2.9.1
 
 - Team actions fit narrow phone screens in an Actions menu, with New issue kept visible.

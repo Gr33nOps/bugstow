@@ -37,9 +37,36 @@ test('Local board search can be changed without returning to the list', async ({
   await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Board search issue')
   await page.getByRole('button', { name: 'Create issue' }).click()
   await page.getByRole('button', { name: 'Board view' }).click()
-  await expect(page.getByRole('searchbox', { name: 'Search board' })).toBeVisible()
+  await page.getByText('More filters and sorting').click()
+  await expect(page.getByRole('combobox', { name: 'Filter by priority' })).toBeVisible()
+  await page.getByRole('combobox', { name: 'Filter by priority' }).selectOption('critical')
+  await expect(page.getByRole('region', { name: 'Issue board' }).getByRole('button', { name: 'Board search issue' })).toHaveCount(0)
+  await page.getByRole('combobox', { name: 'Filter by priority' }).selectOption('all')
   await page.getByRole('searchbox', { name: 'Search board' }).fill('missing')
   await expect(page.getByRole('region', { name: 'Issue board' }).getByRole('button', { name: 'Board search issue' })).toHaveCount(0)
   await page.getByRole('searchbox', { name: 'Search board' }).fill('')
   await expect(page.getByRole('region', { name: 'Issue board' }).getByRole('button', { name: 'Board search issue' })).toBeVisible()
+})
+
+
+test('Local list and board fit narrow screens with long issue titles', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Start with Local' }).click()
+  for (const title of ['A short issue', 'A much longer issue title that should remain readable without pushing the project and actions beyond the edge of the window']) {
+    await page.getByRole('button', { name: /New issue/ }).first().click()
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill(title)
+    await page.getByRole('button', { name: 'Create issue' }).click()
+  }
+  await page.getByRole('button', { name: /Change theme/ }).click()
+  await page.getByRole('button', { name: /^Close/ }).first().click()
+  await page.screenshot({ animations: 'disabled', path: test.info().outputPath('local-list-dark.png') })
+  for (const width of [390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 844 })
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.getByRole('button', { name: 'Board view', exact: true }).click()
+    await expect(page.getByRole('region', { name: 'Issue board' })).toBeVisible()
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ animations: 'disabled', path: test.info().outputPath('local-board-' + width + '.png') })
+    await page.getByRole('button', { name: 'List view', exact: true }).click()
+  }
 })

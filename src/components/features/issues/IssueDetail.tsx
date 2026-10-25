@@ -453,7 +453,6 @@ export function IssueDetail({
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
                   </select>
-                  <ChevronDown size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </span>
               </label>
 
@@ -472,7 +471,6 @@ export function IssueDetail({
                     <option value="idea">Idea</option>
                     <option value="custom">Custom badge…</option>
                   </select>
-                  <ChevronDown size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </span>
               </label>
             </div>

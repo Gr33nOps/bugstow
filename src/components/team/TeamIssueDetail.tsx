@@ -1,3 +1,4 @@
+import { ConfirmModal } from '../common/Modals'
 import { useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
@@ -380,18 +381,7 @@ export function TeamIssueDetail({
           </div>
         )}
       </div>
-      {confirmDelete && (
-        <div role="dialog" aria-modal="true" aria-labelledby="team-delete-title" className="fixed inset-0 z-[140] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
-            <h2 id="team-delete-title" className="text-lg font-semibold">Delete this issue?</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">The issue and its screenshots will move to Trash. Anyone in this workspace can restore it.</p>
-            <div className="mt-6 flex justify-end gap-3">
-              <button type="button" onClick={() => setConfirmDelete(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Cancel</button>
-              <button type="button" onClick={() => onDelete(issue.id)} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">Move to Trash</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {confirmDelete && <ConfirmModal title="Delete this issue?" message="The issue and its screenshots will move to Trash. Anyone in this workspace can restore it." confirmLabel="Move to Trash" isDestructive onCancel={() => setConfirmDelete(false)} onConfirm={() => { void onDelete(issue.id).catch(error => onToast(error instanceof Error ? error.message : 'Could not delete issue')) }} />}
     </div>
   )
 }

@@ -29,7 +29,7 @@ import { SettingsView } from './components/features/settings/SettingsView'
 import { GithubImportModal } from './components/features/github/GithubImportModal'
 import { GithubExportModal } from './components/features/github/GithubExportModal'
 import { TrashView } from './components/common/TrashView'
-import { KanbanBoard } from './components/common/KanbanBoard'
+
 import { captureScreenshotFile, type ExtensionCaptureDraft } from './lib/extensionCapture'
 import { exportGithubIssues } from '../server/src/githubExport'
 import { detectTeamServer } from './lib/teamServer'
@@ -87,7 +87,7 @@ export default function App({
   // Navigation & View States
   const [settingsSection, setSettingsSection] = useState<'general' | 'data'>('general')
   const [currentTab, setCurrentTab] = useState<Tab>('inbox')
-  const [boardView, setBoardView] = useState(false)
+
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
   const [projectFilterId, setProjectFilterId] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -391,24 +391,12 @@ export default function App({
     switch (currentTab) {
       case 'inbox':
         return (
-          <div className="flex min-h-0 flex-1 flex-col bg-white dark:bg-slate-900">
-            <div className="flex flex-wrap justify-end gap-2 border-b border-slate-200 px-5 py-2 text-sm dark:border-slate-800">
-              {boardView && <>
-                <input type="search" aria-label="Search board" placeholder="Search issues…" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} className="min-w-32 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900" />
-                <select aria-label="Board project" value={projectFilterId || ''} onChange={event => setProjectFilterId(event.target.value || null)} className="max-w-44 rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"><option value="">All projects</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select>
-                <select aria-label="Board type" value={typeFilter} onChange={event => setTypeFilter(event.target.value as IssueType | 'all')} className="rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"><option value="all">All types</option><option value="bug">Bug</option><option value="uiux">UI/UX</option><option value="idea">Idea</option></select>
-              </>}
-              <button type="button" onClick={() => setBoardView(value => !value)} className="rounded border border-slate-300 px-3 py-1.5 dark:border-slate-700">{boardView ? 'List view' : 'Board view'}</button>
-            </div>
-            {boardView ? <KanbanBoard
-              issues={issues.filter(issue => (!projectFilterId || issue.projectId === projectFilterId) && (typeFilter === 'all' || issue.type === typeFilter) && (!searchQuery || `${issue.title} ${issue.description}`.toLowerCase().includes(searchQuery.toLowerCase()))).map(issue => ({ ...issue, projectName: projects.find(project => project.id === issue.projectId)?.name }))}
-              onOpen={issue => setSelectedIssueId(issue.id)}
-              onStatusChange={async (issue, status) => { await updateIssue(issue.id, { status }); showToast('Issue status updated') }}
-            /> :
           <ListView
             title="Open issues"
             subtitle="Track what needs attention. Keep the details together."
             issues={openIssues}
+            boardIssues={issues}
+            onStatusChange={async (issue, status) => { await updateIssue(issue.id, { status }); showToast("Issue status updated") }}
             projects={projects}
             screenshotUrls={screenshotUrls}
             selectedIssueId={selectedIssueId}
@@ -429,8 +417,6 @@ export default function App({
             typeFilter={typeFilter}
             onTypeFilterChange={setTypeFilter}
           />
-            }
-          </div>
         )
 
       case 'fixed':
@@ -439,6 +425,7 @@ export default function App({
             title="Completed"
             subtitle="Resolved and fixed items."
             issues={fixedIssues}
+            onStatusChange={async (issue, status) => { await updateIssue(issue.id, { status }); showToast("Issue status updated") }}
             projects={projects}
             screenshotUrls={screenshotUrls}
             selectedIssueId={selectedIssueId}

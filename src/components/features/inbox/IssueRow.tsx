@@ -81,7 +81,7 @@ export function IssueRow({
           onClick()
         }
       }}
-      className={`flex items-center gap-3 @xl:gap-4 px-4 @xl:px-5 py-4 cursor-pointer transition-colors border-b border-slate-100 dark:border-slate-800/80 last:border-0 group select-none relative outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand ${
+      className={`min-w-0 flex-1 flex items-center gap-3 @xl:gap-4 px-4 @xl:px-5 py-4 cursor-pointer transition-colors border-b border-slate-100 dark:border-slate-800/80 last:border-0 group select-none relative outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand ${
         selected
           ? 'bg-brand-soft/80 dark:bg-brand/15 shadow-[inset_2px_0_0_#0f766e]'
           : 'hover:bg-slate-50/90 dark:hover:bg-slate-800/60 bg-white dark:bg-slate-900'
@@ -118,7 +118,7 @@ export function IssueRow({
         >
           {issue.title}
         </p>
-        <div className="flex items-center gap-2 mt-1 min-w-0 text-xs text-slate-500 dark:text-slate-400">
+        <div className="flex flex-wrap items-center gap-2 mt-1 min-w-0 text-xs text-slate-500 dark:text-slate-400">
           <TypeBadge type={issue.type} customLabel={issue.customType} />
           <PriorityBadge priority={issue.priority} />
           {(issue.status === 'in_progress' || issue.status === 'blocked') && <span className="whitespace-nowrap">{STATUS_LABELS[issue.status]}</span>}

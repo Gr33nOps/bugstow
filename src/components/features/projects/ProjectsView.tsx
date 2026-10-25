@@ -1,3 +1,4 @@
+import { useDialogFocus } from '../../../hooks/useDialogFocus'
 import React, { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Plus, MoreHorizontal, ArrowLeft, X, Edit2, Trash2, FolderInput } from 'lucide-react'
@@ -263,6 +264,8 @@ export function ProjectModal({ initial, onSave, onClose }: ProjectModalProps) {
   const [name, setName] = useState(initial?.name || '')
   const [color, setColor] = useState(initial?.color || PROJECT_COLORS[0])
   const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState('')
+  const dialogRef = useDialogFocus(onClose, !isSaving)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -276,20 +279,23 @@ export function ProjectModal({ initial, onSave, onClose }: ProjectModalProps) {
     e.preventDefault()
     if (!name.trim() || isSaving) return
     setIsSaving(true)
+    setError('')
     try {
       await onSave(name.trim(), color)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save the project. Please try again.')
     } finally {
       setIsSaving(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-none">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={initial ? "Edit project" : "New project"} className="fixed inset-0 z-50 flex items-center justify-center p-4 select-none">
       <div className="absolute inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-xs" onClick={() => !isSaving && onClose()} />
 
       <form
         onSubmit={handleFormSubmit}
-        className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200/80 dark:border-slate-800 w-full max-w-md p-6 sm:p-7 flex flex-col gap-4.5 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100"
+        className="dialog-surface relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200/80 dark:border-slate-800 w-full max-w-md p-6 sm:p-7 flex flex-col gap-4.5 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100"
       >
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
@@ -343,6 +349,7 @@ export function ProjectModal({ initial, onSave, onClose }: ProjectModalProps) {
           </div>
         </div>
 
+        {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         <div className="flex gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
           <button
             type="button"
