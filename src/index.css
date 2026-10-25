@@ -86,7 +86,7 @@ html:not(.dark) {
 button, input, select, textarea { font-family: inherit; }
 button:not(:disabled), select { cursor: pointer; }
 button:disabled { cursor: wait; }
-:where(button, a, input, select, textarea):focus-visible {
+:where(button, a, input, select, textarea, summary):focus-visible {
   outline: 3px solid var(--color-brand);
   outline-offset: 3px;
 }

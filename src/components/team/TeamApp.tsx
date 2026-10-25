@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react"
 import { createPortal } from "react-dom"
+import { useDialogFocus } from '../../hooks/useDialogFocus'
 import {
   Plus,
   Inbox,
@@ -384,6 +385,11 @@ function Workspace({
     [issues, query, projectFilter, statusFilter, typeFilter, priorityFilter, severityFilter, assigneeFilter, sort, direction, createdFrom, createdTo, updatedFrom, updatedTo],
   )
 
+  useEffect(() => {
+    const visible = new Set(filtered.map(issue => issue.id))
+    setSelectedIds(current => current.filter(id => visible.has(id)))
+  }, [filtered, activeTeamId])
+
   const selected = issues.find((i) => i.id === selectedId) || (linkedIssue?.id === selectedId && linkedIssue.team_id === activeTeamId ? linkedIssue : null)
 
   // No team yet → onboarding.
@@ -530,11 +536,11 @@ function Workspace({
         {/* Top bar */}
         {/* relative z-20: its menus (workspace switcher) must open above the page below. */}
         <header className="relative z-20 flex items-center gap-2 px-3 sm:px-5 h-16 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 backdrop-blur-sm shrink-0">
-          <div className="relative">
+          <div className="relative min-w-0 flex-1 sm:flex-none">
             <button
               type="button"
               onClick={() => setShowTeamMenu((v) => !v)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold text-sm max-w-[45vw] sm:max-w-xs"
+              className="flex max-w-full items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold text-sm sm:max-w-xs"
             >
               <span className="w-6 h-6 shrink-0 rounded-lg bg-brand text-white flex items-center justify-center text-xs">
                 {activeTeam ? activeTeam.name.slice(0, 1).toUpperCase() : "?"}
@@ -593,11 +599,15 @@ function Workspace({
             </span>
           )}
 
-          <div className="flex-1" />
+          <div className="hidden flex-1 sm:block" />
+          <details className="relative shrink-0 text-sm">
+            <summary className="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-700">Actions</summary>
+            <div onClick={event => { if ((event.target as HTMLElement).closest('button')) event.currentTarget.closest('details')?.removeAttribute('open') }} className="absolute right-0 z-40 mt-2 flex w-56 flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-900">
           <button type="button" disabled={offline || !data.activeTeamId} onClick={() => setShowExport(true)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-50">Export to GitHub</button>
+          {offline && <p className="px-1 text-xs text-slate-500 dark:text-slate-400">GitHub access is disabled on this server.</p>}
           <details className="relative text-sm">
             <summary className="cursor-pointer rounded-lg border border-slate-300 px-3 py-1.5 dark:border-slate-700">Download issues</summary>
-            <div className="absolute right-0 z-40 mt-1 min-w-40 space-y-1 rounded-lg border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+            <div className="mt-1 space-y-1 rounded-lg border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
               <button type="button" onClick={() => downloadPortableIssues(portableIssues, 'csv')} className="block w-full rounded px-2 py-1 text-left hover:bg-slate-100 dark:hover:bg-slate-800">CSV</button>
               <button type="button" onClick={() => downloadPortableIssues(portableIssues, 'markdown')} className="block w-full rounded px-2 py-1 text-left hover:bg-slate-100 dark:hover:bg-slate-800">Markdown</button>
             </div>
@@ -611,7 +621,7 @@ function Workspace({
             className="lg:hidden flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
           >
             <GithubMark size={16} />{" "}
-            <span className="hidden sm:inline">Import from GitHub</span>
+            <span>Import from GitHub</span>
           </button>
           <button
             type="button"
@@ -620,8 +630,10 @@ function Workspace({
             className="lg:hidden flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
           >
             <Users size={16} />{" "}
-            <span className="hidden sm:inline">Invite people</span>
+            <span>Invite people</span>
           </button>
+            </div>
+          </details>
           <button
             type="button"
             onClick={() => setShowNew(true)}
@@ -1513,12 +1525,17 @@ function CreateFirstTeam({
 function ModalShell({
   children,
   onClose,
+  dismissible = true,
 }: {
   children: React.ReactNode
   onClose: () => void
+  dismissible?: boolean
 }) {
+  const dialogRef = useDialogFocus(onClose, dismissible)
   return (
     <div
+      ref={dialogRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-label="Workspace dialog"
@@ -1526,7 +1543,7 @@ function ModalShell({
     >
       <div
         className="absolute inset-0 bg-black/45 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={() => { if (dismissible) onClose() }}
       />
       <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-6 text-slate-900 dark:text-slate-100 max-h-[90vh] overflow-y-auto">
         {children}
@@ -1660,7 +1677,7 @@ function NewIssueModal({
   }
 
   return (
-    <ModalShell onClose={onClose}>
+    <ModalShell onClose={onClose} dismissible={!busy}>
       <form onSubmit={submit} className="flex flex-col gap-3.5">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">New issue</h3>
@@ -1668,6 +1685,7 @@ function NewIssueModal({
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
+            disabled={busy}
             className="p-2 text-slate-400"
           >
             <X size={16} />

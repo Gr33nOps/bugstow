@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.9.1
+
+- Team actions fit narrow phone screens in an Actions menu, with New issue kept visible.
+- Local capture and Team dialogs keep keyboard focus inside, support Escape, and return focus to the opener.
+- Bulk selections in Local and Team drop issues hidden by a changed filter, preventing updates to invisible selections.
+- Local board view keeps search, project, and type controls available.
+
 ## 2.9.0
 
 - Teammates can run `bugstow connect <workspace-url>` once so their installed shortcut reopens the shared Team workspace. `bugstow disconnect` returns the shortcut to this computer.

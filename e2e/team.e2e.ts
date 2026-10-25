@@ -48,7 +48,9 @@ test.beforeAll(async () => {
     },
   })
   let ready = false
-  for (let attempt = 0; attempt < 60; attempt++) {
+  child.stdout?.resume()
+  child.stderr?.resume()
+  for (let attempt = 0; attempt < 200; attempt++) {
     if (child.exitCode !== null) throw new Error(`Team server exited: ${child.exitCode}`)
     try { if ((await fetch(`${base}/api/health`)).ok) { ready = true; break } } catch { /* startup */ }
     await new Promise(resolve => setTimeout(resolve, 100))
@@ -73,6 +75,24 @@ test('Team issue link, comments, board, and fix references work after refresh', 
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(page.getByText('E2E workspace').first()).toBeVisible()
 
+  for (const width of [320, 390, 768]) {
+    await page.setViewportSize({ width, height: 844 })
+    await expect.poll(() => page.locator('header').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+  }
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByText('Actions', { exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Export to GitHub', exact: true })).toBeVisible()
+  await page.screenshot({ path: test.info().outputPath('team-mobile-actions.png') })
+  await page.getByText('Actions', { exact: true }).click()
+  await page.setViewportSize({ width: 1280, height: 720 })
+
+  await page.getByRole('button', { name: 'New issue' }).first().click()
+  const captureDialog = page.getByRole('dialog', { name: 'Workspace dialog' })
+  await captureDialog.getByRole('button', { name: 'Add screenshots', exact: true }).focus()
+  await page.keyboard.press('Tab')
+  await expect.poll(() => captureDialog.evaluate(el => el.contains(document.activeElement))).toBe(true)
+  await page.keyboard.press('Escape')
+  await expect(captureDialog).toHaveCount(0)
   await page.getByRole('button', { name: 'New issue' }).first().click()
   await page.locator('#new-team-issue-title').fill('Team browser issue')
   await page.getByRole('combobox', { name: 'Priority' }).selectOption('high')
@@ -80,6 +100,10 @@ test('Team issue link, comments, board, and fix references work after refresh', 
   await page.getByRole('combobox', { name: 'Severity' }).selectOption('major')
   await page.getByRole('textbox', { name: 'Steps to reproduce' }).fill('Open the Team board')
   await page.getByRole('button', { name: 'Create issue' }).click()
+  await page.getByRole('checkbox', { name: 'Select Team browser issue' }).check()
+  await page.getByRole('searchbox', { name: 'Search issues' }).fill('no matching issue')
+  await expect(page.getByText('1 selected', { exact: true })).toHaveCount(0)
+  await page.getByRole('searchbox', { name: 'Search issues' }).fill('')
   await page.getByRole('button', { name: /Team browser issue/ }).click()
   await expect(page).toHaveURL(new RegExp(`team=${teamId}.*issue=`))
   await expect(page.getByText('Open the Team board')).toBeVisible()

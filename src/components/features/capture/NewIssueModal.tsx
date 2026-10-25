@@ -6,6 +6,7 @@ import { DuplicateSuggestions } from '../../common/DuplicateSuggestions'
 import { IssueReportFields } from '../../common/IssueReportFields'
 import { normalizeCustomBadge } from '../../../lib/writingAssist'
 import { WritingTools } from '../../common/WritingTools'
+import { useDialogFocus } from '../../../hooks/useDialogFocus'
 
 interface AttachedScreenshot {
   id: string
@@ -62,6 +63,7 @@ export function NewIssueModal({
   const [details, setDetails] = useState<IssueDetails>({})
   const [screenshots, setScreenshots] = useState<AttachedScreenshot[]>([])
   const [isSaving, setIsSaving] = useState(false)
+  const dialogRef = useDialogFocus(onClose, !isSaving)
   const [error, setError] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
   const similar = useMemo(() => findSimilarIssues(title, desc, issues), [title, desc, issues])
@@ -189,7 +191,7 @@ export function NewIssueModal({
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="New issue" className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 select-none">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="New issue" className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 select-none">
       <div
         className="absolute inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-xs transition-opacity"
         onClick={() => !isSaving && onClose()}

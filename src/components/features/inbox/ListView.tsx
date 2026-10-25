@@ -91,6 +91,11 @@ export function ListView({
     priority: priorityFilter, severity: severityFilter, sort, direction, createdFrom, createdTo, updatedFrom, updatedTo,
   }), [issues, search, typeFilter, projectFilter, statusFilter, priorityFilter, severityFilter, sort, direction, createdFrom, createdTo, updatedFrom, updatedTo])
 
+  useEffect(() => {
+    const visible = new Set(filteredIssues.map(issue => issue.id))
+    setSelectedIds(current => current.filter(id => visible.has(id)))
+  }, [filteredIssues])
+
   const typePills: Array<{ value: IssueType | "all"; label: string }> = [
     { value: "all", label: "All" },
     { value: "bug", label: "Bug" },
